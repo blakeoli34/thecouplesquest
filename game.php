@@ -26,7 +26,6 @@ if (!$player) {
     exit;
 }
 
-
 $players = getGamePlayers($player['game_id']);
 $gameStatus = $player['status'];
 
@@ -39,6 +38,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $duration = intval($_POST['duration']);
             $result = setGameDuration($player['game_id'], $duration);
             echo json_encode($result);
+            exit;
+
+        case 'debug_timers':
+            try {
+                error_log("Debug timers called for game_id: " . $player['game_id']);
+                $pdo = Config::getDatabaseConnection();
+                $stmt = $pdo->prepare("SELECT *, NOW() as server_now FROM timers WHERE game_id = ? ORDER BY id DESC LIMIT 5");
+                $stmt->execute([$player['game_id']]);
+                $result = $stmt->fetchAll();
+                error_log("Timer results: " . print_r($result, true));
+                echo json_encode($result);
+            } catch (Exception $e) {
+                error_log("Debug timer error: " . $e->getMessage());
+                echo json_encode(['error' => $e->getMessage()]);
+            }
             exit;
             
         case 'update_score':
@@ -194,11 +208,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             transform: translateY(-50%);
         }
         
-        .menu-button {
+        /* Menu System */
+        .menu-system {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
+            z-index: 1000;
+        }
+        
+        .menu-button {
             width: 80px;
             height: 80px;
             background: white;
@@ -210,8 +229,185 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             align-items: center;
             justify-content: center;
             font-size: 24px;
-            z-index: 100;
             color: #111;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+            z-index: 101;
+        }
+        
+        .menu-button:hover {
+            transform: scale(1.1);
+        }
+        
+        .menu-button.active {
+            background: #111;
+            color: white;
+            transform: rotate(45deg);
+        }
+        
+        /* Action Buttons (Add, Subtract, Steal) */
+        .action-buttons {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        
+        .action-button {
+            position: absolute;
+            width: 70px;
+            height: 70px;
+            background: rgba(255,255,255,0.7);
+            border: none;
+            border-radius: 50%;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            color: #333;
+            opacity: 0;
+            transform: translate(-50%, -50%) scale(0);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            pointer-events: none;
+        }
+        
+        .action-button.show {
+            opacity: 1;
+            pointer-events: all;
+        }
+        
+        .action-button:hover {
+            transform: scale(1.1);
+        }
+        
+        .action-button i {
+            font-size: 18px;
+            margin-bottom: 2px;
+        }
+        
+        /* Arc positioning for top player */
+        .action-button.top1 { 
+            top: -100px; 
+            left: -120px;
+            transform: translate(-50%, -50%) scale(0);
+        }
+        .action-button.top1.show { 
+            transform: translate(-50%, -50%) scale(1);
+        }
+        .action-button.top2 { 
+            top: -140px; 
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+        }
+        .action-button.top2.show { 
+            transform: translate(-50%, -50%) scale(1);
+        }
+        .action-button.top3 { 
+            top: -100px; 
+            left: 120px;
+            transform: translate(-50%, -50%) scale(0);
+        }
+        .action-button.top3.show { 
+            transform: translate(-50%, -50%) scale(1);
+        }
+        
+        /* Arc positioning for bottom player */
+        .action-button.bottom1 { 
+            top: 80px; 
+            left: -120px;
+            transform: translate(-50%, -50%) scale(0);
+        }
+        .action-button.bottom1.show { 
+            transform: translate(-50%, -50%) scale(1);
+        }
+        .action-button.bottom2 { 
+            top: 120px; 
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+        }
+        .action-button.bottom2.show { 
+            transform: translate(-50%, -50%) scale(1);
+        }
+        .action-button.bottom3 { 
+            top: 80px; 
+            left: 120px;
+            transform: translate(-50%, -50%) scale(0);
+        }
+        .action-button.bottom3.show { 
+            transform: translate(-50%, -50%) scale(1);
+        }
+        
+        
+        /* Point Buttons */
+        .point-buttons {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 102; /* Higher than menu button */
+        }
+        
+        .point-button {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background: white;
+            border: 2px solid #333;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            font-weight: 700;
+            color: #333;
+            opacity: 0;
+            transform: translate(-50%, -50%) scale(0);
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            pointer-events: none;
+            z-index: 102;
+        }
+        
+        .point-button.show {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+            pointer-events: all;
+        }
+        
+        .point-button:hover {
+            transform: translate(-50%, -50%) scale(1.2);
+            background: #333;
+            color: white;
+        }
+        
+        /* Point button positions - spread wider */
+        .point-button.p1 { left: -120px; }
+        .point-button.p2 { left: -60px; }
+        .point-button.p3 { left: 0px; }
+        .point-button.p4 { left: 60px; }
+        .point-button.p5 { left: 120px; }
+        
+        /* Overlay */
+        .menu-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.3);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+            z-index: 99;
+        }
+        
+        .menu-overlay.active {
+            opacity: 1;
+            pointer-events: all;
         }
         
         .bottom-menu {
@@ -255,7 +451,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             color: #666;
         }
         
-        /* Modals */
+        /* Modals - keeping timer and history modals */
         .modal {
             display: none;
             position: fixed;
@@ -289,66 +485,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             font-weight: 600;
             margin-bottom: 20px;
             text-align: center;
-        }
-        
-        .score-buttons {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        
-        .score-btn {
-            padding: 15px;
-            border: 2px solid #ddd;
-            background: white;
-            border-radius: 10px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: all 0.2s;
-        }
-        
-        .score-btn.add {
-            color: #22c55e;
-            border-color: #22c55e;
-        }
-        
-        .score-btn.subtract {
-            color: #ef4444;
-            border-color: #ef4444;
-        }
-        
-        .score-btn:hover {
-            transform: scale(1.05);
-        }
-        
-        .player-select {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        
-        .player-btn {
-            flex: 1;
-            padding: 15px;
-            border: 2px solid #ddd;
-            background: white;
-            border-radius: 10px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: all 0.2s;
-        }
-        
-        .player-btn.selected.male {
-            background: <?= Config::COLOR_BLUE ?>;
-            color: white;
-            border-color: <?= Config::COLOR_BLUE ?>;
-        }
-        
-        .player-btn.selected.female {
-            background: <?= Config::COLOR_PINK ?>;
-            color: white;
-            border-color: <?= Config::COLOR_PINK ?>;
         }
         
         .form-group {
@@ -473,44 +609,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 <h2>Waiting for Opponent</h2>
                 <p>Share your invite code with your opponent to start the game!</p>
                 <p><strong>Invite Code: <?= htmlspecialchars($player['invite_code']) ?></strong></p>
-                <!-- Notification setup -->
-
                 <div style="margin-top: 30px; padding: 20px; background: rgba(255,255,255,0.1); border-radius: 15px;">
-
                     <h3 style="margin-bottom: 15px;">🔔 Enable Notifications</h3>
-
                     <p style="margin-bottom: 15px; font-size: 14px;">Get notified when your partner bumps you or when timers expire!</p>
-
                     <button id="enableNotificationsBtn" class="btn" onclick="enableNotifications()">
-
                         Enable Notifications
-
                     </button>
-
                     <div id="notificationStatus" style="margin-top: 10px; font-size: 14px;"></div>
-
                 </div>
             </div>
             
         <?php elseif ($gameStatus === 'waiting' && count($players) === 2 && !$player['duration_days']): ?>
             <!-- Set game duration -->
             <div class="waiting-screen">
-                <!-- Notification setup -->
-
                 <div style="margin-bottom: 30px; padding: 20px; background: rgba(255,255,255,0.1); border-radius: 15px;">
-
                     <h3 style="margin-bottom: 15px;">🔔 Enable Notifications</h3>
-
                     <p style="margin-bottom: 15px; font-size: 14px;">Get notified when your partner bumps you or when timers expire!</p>
-
                     <button id="enableNotificationsBtn" class="btn" onclick="enableNotifications()">
-
                         Enable Notifications
-
                     </button>
-
                     <div id="notificationStatus" style="margin-top: 10px; font-size: 14px;"></div>
-
                 </div>
                 <h2>Set Game Duration</h2>
                 <p>How long should this game last?</p>
@@ -557,16 +675,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $opponentPlayer = $p;
                 }
             }
-
-            // Debug output (remove this after testing)
-            if (isset($_GET['debug'])) {
-                echo "<!-- Debug Info:";
-                echo "\nDevice ID: " . htmlspecialchars($deviceId);
-                echo "\nCurrent Player: " . ($currentPlayer ? $currentPlayer['first_name'] . ' (' . $currentPlayer['gender'] . ')' : 'NULL');
-                echo "\nOpponent Player: " . ($opponentPlayer ? $opponentPlayer['first_name'] . ' (' . $opponentPlayer['gender'] . ')' : 'NULL');
-                echo "\nAll Players: " . print_r($players, true);
-                echo "-->";
-            }
             
             if (!$currentPlayer || !$opponentPlayer) {
                 echo '<div style="color: red; padding: 20px;">Error: Could not identify players correctly. Please contact support.</div>';
@@ -594,8 +702,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     <div class="player-score-value"><?= $opponentPlayer['score'] ?></div>
                 </div>
                 
-                <!-- Menu Button -->
-                <button class="menu-button" onclick="openScoreMenu()"><i class="fa-solid fa-plus-minus"></i></button>
+                <!-- Animated Menu System -->
+                <div class="menu-overlay" id="menuOverlay"></div>
+                <div class="menu-system">
+                    <button class="menu-button" id="menuButton">
+                        <i class="fa-solid fa-plus-minus"></i>
+                    </button>
+                    
+                    <!-- Action buttons for top player -->
+                    <div class="action-buttons">
+                        <button class="action-button add top1" data-action="add" data-player="<?= $opponentPlayer['id'] ?>">
+                            <i class="fa-solid fa-plus"></i>
+                            <span>Add</span>
+                        </button>
+                        <button class="action-button subtract top2" data-action="subtract" data-player="<?= $opponentPlayer['id'] ?>">
+                            <i class="fa-solid fa-minus"></i>
+                            <span>Subtract</span>
+                        </button>
+                        <button class="action-button steal top3" data-action="steal" data-player="<?= $opponentPlayer['id'] ?>">
+                            <i class="fa-solid fa-hand-holding"></i>
+                            <span>Steal</span>
+                        </button>
+                    </div>
+                    
+                    <!-- Action buttons for bottom player -->
+                    <div class="action-buttons">
+                        <button class="action-button add bottom1" data-action="add" data-player="<?= $currentPlayer['id'] ?>">
+                            <i class="fa-solid fa-plus"></i>
+                            <span>Add</span>
+                        </button>
+                        <button class="action-button subtract bottom2" data-action="subtract" data-player="<?= $currentPlayer['id'] ?>">
+                            <i class="fa-solid fa-minus"></i>
+                            <span>Subtract</span>
+                        </button>
+                        <button class="action-button steal bottom3" data-action="steal" data-player="<?= $currentPlayer['id'] ?>">
+                            <i class="fa-solid fa-hand-holding"></i>
+                            <span>Steal</span>
+                        </button>
+                    </div>
+                    
+                    <!-- Point buttons -->
+                    <div class="point-buttons" id="pointButtons">
+                        <button class="point-button p1" data-points="1">1</button>
+                        <button class="point-button p2" data-points="2">2</button>
+                        <button class="point-button p3" data-points="3">3</button>
+                        <button class="point-button p4" data-points="4">4</button>
+                        <button class="point-button p5" data-points="5">5</button>
+                    </div>
+                </div>
+                
                 <div class="board-separator"></div>
                 
                 <!-- Current Player Score (Bottom) -->
@@ -620,40 +775,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     <div class="menu-item-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
                     <div class="menu-item-text">History</div>
                 </div>
-                
             </div>
+            
+            <!-- Pass game data to JavaScript -->
+            <script>
+                window.gameDataFromPHP = {
+                    currentPlayerId: <?= $currentPlayer['id'] ?>,
+                    opponentPlayerId: <?= $opponentPlayer['id'] ?>,
+                    gameStatus: '<?= $gameStatus ?>'
+                };
+            </script>
         <?php endif; ?>
-    </div>
-    
-    <!-- Score Modal -->
-    <div class="modal" id="scoreModal">
-        <div class="modal-content">
-            <div class="modal-title">Update Score</div>
-            
-            <div class="player-select">
-                <div class="player-btn male" data-player="<?= $players[0]['gender'] === 'male' ? $players[0]['id'] : $players[1]['id'] ?>">
-                    <?= $players[0]['gender'] === 'male' ? htmlspecialchars($players[0]['first_name']) : htmlspecialchars($players[1]['first_name']) ?>
-                </div>
-                <div class="player-btn female" data-player="<?= $players[0]['gender'] === 'female' ? $players[0]['id'] : $players[1]['id'] ?>">
-                    <?= $players[0]['gender'] === 'female' ? htmlspecialchars($players[0]['first_name']) : htmlspecialchars($players[1]['first_name']) ?>
-                </div>
-            </div>
-            
-            <div class="score-buttons">
-                <div class="score-btn add" data-points="1">+1</div>
-                <div class="score-btn add" data-points="2">+2</div>
-                <div class="score-btn add" data-points="3">+3</div>
-                <div class="score-btn add" data-points="4">+4</div>
-                <div class="score-btn add" data-points="5">+5</div>
-                <div class="score-btn subtract" data-points="-1">-1</div>
-                <div class="score-btn subtract" data-points="-2">-2</div>
-                <div class="score-btn subtract" data-points="-3">-3</div>
-                <div class="score-btn subtract" data-points="-4">-4</div>
-                <div class="score-btn subtract" data-points="-5">-5</div>
-            </div>
-            
-            <button class="btn btn-secondary" onclick="closeModal('scoreModal')">Close</button>
-        </div>
     </div>
     
     <!-- Timer Modal -->

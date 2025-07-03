@@ -174,11 +174,18 @@ function getGameStatistics() {
         $stmt = $pdo->query("SELECT COUNT(*) FROM invite_codes WHERE is_used = FALSE");
         $unusedCodes = $stmt->fetchColumn();
         
-        // Recent games
+        // Recent games with player details including device IDs
         $stmt = $pdo->query("
             SELECT g.*, 
                    COUNT(p.id) as player_count,
-                   GROUP_CONCAT(CONCAT(p.first_name, ' (', p.gender, ')') SEPARATOR ', ') as players
+                   GROUP_CONCAT(
+                       CONCAT(
+                           p.first_name, ' (', p.gender, ') - Device: ', 
+                           SUBSTRING(p.device_id, 1, 8), '...'
+                       ) 
+                       ORDER BY p.joined_at 
+                       SEPARATOR ' | '
+                   ) as players_with_devices
             FROM games g
             LEFT JOIN players p ON g.id = p.game_id
             GROUP BY g.id
@@ -195,6 +202,17 @@ function getGameStatistics() {
         ");
         $unusedCodes = $stmt->fetchAll();
         
+        // Active players with last activity
+        $stmt = $pdo->query("
+            SELECT p.*, g.invite_code, g.status as game_status,
+                   SUBSTRING(p.device_id, 1, 12) as short_device_id
+            FROM players p
+            JOIN games g ON p.game_id = g.id
+            WHERE g.status IN ('active', 'waiting')
+            ORDER BY p.joined_at DESC
+        ");
+        $activePlayers = $stmt->fetchAll();
+        
         return [
             'totalGames' => $totalGames,
             'activeGames' => $activeGames,
@@ -202,7 +220,8 @@ function getGameStatistics() {
             'waitingGames' => $waitingGames,
             'totalPlayers' => $totalPlayers,
             'unusedCodes' => $unusedCodes,
-            'recentGames' => $recentGames
+            'recentGames' => $recentGames,
+            'activePlayers' => $activePlayers
         ];
     } catch (Exception $e) {
         error_log("Error getting statistics: " . $e->getMessage());
@@ -529,6 +548,40 @@ function showLoginForm($error = null) {
             margin-top: 5px;
         }
         
+        .player-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        
+        .player-details {
+            flex: 1;
+        }
+        
+        .player-name {
+            font-weight: bold;
+            font-size: 16px;
+            color: #333;
+        }
+        
+        .player-meta {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .device-id {
+            font-family: 'Courier New', monospace;
+            background: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+        
         .confirm-dialog {
             display: none;
             position: fixed;
@@ -611,6 +664,37 @@ function showLoginForm($error = null) {
             </form>
         </div>
 
+        <!-- Active Players -->
+        <div class="section">
+            <h2>Active Players (<?= count($stats['activePlayers']) ?>)</h2>
+            
+            <?php if (empty($stats['activePlayers'])): ?>
+                <p style="color: #666; text-align: center; padding: 20px;">No active players</p>
+            <?php else: ?>
+                <?php foreach ($stats['activePlayers'] as $player): ?>
+                    <div class="player-item">
+                        <div class="player-details">
+                            <div class="player-name">
+                                <?= htmlspecialchars($player['first_name']) ?> 
+                                (<?= ucfirst($player['gender']) ?>) - Score: <?= $player['score'] ?>
+                            </div>
+                            <div class="player-meta">
+                                Game: <strong><?= htmlspecialchars($player['invite_code']) ?></strong> 
+                                (<?= ucfirst($player['game_status']) ?>) | 
+                                Device: <span class="device-id"><?= htmlspecialchars($player['device_id']) ?></span> |
+                                Joined: <?= date('M j, Y g:i A', strtotime($player['joined_at'])) ?>
+                                <?php if ($player['fcm_token']): ?>
+                                    | <span style="color: #28a745;">📱 Notifications enabled</span>
+                                <?php else: ?>
+                                    | <span style="color: #dc3545;">🔕 No notifications</span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
+
         <!-- Unused Invite Codes -->
         <div class="section">
             <h2>Unused Invite Codes (<?= count($stats['unusedCodes']) ?>)</h2>
@@ -648,7 +732,7 @@ function showLoginForm($error = null) {
                     <tr>
                         <th>Invite Code</th>
                         <th>Status</th>
-                        <th>Players</th>
+                        <th>Players & Devices</th>
                         <th>Duration</th>
                         <th>Created</th>
                         <th>Actions</th>
@@ -664,7 +748,7 @@ function showLoginForm($error = null) {
                                 </span>
                             </td>
                             <td>
-                                <?= $game['players'] ? htmlspecialchars($game['players']) : 'None' ?>
+                                <?= $game['players_with_devices'] ? htmlspecialchars($game['players_with_devices']) : 'None' ?>
                                 (<?= $game['player_count'] ?>/2)
                             </td>
                             <td>

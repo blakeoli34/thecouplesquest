@@ -3,8 +3,12 @@
 // Global variables
 let gameData = {};
 let selectedPlayer = null;
-
 let firebaseMessaging = null;
+
+// Animated Menu System Variables
+let menuOpen = false;
+let currentAction = null;
+let currentTargetPlayerId = null;
 
 // Check for device ID in localStorage as fallback
 function checkLocalStorageAuth() {
@@ -118,9 +122,7 @@ function setupFirebaseMessaging() {
         return;
     }
     
-    // Note: You need to replace this with your actual VAPID key from Firebase Console
-    // Go to: Firebase Console > Project Settings > Cloud Messaging > Web configuration
-    const vapidKey = 'BAhDDY44EUfm9YKOElboy-2fb_6lzVhW4_TLMr4Ctiw6oA_ROcKZ09i5pKMQx3s7SoWgjuPbW-eGI7gFst6qjag'; // REPLACE THIS!
+    const vapidKey = 'BAhDDY44EUfm9YKOElboy-2fb_6lzVhW4_TLMr4Ctiw6oA_ROcKZ09i5pKMQx3s7SoWgjuPbW-eGI7gFst6qjag';
     
     if (vapidKey === 'your-actual-vapid-key-here') {
         console.log('⚠️ VAPID key not configured. Please set your actual VAPID key.');
@@ -246,8 +248,157 @@ style.textContent = `
         to { transform: translateX(0); opacity: 1; }
     }
 `;
-
 document.head.appendChild(style);
+
+// ===========================================
+// ANIMATED MENU SYSTEM FUNCTIONS
+// ===========================================
+
+// Setup animated menu system
+function setupAnimatedMenu() {
+    const menuButton = document.getElementById('menuButton');
+    const menuOverlay = document.getElementById('menuOverlay');
+    const actionButtons = document.querySelectorAll('.action-button');
+    const pointButtons = document.querySelectorAll('.point-button');
+    
+    if (!menuButton) return; // Menu not available on this page
+    
+    // Toggle main menu
+    menuButton.addEventListener('click', toggleMenu);
+    menuOverlay.addEventListener('click', closeMenu);
+    
+    // Action button handlers
+    actionButtons.forEach(button => {
+        button.addEventListener('click', (e) => {
+            e.stopPropagation();
+            currentAction = button.dataset.action;
+            currentTargetPlayerId = button.dataset.player;
+            showPointButtons();
+        });
+    });
+    
+    // Point button handlers
+    pointButtons.forEach(button => {
+        button.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const points = parseInt(button.dataset.points);
+            executeScoreAction(currentAction, currentTargetPlayerId, points);
+            closeMenu();
+        });
+    });
+    
+    // Prevent menu from closing when clicking on buttons
+    actionButtons.forEach(button => {
+        button.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+    });
+    
+    pointButtons.forEach(button => {
+        button.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+    });
+}
+
+function toggleMenu() {
+    if (menuOpen) {
+        closeMenu();
+    } else {
+        openMenu();
+    }
+}
+
+function openMenu() {
+    menuOpen = true;
+    const menuButton = document.getElementById('menuButton');
+    const menuOverlay = document.getElementById('menuOverlay');
+    const actionButtons = document.querySelectorAll('.action-button');
+    
+    menuButton.classList.add('active');
+    menuOverlay.classList.add('active');
+    
+    // Show action buttons with staggered animation
+    actionButtons.forEach((button, index) => {
+        setTimeout(() => {
+            button.classList.add('show');
+        }, index * 50);
+    });
+}
+
+function closeMenu() {
+    menuOpen = false;
+    const menuButton = document.getElementById('menuButton');
+    const menuOverlay = document.getElementById('menuOverlay');
+    const actionButtons = document.querySelectorAll('.action-button');
+    const pointButtons = document.querySelectorAll('.point-button');
+    
+    menuButton.classList.remove('active');
+    menuOverlay.classList.remove('active');
+    
+    // Hide all buttons
+    actionButtons.forEach(button => {
+        button.classList.remove('show');
+    });
+    pointButtons.forEach(button => {
+        button.classList.remove('show');
+    });
+    
+    // Reset state
+    currentAction = null;
+    currentTargetPlayerId = null;
+}
+
+function showPointButtons() {
+    const actionButtons = document.querySelectorAll('.action-button');
+    const pointButtons = document.querySelectorAll('.point-button');
+    
+    // Hide action buttons
+    actionButtons.forEach(button => {
+        button.classList.remove('show');
+    });
+    
+    // Show point buttons with staggered animation
+    pointButtons.forEach((button, index) => {
+        setTimeout(() => {
+            button.classList.add('show');
+        }, index * 50);
+    });
+}
+
+function executeScoreAction(action, targetPlayerId, points) {
+    console.log('Executing score action:', action, targetPlayerId, points);
+    
+    let actualPoints = points;
+    let sourcePlayerId = null;
+    
+    // Calculate points based on action type
+    switch(action) {
+        case 'add':
+            actualPoints = points;
+            break;
+        case 'subtract':
+            actualPoints = -points;
+            break;
+        case 'steal':
+            // For steal, we subtract from opposite player and add to current player
+            // First add to current player
+            updateScore(targetPlayerId, points);
+            // Then subtract from opposite player
+            const currentPlayerId = gameData.currentPlayerId;
+            const opponentPlayerId = gameData.opponentPlayerId;
+            const stealToPlayerId = (targetPlayerId == currentPlayerId) ? opponentPlayerId : currentPlayerId;
+            updateScore(stealToPlayerId, -points);
+            return; // Early return for steal since we handle it specially
+    }
+    
+    // For add/subtract, just update the target player
+    updateScore(targetPlayerId, actualPoints);
+}
+
+// ===========================================
+// EXISTING FUNCTIONS (Updated)
+// ===========================================
 
 // Duration selection handler
 function setupDurationButtons() {
@@ -278,40 +429,7 @@ function setupDurationButtons() {
     });
 }
 
-// Player selection handler
-function setupPlayerSelection() {
-    document.querySelectorAll('.player-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            document.querySelectorAll('.player-btn').forEach(b => b.classList.remove('selected'));
-            this.classList.add('selected');
-            selectedPlayer = this.dataset.player;
-        });
-    });
-}
-
-// Score buttons handler
-function setupScoreButtons() {
-    document.querySelectorAll('.score-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            if (!selectedPlayer) {
-                alert('Please select a player first');
-                return;
-            }
-            
-            const points = parseInt(this.dataset.points);
-            updateScore(selectedPlayer, points);
-        });
-    });
-}
-
 // Modal functions
-function openScoreMenu() {
-    const modal = document.getElementById('scoreModal');
-    if (modal) {
-        modal.classList.add('active');
-    }
-}
-
 function openTimerModal() {
     const modal = document.getElementById('timerModal');
     if (modal) {
@@ -334,7 +452,7 @@ function closeModal(modalId) {
     }
 }
 
-// Score update function
+// Score update function (updated to work with new system)
 function updateScore(playerId, points) {
     fetch('game.php', {
         method: 'POST',
@@ -347,7 +465,6 @@ function updateScore(playerId, points) {
     .then(data => {
         if (data.success) {
             refreshGameData();
-            closeModal('scoreModal');
         } else {
             alert('Failed to update score. Please try again.');
         }
@@ -523,7 +640,6 @@ function refreshGameData() {
     });
 }
 
-// Update timer display function
 function updateTimerDisplay(timers) {
     const currentTimers = document.getElementById('current-timers');
     const opponentTimers = document.getElementById('opponent-timers');
@@ -538,7 +654,8 @@ function updateTimerDisplay(timers) {
         div.className = 'timer-badge';
         div.title = timer.description;
         
-        const endTime = new Date(timer.end_time);
+        // Treat database time as UTC
+        const endTime = new Date(timer.end_time + 'Z');
         const now = new Date();
         const diff = endTime - now;
         
@@ -591,19 +708,17 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Setup event handlers
     setupDurationButtons();
-    setupPlayerSelection();
-    setupScoreButtons();
     setupModalHandlers();
+    setupAnimatedMenu(); // New animated menu system
     
     // Start periodic refresh for active games
     if (gameData.gameStatus === 'active') {
         refreshGameData();
-        setInterval(refreshGameData, 30000); // Refresh every 30 seconds
+        setInterval(refreshGameData, 10000); // Refresh every 10 seconds
     }
 });
 
 // Make functions globally available
-window.openScoreMenu = openScoreMenu;
 window.openTimerModal = openTimerModal;
 window.openHistoryModal = openHistoryModal;
 window.closeModal = closeModal;

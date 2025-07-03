@@ -141,7 +141,9 @@ function updateScore($gameId, $playerId, $pointsToAdd, $modifiedBy) {
 function setGameDuration($gameId, $durationDays) {
     try {
         $pdo = Config::getDatabaseConnection();
-        $startDate = new DateTime();
+        $timezone = new DateTimeZone('America/New_York'); // Change to your timezone
+        
+        $startDate = new DateTime('now');
         $endDate = clone $startDate;
         $endDate->add(new DateInterval('P' . $durationDays . 'D'));
         
@@ -187,7 +189,9 @@ function getScoreHistory($gameId, $hours = 24) {
 function createTimer($gameId, $playerId, $description, $durationMinutes) {
     try {
         $pdo = Config::getDatabaseConnection();
-        $startTime = new DateTime();
+        
+        // Create times in UTC
+        $startTime = new DateTime('now', new DateTimeZone('UTC'));
         $endTime = clone $startTime;
         $endTime->add(new DateInterval('PT' . $durationMinutes . 'M'));
         
@@ -219,7 +223,7 @@ function getActiveTimers($gameId) {
             SELECT t.*, p.first_name, p.gender 
             FROM timers t
             JOIN players p ON t.player_id = p.id
-            WHERE t.game_id = ? AND t.is_active = TRUE AND t.end_time > NOW()
+            WHERE t.game_id = ? AND t.is_active = TRUE AND t.end_time > UTC_TIMESTAMP()
             ORDER BY t.end_time ASC
         ");
         $stmt->execute([$gameId]);
