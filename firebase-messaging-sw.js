@@ -21,9 +21,9 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage(function(payload) {
     console.log('Received background message:', payload);
     
-    const notificationTitle = payload.notification.title;
+    const notificationTitle = payload.data.title;
     const notificationOptions = {
-        body: payload.notification.body,
+        body: payload.data.body,
         icon: '/icon-192x192.png', // Add your app icon
         badge: '/badge-72x72.png',  // Add your badge icon
         tag: 'couples-quest',

@@ -115,6 +115,74 @@ function enableNotifications() {
     });
 }
 
+// Notification enablement from modal
+function enableNotificationsFromModal() {
+    const button = document.getElementById('enableNotificationsModalBtn');
+    const status = document.getElementById('notificationModalStatus');
+    const statusText = document.getElementById('notificationModalStatusText');
+    const testButton = document.getElementById('testNotificationBtn');
+    
+    if (!button || !status || !statusText) return;
+    
+    button.disabled = true;
+    button.textContent = 'Requesting...';
+    statusText.textContent = 'Requesting permission...';
+    status.className = 'notification-status disabled';
+    
+    console.log('User requested to enable notifications from modal');
+    
+    // Check if notifications are supported
+    if (!('Notification' in window)) {
+        statusText.textContent = '❌ Notifications not supported in this browser';
+        status.className = 'notification-status blocked';
+        button.textContent = 'Not Supported';
+        return;
+    }
+    
+    // Request permission
+    Notification.requestPermission().then((permission) => {
+        console.log('Permission result:', permission);
+        
+        if (permission === 'granted') {
+            statusText.textContent = '✅ Notifications are enabled!';
+            status.className = 'notification-status enabled';
+            button.textContent = 'Enabled ✓';
+            button.style.background = '#51cf66';
+            button.disabled = true;
+            
+            // Show test button
+            if (testButton) {
+                testButton.style.display = 'block';
+            }
+            
+            // Try to set up Firebase messaging if available
+            if (firebaseMessaging) {
+                setupFirebaseMessaging();
+            } else {
+                console.log('Firebase messaging not available, using basic notifications');
+            }
+            
+        } else if (permission === 'denied') {
+            statusText.textContent = '❌ Notifications blocked. Please enable in browser settings and refresh the page.';
+            status.className = 'notification-status blocked';
+            button.textContent = 'Blocked';
+            button.disabled = false;
+            
+        } else {
+            statusText.textContent = '⚠️ Permission dismissed. Click to try again.';
+            status.className = 'notification-status disabled';
+            button.textContent = 'Enable Notifications';
+            button.disabled = false;
+        }
+    }).catch((error) => {
+        console.error('Error requesting permission:', error);
+        statusText.textContent = '❌ Error requesting permission';
+        status.className = 'notification-status blocked';
+        button.textContent = 'Error';
+        button.disabled = false;
+    });
+}
+
 // Setup Firebase messaging after permission granted
 function setupFirebaseMessaging() {
     if (!firebaseMessaging) {
@@ -126,8 +194,15 @@ function setupFirebaseMessaging() {
     
     if (vapidKey === 'your-actual-vapid-key-here') {
         console.log('⚠️ VAPID key not configured. Please set your actual VAPID key.');
-        document.getElementById('notificationStatus').innerHTML += 
-            '<br><span style="color: #ffd43b;">⚠️ Firebase push notifications need setup</span>';
+        const statusElements = [
+            document.getElementById('notificationStatus'),
+            document.getElementById('notificationModalStatusText')
+        ];
+        statusElements.forEach(element => {
+            if (element) {
+                element.innerHTML += '<br><span style="color: #ffd43b;">⚠️ Firebase push notifications need setup</span>';
+            }
+        });
         return;
     }
     
@@ -147,8 +222,19 @@ function setupFirebaseMessaging() {
             .then(data => {
                 console.log('Token update result:', data);
                 if (data.success) {
-                    document.getElementById('notificationStatus').innerHTML += 
-                        '<br><span style="color: #51cf66;">🔥 Firebase notifications ready!</span>';
+                    const statusElements = [
+                        document.getElementById('notificationStatus'),
+                        document.getElementById('notificationModalStatusText')
+                    ];
+                    statusElements.forEach(element => {
+                        if (element) {
+                            if (element.id === 'notificationModalStatusText') {
+                                element.textContent = '✅ Notifications are enabled! 🔥 Firebase notifications ready!';
+                            } else {
+                                element.innerHTML += '<br><span style="color: #51cf66;">🔥 Firebase notifications ready!</span>';
+                            }
+                        }
+                    });
                 }
             })
             .catch(error => {
@@ -162,6 +248,7 @@ function setupFirebaseMessaging() {
         console.log('This is likely due to missing or invalid VAPID key');
     });
 }
+
 
 // Check notification status on page load
 function checkNotificationStatus() {
@@ -197,10 +284,58 @@ function checkNotificationStatus() {
     }
 }
 
+// Check notification status for modal
+function checkNotificationStatusForModal() {
+    const status = document.getElementById('notificationModalStatus');
+    const statusText = document.getElementById('notificationModalStatusText');
+    const button = document.getElementById('enableNotificationsModalBtn');
+    const testButton = document.getElementById('testNotificationBtn');
+    
+    if (!status || !statusText || !button) return;
+    
+    if (!('Notification' in window)) {
+        statusText.textContent = '❌ Notifications not supported in this browser';
+        status.className = 'notification-status blocked';
+        button.textContent = 'Not Supported';
+        button.disabled = true;
+        return;
+    }
+    
+    if (Notification.permission === 'granted') {
+        statusText.textContent = '✅ Notifications are enabled!';
+        status.className = 'notification-status enabled';
+        button.textContent = 'Enabled ✓';
+        button.style.background = '#51cf66';
+        button.disabled = true;
+        
+        // Show test button
+        if (testButton) {
+            testButton.style.display = 'block';
+        }
+        
+        // Set up Firebase if available
+        if (firebaseMessaging) {
+            setupFirebaseMessaging();
+        }
+        
+    } else if (Notification.permission === 'denied') {
+        statusText.textContent = '❌ Notifications are blocked. Please enable in browser settings and refresh the page.';
+        status.className = 'notification-status blocked';
+        button.textContent = 'Blocked';
+        button.disabled = false;
+        
+    } else {
+        statusText.textContent = 'Click below to enable notifications for this game.';
+        status.className = 'notification-status disabled';
+        button.textContent = 'Enable Notifications';
+        button.disabled = false;
+    }
+}
+
 // Show notification in foreground
 function showNotification(payload) {
-    const title = payload.notification?.title || 'The Couples Quest';
-    const body = payload.notification?.body || 'New notification';
+    const title = payload.data.title || 'The Couples Quest';
+    const body = payload.data.body || 'New notification';
     
     // Show browser notification if page is visible
     if (document.visibilityState === 'visible') {
@@ -212,43 +347,21 @@ function showNotification(payload) {
 // Show in-app notification
 function showInAppNotification(title, body) {
     // Create a simple in-app notification
-    const notification = document.createElement('div');
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: #333;
-        color: white;
-        padding: 15px 20px;
-        border-radius: 10px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-        z-index: 10000;
-        max-width: 300px;
-        animation: slideIn 0.3s ease;
-    `;
-    
-    notification.innerHTML = `
-        <div style="font-weight: bold; margin-bottom: 5px;">${title}</div>
-        <div>${body}</div>
-    `;
-    
-    document.body.appendChild(notification);
+    let $notification = $('.iAN'),
+    $title = $notification.find('.iAN-title'),
+    $body = $notification.find('.iAN-body');
+
+    $title.text(title);
+    $body.text(body);
+    $notification.addClass('show');
     
     // Remove after 5 seconds
     setTimeout(() => {
-        notification.remove();
+        $notification.removeClass('show');
+        $title.empty();
+        $body.empty();
     }, 5000);
 }
-
-// Add CSS animation for notifications
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes slideIn {
-        from { transform: translateX(100%); opacity: 0; }
-        to { transform: translateX(0); opacity: 1; }
-    }
-`;
-document.head.appendChild(style);
 
 // ===========================================
 // ANIMATED MENU SYSTEM FUNCTIONS
@@ -314,6 +427,8 @@ function openMenu() {
     const menuButton = document.getElementById('menuButton');
     const menuOverlay = document.getElementById('menuOverlay');
     const actionButtons = document.querySelectorAll('.action-button');
+
+    $('.player-name').addClass('hide');
     
     menuButton.classList.add('active');
     menuOverlay.classList.add('active');
@@ -332,6 +447,8 @@ function closeMenu() {
     const menuOverlay = document.getElementById('menuOverlay');
     const actionButtons = document.querySelectorAll('.action-button');
     const pointButtons = document.querySelectorAll('.point-button');
+
+    $('.player-name').removeClass('hide');
     
     menuButton.classList.remove('active');
     menuOverlay.classList.remove('active');
@@ -429,6 +546,16 @@ function setupDurationButtons() {
     });
 }
 
+// Open notification modal
+function openNotifyModal() {
+    const modal = document.getElementById('notifyModal');
+    if (modal) {
+        modal.classList.add('active');
+        // Check notification status when modal opens
+        setTimeout(checkNotificationStatusForModal, 100);
+    }
+}
+
 // Modal functions
 function openTimerModal() {
     const modal = document.getElementById('timerModal');
@@ -515,6 +642,8 @@ function createTimer() {
 
 // Bump notification function
 function sendBump() {
+    let $bubble = $('.bump-send-display');
+    $bubble.text('Sending Bump...').addClass('show');
     fetch('game.php', {
         method: 'POST',
         headers: {
@@ -525,15 +654,18 @@ function sendBump() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert(data.message);
+            $bubble.text(data.message);
         } else {
-            alert('Failed to send bump: ' + data.message);
+            $bubble.text('Failed to send bump');
         }
     })
     .catch(error => {
         console.error('Error sending bump:', error);
-        alert('Failed to send bump. Please try again.');
+        $bubble.text('Bump Failed');
     });
+    setTimeout(function() {
+        $bubble.text('').removeClass('show');
+    }, 5000);
 }
 
 // Test notification function
@@ -719,6 +851,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Make functions globally available
+window.openNotifyModal = openNotifyModal;
 window.openTimerModal = openTimerModal;
 window.openHistoryModal = openHistoryModal;
 window.closeModal = closeModal;
@@ -726,3 +859,4 @@ window.createTimer = createTimer;
 window.sendBump = sendBump;
 window.testNotification = testNotification;
 window.enableNotifications = enableNotifications;
+window.enableNotificationsFromModal = enableNotificationsFromModal;

@@ -235,7 +235,7 @@ function getActiveTimers($gameId) {
 }
 
 function sendPushNotification($fcmToken, $title, $body, $data = []) {
-    if (!$fcmToken) {
+    if (!$fcmToken || empty($fcmToken)) {
         error_log("FCM: No token provided");
         return false;
     }
@@ -245,6 +245,11 @@ function sendPushNotification($fcmToken, $title, $body, $data = []) {
         error_log("FCM: Project ID not configured properly");
         return false;
     }
+
+    $data = [
+        'title' => $title,
+        'body' => $body
+    ];
     
     // FCM v1 API endpoint
     $url = 'https://fcm.googleapis.com/v1/projects/' . Config::FCM_PROJECT_ID . '/messages:send';
@@ -260,25 +265,7 @@ function sendPushNotification($fcmToken, $title, $body, $data = []) {
     $message = [
         'message' => [
             'token' => $fcmToken,
-            'notification' => [
-                'title' => $title,
-                'body' => $body
-            ],
             'data' => $data,
-            'webpush' => [
-                'notification' => [
-                    'title' => $title,
-                    'body' => $body,
-                    'icon' => Config::SITE_URL . '/icon-192x192.png',
-                    'badge' => Config::SITE_URL . '/badge-72x72.png',
-                    'tag' => 'couples-quest',
-                    'requireInteraction' => false,
-                    'renotify' => false
-                ],
-                'fcm_options' => [
-                    'link' => Config::SITE_URL . '/game.php'
-                ]
-            ]
         ]
     ];
     
@@ -300,17 +287,41 @@ function sendPushNotification($fcmToken, $title, $body, $data = []) {
     curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($message));
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30); // Add timeout
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10); // Add connection timeout
     
     $result = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
     curl_close($ch);
     
-    if ($httpCode !== 200) {
-        error_log("FCM API error: HTTP $httpCode - $result");
+    if ($curlError) {
+        error_log("FCM cURL error: $curlError");
         return false;
     }
     
-    error_log("FCM notification sent successfully");
+    if ($httpCode !== 200) {
+        error_log("FCM API error: HTTP $httpCode - $result");
+        
+        // Try to parse the error for more specific logging
+        $errorData = json_decode($result, true);
+        if ($errorData && isset($errorData['error'])) {
+            error_log("FCM error details: " . $errorData['error']['message']);
+            
+            // Handle token errors specifically
+            if (isset($errorData['error']['details'])) {
+                foreach ($errorData['error']['details'] as $detail) {
+                    if (isset($detail['errorCode']) && in_array($detail['errorCode'], ['UNREGISTERED', 'INVALID_ARGUMENT'])) {
+                        error_log("FCM token appears to be invalid or unregistered");
+                        // You might want to remove this token from the database
+                    }
+                }
+            }
+        }
+        return false;
+    }
+    
+    error_log("FCM notification sent successfully to token: " . substr($fcmToken, 0, 20) . "...");
     return true;
 }
 
@@ -335,6 +346,11 @@ function getAccessToken() {
     
     $serviceAccount = json_decode(file_get_contents($serviceAccountPath), true);
     
+    if (!$serviceAccount) {
+        error_log("Failed to parse service account JSON");
+        return false;
+    }
+    
     // Create JWT
     $header = json_encode(['typ' => 'JWT', 'alg' => 'RS256']);
     $now = time();
@@ -351,9 +367,18 @@ function getAccessToken() {
     
     $signature = '';
     $privateKey = openssl_pkey_get_private($serviceAccount['private_key']);
-    openssl_sign($base64Header . "." . $base64Payload, $signature, $privateKey, OPENSSL_ALGO_SHA256);
-    $base64Signature = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($signature));
     
+    if (!$privateKey) {
+        error_log("Failed to parse private key from service account");
+        return false;
+    }
+    
+    if (!openssl_sign($base64Header . "." . $base64Payload, $signature, $privateKey, OPENSSL_ALGO_SHA256)) {
+        error_log("Failed to sign JWT");
+        return false;
+    }
+    
+    $base64Signature = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($signature));
     $jwt = $base64Header . "." . $base64Payload . "." . $base64Signature;
     
     // Exchange JWT for access token
@@ -366,10 +391,18 @@ function getAccessToken() {
     ]));
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/x-www-form-urlencoded']);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
     
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
     curl_close($ch);
+    
+    if ($curlError) {
+        error_log("OAuth cURL error: $curlError");
+        return false;
+    }
     
     if ($httpCode !== 200) {
         error_log("OAuth token error: HTTP $httpCode - $response");
@@ -391,6 +424,38 @@ function getAccessToken() {
     file_put_contents($cacheFile, json_encode($cacheData));
     
     return $tokenData['access_token'];
+}
+
+// Add a new function to test FCM configuration
+function testFCMConfiguration() {
+    error_log("Testing FCM configuration...");
+    
+    // Check if constants are defined
+    if (!defined('Config::FCM_PROJECT_ID')) {
+        error_log("FCM_PROJECT_ID not defined");
+        return false;
+    }
+    
+    if (!defined('Config::FCM_SERVICE_ACCOUNT_PATH')) {
+        error_log("FCM_SERVICE_ACCOUNT_PATH not defined");
+        return false;
+    }
+    
+    // Check if service account file exists
+    if (!file_exists(Config::FCM_SERVICE_ACCOUNT_PATH)) {
+        error_log("Service account file not found: " . Config::FCM_SERVICE_ACCOUNT_PATH);
+        return false;
+    }
+    
+    // Try to get an access token
+    $token = getAccessToken();
+    if (!$token) {
+        error_log("Failed to get access token");
+        return false;
+    }
+    
+    error_log("FCM configuration test passed");
+    return true;
 }
 
 function sendBumpNotification($gameId, $senderPlayerId) {
@@ -435,7 +500,7 @@ function sendBumpNotification($gameId, $senderPlayerId) {
         // Send actual FCM notification
         $result = sendPushNotification(
             $recipient['fcm_token'],
-            'The Couples Quest',
+            'Bump!',
             $senderName . ' is waiting for you...'
         );
         
@@ -500,43 +565,6 @@ function updateFcmToken($deviceId, $fcmToken) {
     } catch (Exception $e) {
         error_log("Error updating FCM token: " . $e->getMessage());
         return false;
-    }
-}
-
-function checkExpiredTimers() {
-    try {
-        $pdo = Config::getDatabaseConnection();
-        
-        // Get expired timers
-        $stmt = $pdo->prepare("
-            SELECT t.*, p.fcm_token, p.first_name 
-            FROM timers t
-            JOIN players p ON t.player_id = p.id
-            WHERE t.is_active = TRUE AND t.end_time <= NOW()
-        ");
-        $stmt->execute();
-        $expiredTimers = $stmt->fetchAll();
-        
-        foreach ($expiredTimers as $timer) {
-            // Send notification
-            if ($timer['fcm_token']) {
-                sendPushNotification(
-                    $timer['fcm_token'],
-                    'Timer Expired',
-                    $timer['description']
-                );
-            }
-            
-            // Mark timer as inactive
-            $stmt = $pdo->prepare("UPDATE timers SET is_active = FALSE WHERE id = ?");
-            $stmt->execute([$timer['id']]);
-        }
-        
-        return count($expiredTimers);
-        
-    } catch (Exception $e) {
-        error_log("Error checking expired timers: " . $e->getMessage());
-        return 0;
     }
 }
 ?>

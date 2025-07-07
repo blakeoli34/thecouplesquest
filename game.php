@@ -103,7 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>The Couple's Quest</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -113,493 +113,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     <link rel="manifest" href="/manifest.json">
     <link rel="apple-touch-icon" href="/icon-180x180.png">
     <meta name="apple-mobile-web-app-title" content="TCQ">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'museo-sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f5f5f5;
-            min-height: 100vh;
-            overflow-x: hidden;
-        }
-        
-        .container {
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .game-timer {
-            background: #111;
-            color: white;
-            text-align: center;
-            padding: 12px;
-            font-weight: 500;
-            font-size: 12px;
-        }
-        
-        .scoreboard {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            position: relative;
-        }
-        
-        .player-score {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            position: relative;
-            padding: 40px 20px;
-            color: white;
-            font-weight: bold;
-        }
-        
-        .player-score.male {
-            background: <?= Config::COLOR_BLUE ?>;
-        }
-        
-        .player-score.female {
-            background: <?= Config::COLOR_PINK ?>;
-        }
-        
-        .player-name {
-            font-size: 24px;
-            margin-bottom: 12px;
-        }
-        
-        .player-score-value {
-            font-size: 64px;
-            font-weight: 300;
-        }
-        
-        .player-timers {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-        }
-        
-        .timer-badge {
-            background: rgba(255,255,255,0.2);
-            padding: 5px 10px;
-            border-radius: 15px;
-            font-size: 12px;
-            cursor: pointer;
-            backdrop-filter: blur(10px);
-        }
-
-        .board-separator {
-            position: absolute;
-            top: 50%;
-            left: 0;
-            width: 100%;
-            height: 5px;
-            z-index: 99;
-            background: white;
-            transform: translateY(-50%);
-        }
-        
-        /* Menu System */
-        .menu-system {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 1000;
-        }
-        
-        .menu-button {
-            width: 80px;
-            height: 80px;
-            background: white;
-            border: none;
-            border-radius: 50%;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            color: #111;
-            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            position: relative;
-            z-index: 101;
-        }
-        
-        .menu-button:hover {
-            transform: scale(1.1);
-        }
-        
-        .menu-button.active {
-            background: #111;
-            color: white;
-            transform: rotate(45deg);
-        }
-        
-        /* Action Buttons (Add, Subtract, Steal) */
-        .action-buttons {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-        }
-        
-        .action-button {
-            position: absolute;
-            width: 70px;
-            height: 70px;
-            background: rgba(255,255,255,0.7);
-            border: none;
-            border-radius: 50%;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            cursor: pointer;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            font-weight: 600;
-            color: #333;
-            opacity: 0;
-            transform: translate(-50%, -50%) scale(0);
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            pointer-events: none;
-        }
-        
-        .action-button.show {
-            opacity: 1;
-            pointer-events: all;
-        }
-        
-        .action-button:hover {
-            transform: scale(1.1);
-        }
-        
-        .action-button i {
-            font-size: 18px;
-            margin-bottom: 2px;
-        }
-        
-        /* Arc positioning for top player */
-        .action-button.top1 { 
-            top: -100px; 
-            left: -120px;
-            transform: translate(-50%, -50%) scale(0);
-        }
-        .action-button.top1.show { 
-            transform: translate(-50%, -50%) scale(1);
-        }
-        .action-button.top2 { 
-            top: -140px; 
-            left: 50%;
-            transform: translate(-50%, -50%) scale(0);
-        }
-        .action-button.top2.show { 
-            transform: translate(-50%, -50%) scale(1);
-        }
-        .action-button.top3 { 
-            top: -100px; 
-            left: 120px;
-            transform: translate(-50%, -50%) scale(0);
-        }
-        .action-button.top3.show { 
-            transform: translate(-50%, -50%) scale(1);
-        }
-        
-        /* Arc positioning for bottom player */
-        .action-button.bottom1 { 
-            top: 80px; 
-            left: -120px;
-            transform: translate(-50%, -50%) scale(0);
-        }
-        .action-button.bottom1.show { 
-            transform: translate(-50%, -50%) scale(1);
-        }
-        .action-button.bottom2 { 
-            top: 120px; 
-            left: 50%;
-            transform: translate(-50%, -50%) scale(0);
-        }
-        .action-button.bottom2.show { 
-            transform: translate(-50%, -50%) scale(1);
-        }
-        .action-button.bottom3 { 
-            top: 80px; 
-            left: 120px;
-            transform: translate(-50%, -50%) scale(0);
-        }
-        .action-button.bottom3.show { 
-            transform: translate(-50%, -50%) scale(1);
-        }
-        
-        
-        /* Point Buttons */
-        .point-buttons {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 102; /* Higher than menu button */
-        }
-        
-        .point-button {
-            position: absolute;
-            width: 50px;
-            height: 50px;
-            background: white;
-            border: 2px solid #333;
-            border-radius: 50%;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 16px;
-            font-weight: 700;
-            color: #333;
-            opacity: 0;
-            transform: translate(-50%, -50%) scale(0);
-            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            pointer-events: none;
-            z-index: 102;
-        }
-        
-        .point-button.show {
-            opacity: 1;
-            transform: translate(-50%, -50%) scale(1);
-            pointer-events: all;
-        }
-        
-        .point-button:hover {
-            transform: translate(-50%, -50%) scale(1.2);
-            background: #333;
-            color: white;
-        }
-        
-        /* Point button positions - spread wider */
-        .point-button.p1 { left: -120px; }
-        .point-button.p2 { left: -60px; }
-        .point-button.p3 { left: 0px; }
-        .point-button.p4 { left: 60px; }
-        .point-button.p5 { left: 120px; }
-        
-        /* Overlay */
-        .menu-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.3);
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.3s ease;
-            z-index: 99;
-        }
-        
-        .menu-overlay.active {
-            opacity: 1;
-            pointer-events: all;
-        }
-        
-        .bottom-menu {
-            background: white;
-            padding: 20px;
-            display: flex;
-            justify-content: center;
-            gap: 40px;
-            box-shadow: 0 -2px 20px rgba(0,0,0,0.1);
-        }
-        
-        .menu-item {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 5px;
-            cursor: pointer;
-            border-radius: 10px;
-            transition: background-color 0.2s;
-        }
-        
-        .menu-item:hover {
-            background: #f0f0f0;
-        }
-        
-        .menu-item-icon {
-            width: 50px;
-            height: 50px;
-            font-size: 28px;
-            background: #eee;
-            border-radius: 8px;
-            padding: 4px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #666;
-        }
-        
-        .menu-item-text {
-            font-size: 14px;
-            color: #666;
-        }
-        
-        /* Modals - keeping timer and history modals */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-        
-        .modal.active {
-            display: flex;
-        }
-        
-        .modal-content {
-            background: white;
-            border-radius: 20px;
-            padding: 30px;
-            width: 100%;
-            max-width: 400px;
-            max-height: 80vh;
-            overflow-y: auto;
-        }
-        
-        .modal-title {
-            font-size: 20px;
-            font-weight: 600;
-            margin-bottom: 20px;
-            text-align: center;
-        }
-        
-        .form-group {
-            margin-bottom: 20px;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 600;
-        }
-        
-        .form-group input, .form-group select {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #ddd;
-            border-radius: 10px;
-            font-size: 16px;
-        }
-        
-        .btn {
-            width: 100%;
-            padding: 15px;
-            background: linear-gradient(135deg, <?= Config::COLOR_PINK ?>, <?= Config::COLOR_BLUE ?>);
-            color: white;
-            border: none;
-            border-radius: 10px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            margin-bottom: 10px;
-        }
-        
-        .btn-secondary {
-            background: #6b7280;
-        }
-        
-        .history-item {
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 10px;
-            margin-bottom: 10px;
-        }
-        
-        .history-time {
-            font-size: 12px;
-            color: #666;
-        }
-        
-        .history-change {
-            font-weight: 600;
-            margin-top: 5px;
-        }
-        
-        .waiting-screen {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 40px;
-            text-align: center;
-        }
-        
-        .waiting-screen h2 {
-            margin-bottom: 20px;
-            color: #333;
-        }
-        
-        .waiting-screen p {
-            color: #666;
-            margin-bottom: 30px;
-        }
-        
-        .duration-options {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-        
-        .duration-btn {
-            padding: 20px;
-            border: 2px solid #ddd;
-            background: white;
-            border-radius: 15px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: all 0.2s;
-        }
-        
-        .duration-btn:hover {
-            border-color: <?= Config::COLOR_BLUE ?>;
-            color: <?= Config::COLOR_BLUE ?>;
-        }
-        
-        .game-ended {
-            text-align: center;
-            padding: 40px;
-        }
-        
-        .winner {
-            font-size: 32px;
-            font-weight: 900;
-            margin-bottom: 20px;
-        }
-        
-        .winner.male {
-            color: <?= Config::COLOR_BLUE ?>;
-        }
-        
-        .winner.female {
-            color: <?= Config::COLOR_PINK ?>;
+        :root {
+            --color-blue: <?= Config::COLOR_BLUE ?>;
+            --color-pink: <?= Config::COLOR_PINK ?>;
+            --color-blue-dark: <?= Config::COLOR_BLUE_DARK ?>;
+            --color-pink-dark: <?= Config::COLOR_PINK_DARK ?>;
         }
     </style>
+    <link rel="stylesheet" href="/game.css">
 </head>
 <body>
     <div class="container">
@@ -713,15 +236,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     <div class="action-buttons">
                         <button class="action-button add top1" data-action="add" data-player="<?= $opponentPlayer['id'] ?>">
                             <i class="fa-solid fa-plus"></i>
-                            <span>Add</span>
                         </button>
                         <button class="action-button subtract top2" data-action="subtract" data-player="<?= $opponentPlayer['id'] ?>">
                             <i class="fa-solid fa-minus"></i>
-                            <span>Subtract</span>
                         </button>
                         <button class="action-button steal top3" data-action="steal" data-player="<?= $opponentPlayer['id'] ?>">
-                            <i class="fa-solid fa-hand-holding"></i>
-                            <span>Steal</span>
+                            <i class="fa-solid fa-hand"></i>
                         </button>
                     </div>
                     
@@ -729,15 +249,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     <div class="action-buttons">
                         <button class="action-button add bottom1" data-action="add" data-player="<?= $currentPlayer['id'] ?>">
                             <i class="fa-solid fa-plus"></i>
-                            <span>Add</span>
                         </button>
                         <button class="action-button subtract bottom2" data-action="subtract" data-player="<?= $currentPlayer['id'] ?>">
                             <i class="fa-solid fa-minus"></i>
-                            <span>Subtract</span>
                         </button>
                         <button class="action-button steal bottom3" data-action="steal" data-player="<?= $currentPlayer['id'] ?>">
-                            <i class="fa-solid fa-hand-holding"></i>
-                            <span>Steal</span>
+                            <i class="fa-solid fa-hand"></i>
                         </button>
                     </div>
                     
@@ -754,7 +271,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 <div class="board-separator"></div>
                 
                 <!-- Current Player Score (Bottom) -->
-                <div class="player-score <?= $currentPlayer['gender'] ?>">
+                <div class="player-score bottom <?= $currentPlayer['gender'] ?>">
                     <div class="player-timers" id="current-timers"></div>
                     <div class="player-name"><?= htmlspecialchars($currentPlayer['first_name']) ?></div>
                     <div class="player-score-value"><?= $currentPlayer['score'] ?></div>
@@ -763,6 +280,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             
             <!-- Bottom Menu -->
             <div class="bottom-menu">
+                <div class="bump-send-display"></div>
                 <div class="menu-item" onclick="sendBump()">
                     <div class="menu-item-icon"><i class="fa-solid fa-bullhorn"></i></div>
                     <div class="menu-item-text">Bump</div>
@@ -775,6 +293,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     <div class="menu-item-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
                     <div class="menu-item-text">History</div>
                 </div>
+                <div class="menu-item" onclick="openNotifyModal()">
+                    <div class="menu-item-icon"><i class="fa-solid fa-bell"></i></div>
+                    <div class="menu-item-text">Notify</div>
+                </div>
             </div>
             
             <!-- Pass game data to JavaScript -->
@@ -786,6 +308,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 };
             </script>
         <?php endif; ?>
+    </div>
+
+    <div class="iAN">
+        <div class="iAN-title"></div>
+        <div class="iAN-body"></div>
+    </div>
+
+    <!-- Notify Modal -->
+    <div class="modal" id="notifyModal">
+        <div class="modal-content">
+            <div class="modal-title">🔔 Notification Settings</div>
+            
+            <div id="notificationModalStatus" class="notification-status disabled">
+                <span id="notificationModalStatusText">Checking notification status...</span>
+            </div>
+            
+            <div class="notification-info">
+                <h4>What you'll receive:</h4>
+                <ul>
+                    <li>Daily score updates</li>
+                    <li>Timer expiration alerts</li>
+                    <li>Bump notifications from your partner</li>
+                </ul>
+            </div>
+            
+            <button id="enableNotificationsModalBtn" class="btn" onclick="enableNotificationsFromModal()">
+                Enable Notifications
+            </button>
+            
+            <button id="testNotificationBtn" class="btn btn-test" onclick="testNotification()" style="display: none;">
+                Send Test Notification
+            </button>
+            
+            <button class="btn btn-secondary" onclick="closeModal('notifyModal')">Close</button>
+        </div>
     </div>
     
     <!-- Timer Modal -->
@@ -823,13 +380,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         <div class="modal-content">
             <div class="modal-title">Score History (24h)</div>
             <div id="historyContent"></div>
-            <button class="btn btn-secondary" onclick="closeModal('historyModal')">Close</button>
+            <button class="btn btn-secondary" onclick="closeModal('historyModal')" style="margin-top: 12px;">Close</button>
         </div>
     </div>
     
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js"></script>
-    
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js"></script>    
     <script src="/game.js"></script>
 </body>
 </html>
