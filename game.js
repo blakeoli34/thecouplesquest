@@ -349,11 +349,14 @@ function showInAppNotification(title, body) {
     // Create a simple in-app notification
     let $notification = $('.iAN'),
     $title = $notification.find('.iAN-title'),
-    $body = $notification.find('.iAN-body');
+    $body = $notification.find('.iAN-body'),
+    alertSound = new Audio('/ian.m4r');
 
     $title.text(title);
     $body.text(body);
     $notification.addClass('show');
+    alertSound.play();
+
     
     // Remove after 5 seconds
     setTimeout(() => {
@@ -719,13 +722,28 @@ function loadHistory() {
             const div = document.createElement('div');
             div.className = 'history-item';
             
-            const time = new Date(item.timestamp).toLocaleString();
-            const change = item.points_changed > 0 ? `+${item.points_changed}` : item.points_changed;
+            const time = new Date(item.timestamp + 'Z');
+            const options = {
+                month: 'long',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            };
+            const formatter = new Intl.DateTimeFormat('en-US', options);
+            const formattedDate = formatter.format(time);
+            const change = item.points_changed < 0 ? Math.abs(item.points_changed) : item.points_changed;
+            var modifiedWord = 'added',
+            modifiedWordNext = 'to';
+            if(item.points_changed < 0) {
+                modifiedWord = 'subtracted',
+                modifiedWordNext = 'from';
+            }
             
             div.innerHTML = `
-                <div class="history-time">${time}</div>
+                <div class="history-time">${formattedDate}</div>
                 <div class="history-change">
-                    ${item.modified_by_name} gave ${change} points to ${item.player_name}
+                    ${item.modified_by_name} ${modifiedWord} ${change} points ${modifiedWordNext} ${item.player_name}'s score
                 </div>
             `;
             
@@ -766,6 +784,9 @@ function refreshGameData() {
         if (data.timers) {
             updateTimerDisplay(data.timers);
         }
+        if (data.gametime) {
+            $('.game-timer').text(data.gametime);
+        }
     })
     .catch(error => {
         console.error('Error refreshing game data:', error);
@@ -794,8 +815,10 @@ function updateTimerDisplay(timers) {
         if (diff > 0) {
             const hours = Math.floor(diff / (1000 * 60 * 60));
             const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+            const title = '<span class="timer-title">' + timer.description + '</span>';
             
-            div.textContent = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+            div.innerHTML = title.concat(hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`);
             
             if (timer.player_id == gameData.currentPlayerId) {
                 currentTimers.appendChild(div);

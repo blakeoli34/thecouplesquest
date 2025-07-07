@@ -29,6 +29,31 @@ if (!$player) {
 $players = getGamePlayers($player['game_id']);
 $gameStatus = $player['status'];
 
+$now = new DateTime();
+$endDate = new DateTime($player['end_date']);
+$timeRemaining = $now < $endDate ? $endDate->diff($now) : null;
+
+$gameTimeText = '';
+if ($timeRemaining) {
+    $parts = [];
+    
+    if ($timeRemaining->days > 0) {
+        $parts[] = $timeRemaining->days . ' day' . ($timeRemaining->days > 1 ? 's' : '');
+    }
+    
+    if ($timeRemaining->h > 0) {
+        $parts[] = $timeRemaining->h . ' hour' . ($timeRemaining->h > 1 ? 's' : '');
+    }
+    
+    if ($timeRemaining->i > 0) {
+        $parts[] = $timeRemaining->i . ' minute' . ($timeRemaining->i > 1 ? 's' : '');
+    }
+    
+    $gameTimeText = 'Game Remaining: ' . implode(', ', $parts);
+} else {
+    $gameTimeText = 'Game Ended';
+}
+
 // Handle AJAX requests
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     header('Content-Type: application/json');
@@ -93,7 +118,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             echo json_encode([
                 'players' => $updatedPlayers,
                 'timers' => $timers,
-                'history' => $history
+                'history' => $history,
+                'gametime' => $gameTimeText
             ]);
             exit;
     }
@@ -204,17 +230,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 exit;
             }
             
-            $now = new DateTime();
-            $endDate = new DateTime($player['end_date']);
-            $timeRemaining = $now < $endDate ? $endDate->diff($now) : null;
+            
             ?>
             
             <div class="game-timer">
-                <?php if ($timeRemaining): ?>
-                    Time Remaining: <?= $timeRemaining->format('%a days, %h hours, %i minutes') ?>
-                <?php else: ?>
-                    Game Ended
-                <?php endif; ?>
+                <?php echo $gameTimeText; ?>
             </div>
             
             <div class="scoreboard">
