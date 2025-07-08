@@ -146,11 +146,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             --color-pink: <?= Config::COLOR_PINK ?>;
             --color-blue-dark: <?= Config::COLOR_BLUE_DARK ?>;
             --color-pink-dark: <?= Config::COLOR_PINK_DARK ?>;
+            --animation-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
     </style>
     <link rel="stylesheet" href="/game.css">
 </head>
 <body>
+    <div class="largeScreen">
+        <div class="largeScreenTitle">Please Use a Phone</div>
+        <div class="largeScreenMessage">This game was designed for mobile phone use only. (iPhone Recommended)<br>Please use a smaller screen size to see the game UI.</div>
+    </div>
     <div class="container">
         <?php if ($gameStatus === 'waiting' && count($players) < 2): ?>
             <!-- Waiting for other player -->
@@ -185,7 +190,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     <div class="duration-btn" data-days="7">1 Week</div>
                     <div class="duration-btn" data-days="14">2 Weeks</div>
                     <div class="duration-btn" data-days="30">1 Month</div>
-                    <div class="duration-btn" data-days="90">3 Months</div>
+                    <div class="duration-btn recommended" data-days="90">3 Months</div>
                     <div class="duration-btn" data-days="180">6 Months</div>
                     <div class="duration-btn" data-days="365">1 Year</div>
                 </div>
@@ -240,6 +245,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             <div class="scoreboard">
                 <!-- Opponent Score (Top) -->
                 <div class="player-score opponent <?= $opponentPlayer['gender'] ?>">
+                    <div class="player-score-animation"></div>
                     <div class="player-timers" id="opponent-timers"></div>
                     <div class="player-name"><?= htmlspecialchars($opponentPlayer['first_name']) ?></div>
                     <div class="player-score-value"><?= $opponentPlayer['score'] ?></div>
@@ -292,6 +298,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 
                 <!-- Current Player Score (Bottom) -->
                 <div class="player-score bottom <?= $currentPlayer['gender'] ?>">
+                    <div class="player-score-animation"></div>
                     <div class="player-timers" id="current-timers"></div>
                     <div class="player-name"><?= htmlspecialchars($currentPlayer['first_name']) ?></div>
                     <div class="player-score-value"><?= $currentPlayer['score'] ?></div>
@@ -307,15 +314,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 </div>
                 <div class="menu-item" onclick="openTimerModal()">
                     <div class="menu-item-icon"><i class="fa-solid fa-stopwatch"></i></div>
-                    <div class="menu-item-text">Timers</div>
+                    <div class="menu-item-text">Timer</div>
                 </div>
-                <div class="menu-item" onclick="openHistoryModal()">
-                    <div class="menu-item-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
-                    <div class="menu-item-text">History</div>
-                </div>
-                <div class="menu-item" onclick="openNotifyModal()">
-                    <div class="menu-item-icon"><i class="fa-solid fa-bell"></i></div>
-                    <div class="menu-item-text">Notify</div>
+            </div>
+
+            <div class="bottom-right-menu">
+                <i class="fa-solid fa-ellipsis"></i>
+                <div class="bottom-right-menu-flyout">
+                    <div class="flyout-menu-item red" onclick="endGame()">
+                        <div class="flyout-menu-item-icon"><i class="fa-solid fa-ban"></i></div>
+                        <div class="flyout-menu-item-text">End Game Now</div>
+                    </div>
+                    <div class="flyout-menu-item" onclick="hardRefresh()">
+                        <div class="flyout-menu-item-icon"><i class="fa-solid fa-arrows-rotate"></i></div>
+                        <div class="flyout-menu-item-text">Refresh Game...</div>
+                    </div>
+                    <div class="flyout-menu-item" onclick="openHistoryModal()">
+                        <div class="flyout-menu-item-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
+                        <div class="flyout-menu-item-text">History</div>
+                    </div>
+                    <div class="flyout-menu-item" onclick="openNotifyModal()">
+                        <div class="flyout-menu-item-icon"><i class="fa-solid fa-bell"></i></div>
+                        <div class="flyout-menu-item-text">Notifications</div>
+                    </div>
                 </div>
             </div>
             
@@ -347,9 +368,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             <div class="notification-info">
                 <h4>What you'll receive:</h4>
                 <ul>
-                    <li>Daily score updates</li>
+                    <li>Score updates</li>
                     <li>Timer expiration alerts</li>
-                    <li>Bump notifications from your partner</li>
+                    <li>Bump notifications from your opponent</li>
                 </ul>
             </div>
             
@@ -368,7 +389,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     <!-- Timer Modal -->
     <div class="modal" id="timerModal">
         <div class="modal-content">
-            <div class="modal-title">Set Timer</div>
+            <div class="modal-title">Create Timer</div>
             
             <div class="form-group">
                 <label>Description</label>

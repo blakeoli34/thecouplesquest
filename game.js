@@ -10,6 +10,10 @@ let menuOpen = false;
 let currentAction = null;
 let currentTargetPlayerId = null;
 
+$('.bottom-right-menu').on('click', function() {
+    $(this).toggleClass('open');
+});
+
 // Check for device ID in localStorage as fallback
 function checkLocalStorageAuth() {
     const deviceId = localStorage.getItem('couples_quest_device_id');
@@ -582,7 +586,7 @@ function closeModal(modalId) {
     }
 }
 
-// Score update function (updated to work with new system)
+// Score update function with animation
 function updateScore(playerId, points) {
     fetch('game.php', {
         method: 'POST',
@@ -594,7 +598,43 @@ function updateScore(playerId, points) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            refreshGameData();
+            // Find the score element
+            const players = gameData.players || [];
+            let targetGender = '';
+            
+            // Get updated data to find which player was modified
+            fetch('game.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'action=get_game_data'
+            })
+            .then(response => response.json())
+            .then(gameDataUpdate => {
+                if (gameDataUpdate.players) {
+                    const updatedPlayer = gameDataUpdate.players.find(p => p.id == playerId);
+                    if (updatedPlayer) {
+                        animateScoreChange(updatedPlayer.gender, updatedPlayer.score, points);
+                    }
+                    
+                    // Update all scores
+                    gameDataUpdate.players.forEach(player => {
+                        const scoreElement = document.querySelector(`.player-score.${player.gender} .player-score-value`);
+                        if (scoreElement) {
+                            scoreElement.textContent = player.score;
+                        }
+                    });
+                    
+                    // Update timers
+                    if (gameDataUpdate.timers) {
+                        updateTimerDisplay(gameDataUpdate.timers);
+                    }
+                    if (gameDataUpdate.gametime) {
+                        $('.game-timer').text(gameDataUpdate.gametime);
+                    }
+                }
+            });
         } else {
             alert('Failed to update score. Please try again.');
         }
@@ -603,6 +643,67 @@ function updateScore(playerId, points) {
         console.error('Error updating score:', error);
         alert('Failed to update score. Please try again.');
     });
+}
+
+// New function to animate score changes
+function animateScoreChange(playerGender, newScore, pointsChanged) {
+    const scoringPlayer = document.querySelector(`.player-score.${playerGender}`),
+    scoreElement = scoringPlayer.querySelector('.player-score-value'),
+    animateElement = scoringPlayer.querySelector('.player-score-animation');
+    if (!scoreElement) return;
+    
+    // Add counting class for scale effect
+    scoreElement.classList.add('counting');
+    setTimeout(() => {
+        scoreElement.classList.remove('counting');
+    }, 1700);
+    
+    
+    
+    if (pointsChanged > 0) {
+        animateElement.textContent = `+${pointsChanged}`;
+    } else {
+        animateElement.textContent = `${pointsChanged}`;
+    }
+
+    animateElement.classList.add('animate');
+    
+    // Animate the score counting
+    const oldScore = newScore - pointsChanged;
+    animateCounter(scoreElement, oldScore, newScore, 2000);
+    
+    // Remove animation element
+    setTimeout(() => {
+        if (animateElement) {
+            animateElement.textContent = '';
+            animateElement.classList.remove('animate');
+        }
+    }, 1800);
+}
+
+// Counter animation function
+function animateCounter(element, start, end, duration) {
+    const startTime = performance.now();
+    const difference = end - start;
+    
+    function updateCounter(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        
+        // Easing function for smooth animation
+        const easeOutQuart = 1 - Math.pow(1 - progress, 4);
+        const current = Math.round(start + (difference * easeOutQuart));
+        
+        element.textContent = current;
+        
+        if (progress < 1) {
+            requestAnimationFrame(updateCounter);
+        } else {
+            element.textContent = end; // Ensure final value is exact
+        }
+    }
+    
+    requestAnimationFrame(updateCounter);
 }
 
 // Timer creation function
@@ -759,7 +860,7 @@ function loadHistory() {
     });
 }
 
-// Refresh game data function
+// Refresh game data function (modified to not interfere with animations)
 function refreshGameData() {
     fetch('game.php', {
         method: 'POST',
@@ -770,11 +871,11 @@ function refreshGameData() {
     })
     .then(response => response.json())
     .then(data => {
-        // Update scores
+        // Only update scores if they're not currently animating
         if (data.players) {
             data.players.forEach(player => {
                 const scoreElement = document.querySelector(`.player-score.${player.gender} .player-score-value`);
-                if (scoreElement) {
+                if (scoreElement && !scoreElement.classList.contains('counting')) {
                     scoreElement.textContent = player.score;
                 }
             });
