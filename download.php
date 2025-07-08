@@ -1,10 +1,17 @@
 <?php
 // download.php - Mobile config download page
 require_once 'config.php';
+require_once 'functions.php';
 
 $deviceId = $_COOKIE['device_id'] ?? null;
 
 if (!$deviceId) {
+    header('Location: index.php');
+    exit;
+}
+
+$player = getPlayerByDeviceId($deviceId);
+if (!$player) {
     header('Location: index.php');
     exit;
 }
@@ -183,17 +190,20 @@ function generateUUID() {
         <h1>Almost Ready!</h1>
         
         <p class="instruction">
-            Download the configuration file to install The Couples Quest on your home screen for the best experience.
+            Download the configuration file to install The Couples Quest PWA (Progressive Web App) on your home screen for the best experience.
         </p>
         
-        <a href="?download=1" class="download-btn">Download App</a>
+        <a href="?download=1" class="download-btn">Download PWA Config</a>
+        <a href="os-beta-updates://" class="download-btn">Go to Settings</a>
         
         <div class="steps">
             <h3>After downloading:</h3>
             <ol>
-                <li>Install the Profile in the Settings app</li>
+                <li>Install the Profile in Settings > General > VPN & Device Management</li>
                 <li>Follow the prompts to install</li>
                 <li>Find TCQ app on your home screen</li>
+                <li>Enable notifications for the best experience</li>
+                <li>Begin and enjoy your game!</li>
             </ol>
         </div>
     </div>

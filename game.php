@@ -122,6 +122,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 'gametime' => $gameTimeText
             ]);
             exit;
+
+        case 'check_game_status':
+            try {
+                $gameId = $player['game_id'];
+                $currentPlayers = getGamePlayers($gameId);
+                $currentStatus = $player['status']; // or get fresh from DB if needed
+                
+                echo json_encode([
+                    'success' => true,
+                    'status' => $currentStatus,
+                    'player_count' => count($currentPlayers)
+                ]);
+            } catch (Exception $e) {
+                echo json_encode([
+                    'success' => false,
+                    'error' => $e->getMessage()
+                ]);
+            }
+            exit;
+
+        case 'end_game':
+            try {
+                $pdo = Config::getDatabaseConnection();
+                $stmt = $pdo->prepare("UPDATE games SET status = 'completed', end_date = NOW() WHERE id = ?");
+                $stmt->execute([$player['game_id']]);
+                echo json_encode(['success' => true]);
+            } catch (Exception $e) {
+                error_log("Error ending game: " . $e->getMessage());
+                echo json_encode(['success' => false, 'message' => 'Failed to end game.']);
+            }
+            exit;
     }
 }
 ?>
@@ -140,6 +171,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     <link rel="apple-touch-icon" href="/icon-180x180.png">
     <meta name="apple-mobile-web-app-title" content="TCQ">
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
     <style>
         :root {
             --color-blue: <?= Config::COLOR_BLUE ?>;
@@ -159,11 +191,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     <div class="container">
         <?php if ($gameStatus === 'waiting' && count($players) < 2): ?>
             <!-- Waiting for other player -->
-            <div class="waiting-screen">
+            <div class="waiting-screen no-opponent">
                 <h2>Waiting for Opponent</h2>
                 <p>Share your invite code with your opponent to start the game!</p>
                 <p><strong>Invite Code: <?= htmlspecialchars($player['invite_code']) ?></strong></p>
-                <div style="margin-top: 30px; padding: 20px; background: rgba(255,255,255,0.1); border-radius: 15px;">
+                <div class="notify-bubble" style="margin-top: 30px; padding: 20px; border-radius: 15px;">
                     <h3 style="margin-bottom: 15px;">🔔 Enable Notifications</h3>
                     <p style="margin-bottom: 15px; font-size: 14px;">Get notified when your partner bumps you or when timers expire!</p>
                     <button id="enableNotificationsBtn" class="btn" onclick="enableNotifications()">
@@ -175,8 +207,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             
         <?php elseif ($gameStatus === 'waiting' && count($players) === 2 && !$player['duration_days']): ?>
             <!-- Set game duration -->
-            <div class="waiting-screen">
-                <div style="margin-bottom: 30px; padding: 20px; background: rgba(255,255,255,0.1); border-radius: 15px;">
+            <div class="waiting-screen duration">
+                <div class="notify-bubble" style="margin-bottom: 30px; padding: 20px; border-radius: 15px;">
                     <h3 style="margin-bottom: 15px;">🔔 Enable Notifications</h3>
                     <p style="margin-bottom: 15px; font-size: 14px;">Get notified when your partner bumps you or when timers expire!</p>
                     <button id="enableNotificationsBtn" class="btn" onclick="enableNotifications()">
@@ -200,14 +232,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             <!-- Game ended -->
             <?php 
             $winner = $players[0]['score'] > $players[1]['score'] ? $players[0] : $players[1];
+            $loser = $players[0]['score'] > $players[1]['score'] ? $players[1] : $players[0];
             if ($players[0]['score'] === $players[1]['score']) $winner = null;
             ?>
             <div class="game-ended">
+                <div class="confetti"></div>
                 <?php if ($winner): ?>
                     <div class="winner <?= $winner['gender'] ?>">
                         🎉 <?= htmlspecialchars($winner['first_name']) ?> Wins! 🎉
                     </div>
-                    <p>Final Score: <?= $winner['score'] ?> points</p>
+                    <p>Final Score: <?= $winner['score'] ?>-<?= $loser['score'] ?></p>
                 <?php else: ?>
                     <div class="winner">
                         🤝 It's a Tie! 🤝
@@ -247,7 +281,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 <div class="player-score opponent <?= $opponentPlayer['gender'] ?>">
                     <div class="player-score-animation"></div>
                     <div class="player-timers" id="opponent-timers"></div>
-                    <div class="player-name"><?= htmlspecialchars($opponentPlayer['first_name']) ?></div>
+                    <div class="player-name<?= strlen($opponentPlayer['first_name']) > 5 ? ' long' : '' ?>"><?= htmlspecialchars($opponentPlayer['first_name']) ?></div>
                     <div class="player-score-value"><?= $opponentPlayer['score'] ?></div>
                 </div>
                 
@@ -300,7 +334,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 <div class="player-score bottom <?= $currentPlayer['gender'] ?>">
                     <div class="player-score-animation"></div>
                     <div class="player-timers" id="current-timers"></div>
-                    <div class="player-name"><?= htmlspecialchars($currentPlayer['first_name']) ?></div>
+                    <div class="player-name<?= strlen($currentPlayer['first_name']) > 5 ? ' long' : '' ?>"><?= htmlspecialchars($currentPlayer['first_name']) ?></div>
                     <div class="player-score-value"><?= $currentPlayer['score'] ?></div>
                 </div>
             </div>
@@ -426,7 +460,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     </div>
     
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js"></script>    
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js"></script>
     <script src="/game.js"></script>
 </body>
 </html>

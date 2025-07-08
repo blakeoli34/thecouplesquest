@@ -233,9 +233,9 @@ function setupFirebaseMessaging() {
                     statusElements.forEach(element => {
                         if (element) {
                             if (element.id === 'notificationModalStatusText') {
-                                element.textContent = '✅ Notifications are enabled! 🔥 Firebase notifications ready!';
+                                element.textContent = '✅ Notifications are enabled! 🔥 Global notifications ready!';
                             } else {
-                                element.innerHTML += '<br><span style="color: #51cf66;">🔥 Firebase notifications ready!</span>';
+                                element.innerHTML += '<br><span style="color: #51cf66;">🔥 Global notifications ready!</span>';
                             }
                         }
                     });
@@ -942,6 +942,36 @@ function setupModalHandlers() {
     });
 }
 
+// Hard refresh function
+function hardRefresh() {
+    window.location.reload(true);
+}
+
+// End game function with confirmation
+function endGame() {
+    if (confirm('Are you sure you want to end this game now? This action cannot be undone.')) {
+        fetch('game.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: 'action=end_game'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Failed to end game: ' + (data.message || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error ending game:', error);
+            alert('Failed to end game. Please try again.');
+        });
+    }
+}
+
 // Initialize everything when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Game page loaded');
@@ -966,12 +996,128 @@ document.addEventListener('DOMContentLoaded', function() {
     setupDurationButtons();
     setupModalHandlers();
     setupAnimatedMenu(); // New animated menu system
+
+    // Check if we're waiting on an opponent
+    if (document.querySelector('.waiting-screen.no-opponent')) {
+        console.log('Starting opponent check polling...');
+        
+        function checkForOpponent() {
+            fetch('game.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'action=check_game_status'
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Game status check:', data);
+                
+                // If game status changed or opponent joined, reload
+                if (data.success && (data.status !== 'waiting' || data.player_count >= 2)) {
+                    console.log('Game status changed or opponent joined, reloading...');
+                    window.location.reload();
+                }
+            })
+            .catch(error => {
+                console.error('Error checking game status:', error);
+            });
+        }
+        
+        // Check every 10 seconds
+        const statusInterval = setInterval(checkForOpponent, 10000);
+        
+        // Clear interval when page unloads
+        window.addEventListener('beforeunload', () => {
+            clearInterval(statusInterval);
+        });
+    }
+
+    // Check if game duration has been chosen
+    if (document.querySelector('.waiting-screen.duration')) {
+        console.log('Starting game status polling...');
+        
+        function checkForStatusChange() {
+            fetch('game.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'action=check_game_status'
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Game status check:', data);
+                
+                // If game status changed or opponent joined, reload
+                if (data.success && (data.status !== 'waiting')) {
+                    console.log('Game status changed, reloading...');
+                    window.location.reload();
+                }
+            })
+            .catch(error => {
+                console.error('Error checking game status:', error);
+            });
+        }
+        
+        // Check every 10 seconds
+        const statusInterval = setInterval(checkForStatusChange, 10000);
+        
+        // Clear interval when page unloads
+        window.addEventListener('beforeunload', () => {
+            clearInterval(statusInterval);
+        });
+    }
     
     // Start periodic refresh for active games
     if (gameData.gameStatus === 'active') {
         refreshGameData();
         setInterval(refreshGameData, 10000); // Refresh every 10 seconds
     }
+});
+
+// Confetti at game end
+window.addEventListener('load', function() {
+    const confettiDiv = document.querySelector('.confetti');
+    
+    // Exit if confetti div doesn't exist
+    if (!confettiDiv) return;
+    
+    console.log('found confetti div. creating canvas element.');
+    // Create canvas for confetti
+    const canvas = document.createElement('canvas');
+    
+    // Append canvas to confetti div
+    confettiDiv.appendChild(canvas);
+    
+    console.log('initializing confetti');
+    // Initialize confetti with canvas
+    const myConfetti = confetti.create(canvas, {
+        resize: true,
+        useWorker: true
+    });
+    
+    // Confetti colors
+    const colors = ['#fff', '#FD9BC7', '#4BC0D9'];
+    
+    // Function to launch confetti from bottom
+    function launchConfetti() {
+        myConfetti({
+            particleCount: 30,
+            startVelocity: 60,
+            angle: 90,
+            spread: 45,
+            origin: { x: Math.random(), y: 1 },
+            colors: colors,
+            gravity: 0.9,
+            scalar: 0.8,
+            drift: 0
+        });
+    }
+    console.log('starting confetti');
+    // Start confetti animation
+    setInterval(launchConfetti, 2000);
+
 });
 
 // Make functions globally available
@@ -984,3 +1130,5 @@ window.sendBump = sendBump;
 window.testNotification = testNotification;
 window.enableNotifications = enableNotifications;
 window.enableNotificationsFromModal = enableNotificationsFromModal;
+window.hardRefresh = hardRefresh;
+window.endGame = endGame;
