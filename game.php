@@ -208,6 +208,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 echo json_encode(['success' => false, 'message' => 'Failed to end game.']);
             }
             exit;
+
+        case 'ready_for_new_game':
+            $result = markPlayerReadyForNewGame($player['game_id'], $player['id']);
+            if ($result['success'] && $result['both_ready']) {
+                $resetResult = resetGameForNewRound($player['game_id']);
+                if ($resetResult['success']) {
+                    echo json_encode(['success' => true, 'redirect' => true]);
+                } else {
+                    echo json_encode(['success' => false, 'message' => 'Failed to reset game']);
+                }
+            } else {
+                echo json_encode($result);
+            }
+            exit;
+
+        case 'get_new_game_status':
+            // Check if game has been reset (status = 'waiting')
+            try {
+                $pdo = Config::getDatabaseConnection();
+                $stmt = $pdo->prepare("SELECT status FROM games WHERE id = ?");
+                $stmt->execute([$player['game_id']]);
+                $gameStatus = $stmt->fetchColumn();
+                
+                echo json_encode([
+                    'success' => true, 
+                    'game_reset' => ($gameStatus === 'waiting')
+                ]);
+            } catch (Exception $e) {
+                echo json_encode(['success' => false]);
+            }
+            exit;
     }
 }
 ?>
@@ -303,6 +334,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     </div>
                     <p>Final Score: <?= $players[0]['score'] ?> points each</p>
                 <?php endif; ?>
+
+                <div style="margin-top: 40px;">
+                    <?php if ($currentPlayerReady && $opponentPlayerReady): ?>
+                        <p style="color: #51cf66; margin-bottom: 20px;">Both players ready! Creating new game...</p>
+                    <?php elseif ($currentPlayerReady): ?>
+                        <p style="color: #ffd43b; margin-bottom: 20px;">Waiting for opponent to be ready...</p>
+                    <?php elseif ($opponentPlayerReady): ?>
+                        <p style="color: #ffd43b; margin-bottom: 20px;">Your opponent is ready for a new game!</p>
+                    <?php endif; ?>
+                    
+                    <button id="newGameBtn" class="btn" onclick="readyForNewGame()" 
+                            <?= $currentPlayerReady ? 'disabled style="background: #51cf66;"' : '' ?>>
+                        <?= $currentPlayerReady ? 'Ready ✓' : 'Start New Game' ?>
+                    </button>
+                </div>
             </div>
             
         <?php else: ?>
@@ -523,8 +569,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             <div class="modal-title">Are you sure you want to end this game now?</div>
             <div class="modal-subtitle">This action cannot be undone.</div>
             <div class="modal-buttons">
-                <button class="btn dark no">No</button>
-                <button class="btn red yes">Yes</button>
+                <button class="btn dark" onclick="closeModal('endGameModal')">No</button>
+                <button class="btn red" onclick="endGame()">Yes</button>
             </div>
         </div>
     </div>

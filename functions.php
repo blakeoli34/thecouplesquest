@@ -641,4 +641,70 @@ function updateFcmToken($deviceId, $fcmToken) {
         return false;
     }
 }
+
+function markPlayerReadyForNewGame($gameId, $playerId) {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        $stmt = $pdo->prepare("UPDATE players SET ready_for_new_game = TRUE WHERE game_id = ? AND id = ?");
+        $stmt->execute([$gameId, $playerId]);
+        
+        // Check if both players are ready
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM players WHERE game_id = ? AND ready_for_new_game = TRUE");
+        $stmt->execute([$gameId]);
+        $readyCount = $stmt->fetchColumn();
+        
+        return ['success' => true, 'both_ready' => $readyCount >= 2];
+    } catch (Exception $e) {
+        error_log("Error marking player ready: " . $e->getMessage());
+        return ['success' => false, 'message' => 'Failed to mark ready.'];
+    }
+}
+
+function resetGameForNewRound($gameId) {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        $pdo->beginTransaction();
+        
+        // Reset players: scores to 0, ready status to false
+        $stmt = $pdo->prepare("UPDATE players SET score = 0, ready_for_new_game = FALSE WHERE game_id = ?");
+        $stmt->execute([$gameId]);
+        
+        // Reset game: status to waiting, clear dates and duration
+        $stmt = $pdo->prepare("UPDATE games SET status = 'waiting', duration_days = NULL, start_date = NULL, end_date = NULL WHERE id = ?");
+        $stmt->execute([$gameId]);
+        
+        // Clear timers
+        $stmt = $pdo->prepare("DELETE FROM timers WHERE game_id = ?");
+        $stmt->execute([$gameId]);
+        
+        // Clear score history
+        $stmt = $pdo->prepare("DELETE FROM score_history WHERE game_id = ?");
+        $stmt->execute([$gameId]);
+        
+        $pdo->commit();
+        return ['success' => true];
+        
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        error_log("Error resetting game: " . $e->getMessage());
+        return ['success' => false, 'message' => 'Failed to reset game.'];
+    }
+}
+
+function getNewGameReadyStatus($gameId) {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        $stmt = $pdo->prepare("
+            SELECT first_name, ready_for_new_game 
+            FROM players 
+            WHERE game_id = ? 
+            ORDER BY id ASC
+        ");
+        $stmt->execute([$gameId]);
+        return $stmt->fetchAll();
+    } catch (Exception $e) {
+        error_log("Error getting ready status: " . $e->getMessage());
+        return [];
+    }
+}
 ?>

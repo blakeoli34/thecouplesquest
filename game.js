@@ -1045,10 +1045,67 @@ function endGame() {
     });
 }
 
-$('#endGameModal .btn.no').on('click', closeModal('endGameModal'));
-$('#endGameModal .btn.yes').on('click', function() {
-    endGame();
-});
+function readyForNewGame() {
+    const button = document.getElementById('newGameBtn');
+    button.disabled = true;
+    button.textContent = 'Getting Ready...';
+    
+    fetch('game.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'action=ready_for_new_game'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            if (data.redirect) {
+                // Both players ready, redirect to new game
+                window.location.reload();
+            } else {
+                // This player is ready, wait for opponent
+                button.textContent = 'Ready ✓';
+                button.style.background = '#51cf66';
+                
+                // Start polling for opponent
+                startNewGamePolling();
+            }
+        } else {
+            button.disabled = false;
+            button.textContent = 'Start New Game';
+            alert('Failed to ready for new game: ' + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error readying for new game:', error);
+        button.disabled = false;
+        button.textContent = 'Start New Game';
+        alert('Failed to ready for new game.');
+    });
+}
+
+function startNewGamePolling() {
+    const pollInterval = setInterval(() => {
+        fetch('game.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: 'action=get_new_game_status'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.game_reset) {
+                clearInterval(pollInterval);
+                window.location.reload();
+            }
+        })
+        .catch(error => {
+            console.error('Error polling new game status:', error);
+        });
+    }, 5000);
+}
 
 // Initialize everything when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
@@ -1103,7 +1160,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // Check every 10 seconds
-        const statusInterval = setInterval(checkForOpponent, 10000);
+        const statusInterval = setInterval(checkForOpponent, 5000);
         
         // Clear interval when page unloads
         window.addEventListener('beforeunload', () => {
@@ -1139,7 +1196,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // Check every 10 seconds
-        const statusInterval = setInterval(checkForStatusChange, 10000);
+        const statusInterval = setInterval(checkForStatusChange, 5000);
         
         // Clear interval when page unloads
         window.addEventListener('beforeunload', () => {
@@ -1214,3 +1271,4 @@ window.endGame = endGame;
 window.showTimerDeleteModal = showTimerDeleteModal;
 window.hideTimerDeleteModal = hideTimerDeleteModal;
 window.deleteSelectedTimer = deleteSelectedTimer;
+window.readyForNewGame = readyForNewGame;
