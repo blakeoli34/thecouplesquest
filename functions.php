@@ -542,7 +542,6 @@ function sendBumpNotification($gameId, $senderPlayerId) {
 
 function checkAndNotifyLeadChange($gameId, $oldScores) {
     try {
-        error_log("Checking lead change for game $gameId");
         $pdo = Config::getDatabaseConnection();
         
         // Get current scores
@@ -554,9 +553,6 @@ function checkAndNotifyLeadChange($gameId, $oldScores) {
             error_log("Not exactly 2 players found");
             return;
         }
-        
-        error_log("Old scores: " . json_encode($oldScores));
-        error_log("New scores: " . json_encode(array_map(function($p) { return ['id' => $p['id'], 'score' => $p['score']]; }, $players)));
         
         // Determine old leader
         $oldLeader = null;
@@ -574,23 +570,19 @@ function checkAndNotifyLeadChange($gameId, $oldScores) {
             $newLeader = $players[1]['id'];
         }
         
-        error_log("Old leader: $oldLeader, New leader: $newLeader");
-        
         // Check if leadership changed
         if ($oldLeader !== $newLeader && $newLeader !== null) {
             $leader = $players[0]['score'] > $players[1]['score'] ? $players[0] : $players[1];
             $follower = $players[0]['score'] > $players[1]['score'] ? $players[1] : $players[0];
             
-            error_log("Lead change detected! Sending notification to {$follower['first_name']}");
-            
             // Send notification to follower
             if ($follower['fcm_token']) {
+                $difference = $leader['score'] - $follower['score'];
                 $result = sendPushNotification(
                     $follower['fcm_token'],
                     'Lead Change!',
-                    $leader['first_name'] . ' has taken the lead! Current score: ' . $leader['score'] . '-' . $follower['score']
+                    $leader['first_name'] . ' has taken the lead! You\'re behind by ' . $difference . ' point' . ($difference === 1 ? '' : 's') . '.'
                 );
-                error_log("Notification send result: " . ($result ? 'success' : 'failed'));
             } else {
                 error_log("No FCM token for follower");
             }
