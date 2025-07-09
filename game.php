@@ -49,7 +49,7 @@ if ($timeRemaining) {
         $parts[] = $timeRemaining->i . ' minute' . ($timeRemaining->i > 1 ? 's' : '');
     }
     
-    $gameTimeText = 'Game Remaining: ' . implode(', ', $parts);
+    $gameTimeText = 'Game ends in ' . implode(', ', $parts);
 } else {
     $gameTimeText = 'Game Ended';
 }
@@ -120,12 +120,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $updatedPlayers = getGamePlayers($player['game_id']);
             $timers = getActiveTimers($player['game_id']);
             $history = getScoreHistory($player['game_id']);
+
+            // Check if game has expired
+            $now = new DateTime();
+            $endDate = new DateTime($player['end_date']);
+            $gameExpired = ($now >= $endDate && $player['status'] === 'active');
             
             echo json_encode([
                 'players' => $updatedPlayers,
                 'timers' => $timers,
                 'history' => $history,
-                'gametime' => $gameTimeText
+                'gametime' => $gameTimeText,
+                'game_expired' => $gameExpired
             ]);
             exit;
 
@@ -151,8 +157,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         case 'end_game':
             try {
                 $pdo = Config::getDatabaseConnection();
+                
+                // Get final scores before ending the game
+                $players = getGamePlayers($player['game_id']);
+                
+                // Determine winner
+                $winner = null;
+                $loser = null;
+                $isTie = false;
+                
+                if (count($players) === 2) {
+                    if ($players[0]['score'] > $players[1]['score']) {
+                        $winner = $players[0];
+                        $loser = $players[1];
+                    } elseif ($players[1]['score'] > $players[0]['score']) {
+                        $winner = $players[1];
+                        $loser = $players[0];
+                    } else {
+                        $isTie = true;
+                    }
+                }
+                
+                // End the game
                 $stmt = $pdo->prepare("UPDATE games SET status = 'completed', end_date = NOW() WHERE id = ?");
                 $stmt->execute([$player['game_id']]);
+                
+                // Send notifications to both players
+                foreach ($players as $p) {
+                    if ($p['fcm_token']) {
+                        if ($isTie) {
+                            $title = "Game Over - It's a Tie!";
+                            $body = "Final score: " . $players[0]['score'] . " points each. Great game!";
+                        } else {
+                            if ($p['id'] === $winner['id']) {
+                                $title = "🎉 You Won!";
+                                $body = "Final score: " . $winner['score'] . "-" . $loser['score'] . ". Congratulations!";
+                            } else {
+                                $title = "Game Over";
+                                $body = $winner['first_name'] . " won " . $winner['score'] . "-" . $loser['score'] . ". Better luck next time!";
+                            }
+                        }
+                        
+                        sendPushNotification($p['fcm_token'], $title, $body);
+                    }
+                }
+                
                 echo json_encode(['success' => true]);
             } catch (Exception $e) {
                 error_log("Error ending game: " . $e->getMessage());
@@ -361,7 +410,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             <div class="bottom-right-menu">
                 <i class="fa-solid fa-ellipsis"></i>
                 <div class="bottom-right-menu-flyout">
-                    <div class="flyout-menu-item red" onclick="endGame()">
+                    <div class="flyout-menu-item red" onclick="openEndGameModal()">
                         <div class="flyout-menu-item-icon"><i class="fa-solid fa-ban"></i></div>
                         <div class="flyout-menu-item-text">End Game Now</div>
                     </div>
@@ -456,13 +505,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         </div>
     </div>
 
+    <!-- Delete Timer Modal -->
     <div class="modal" id="timerDeleteModal">
-        <div class="timer-delete-content">
-            <h3>Delete Timer?</h3>
-            <p id="timerDeleteDescription"></p>
-            <div class="timer-delete-buttons">
-                <button class="timer-delete-btn no" onclick="hideTimerDeleteModal()">No</button>
-                <button class="timer-delete-btn yes" onclick="deleteSelectedTimer()">Yes</button>
+        <div class="modal-content">
+            <div class="modal-title">Delete Timer?</div>
+            <div class="modal-subtitle" id="timerDeleteDescription"></div>
+            <div class="modal-buttons">
+                <button class="btn dark no" onclick="hideTimerDeleteModal()">No</button>
+                <button class="btn red yes" onclick="deleteSelectedTimer()">Yes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- End Game Modal -->
+    <div class="modal" id="endGameModal">
+        <div class="modal-content">
+            <div class="modal-title">Are you sure you want to end this game now?</div>
+            <div class="modal-subtitle">This action cannot be undone.</div>
+            <div class="modal-buttons">
+                <button class="btn dark no">No</button>
+                <button class="btn red yes">Yes</button>
             </div>
         </div>
     </div>

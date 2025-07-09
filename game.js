@@ -581,6 +581,13 @@ function openHistoryModal() {
     }
 }
 
+function openEndGameModal() {
+    const modal = document.getElementById('endGameModal');
+    if(modal) {
+        modal.classList.add('active');
+    }
+}
+
 function closeModal(modalId) {
     const modal = document.getElementById(modalId);
     if (modal) {
@@ -917,6 +924,23 @@ function refreshGameData() {
     })
     .then(response => response.json())
     .then(data => {
+        // Check if game has expired and auto-end it
+        if (data.game_expired && gameData.gameStatus === 'active') {
+            fetch('game.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'action=end_game'
+            })
+            .then(response => response.json())
+            .then(endData => {
+                if (endData.success) {
+                    location.reload();
+                }
+            });
+            return; // Don't process other updates
+        }
         // Only update scores if they're not currently animating
         if (data.players) {
             data.players.forEach(player => {
@@ -925,6 +949,10 @@ function refreshGameData() {
                     scoreElement.textContent = player.score;
                 }
             });
+        }
+
+        if(data.gametime === 'Game Ended') {
+            location.reload();
         }
         
         // Update timers
@@ -994,30 +1022,33 @@ function hardRefresh() {
     window.location.reload(true);
 }
 
-// End game function with confirmation
+// End game function
 function endGame() {
-    if (confirm('Are you sure you want to end this game now? This action cannot be undone.')) {
-        fetch('game.php', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: 'action=end_game'
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                location.reload();
-            } else {
-                alert('Failed to end game: ' + (data.message || 'Unknown error'));
-            }
-        })
-        .catch(error => {
-            console.error('Error ending game:', error);
-            alert('Failed to end game. Please try again.');
-        });
-    }
+    fetch('game.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'action=end_game'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Failed to end game: ' + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error ending game:', error);
+        alert('Failed to end game. Please try again.');
+    });
 }
+
+$('#endGameModal .btn.no').on('click', closeModal('endGameModal'));
+$('#endGameModal .btn.yes').on('click', function() {
+    endGame();
+});
 
 // Initialize everything when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
@@ -1178,6 +1209,7 @@ window.testNotification = testNotification;
 window.enableNotifications = enableNotifications;
 window.enableNotificationsFromModal = enableNotificationsFromModal;
 window.hardRefresh = hardRefresh;
+window.openEndGameModal = openEndGameModal;
 window.endGame = endGame;
 window.showTimerDeleteModal = showTimerDeleteModal;
 window.hideTimerDeleteModal = hideTimerDeleteModal;
