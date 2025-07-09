@@ -881,6 +881,49 @@ body {
     white-space: nowrap;
 }
 
+.timer-delete-content {
+    background: white;
+    padding: 30px;
+    border-radius: 20px;
+    text-align: center;
+    max-width: 300px;
+    transform: scale(0);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.3s var(--animation-spring);
+}
+
+.modal.active .timer-delete-content {
+    transform: scale(1);
+    opacity: 1;
+    pointer-events: all;
+}
+
+.timer-delete-buttons {
+    display: flex;
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.timer-delete-btn {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    border-radius: 10px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.timer-delete-btn.yes {
+    background: #ef4444;
+    color: white;
+}
+
+.timer-delete-btn.no {
+    background: #6b7280;
+    color: white;
+}
+
 @media (prefers-color-scheme: dark) {
     .player-score.female {
         background: var(--color-pink-dark);
@@ -964,6 +1007,11 @@ body {
 
     .duration-btn {
         color: #fff;
+    }
+
+    .timer-delete-content {
+        background: #171717;
+        color: #e6e6e6;
     }
 }
 

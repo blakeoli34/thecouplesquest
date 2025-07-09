@@ -110,7 +110,12 @@ function updateScore($gameId, $playerId, $pointsToAdd, $modifiedBy) {
         $pdo = Config::getDatabaseConnection();
         $pdo->beginTransaction();
         
-        // Get current score
+        // Get current scores before update
+        $stmt = $pdo->prepare("SELECT id, score FROM players WHERE game_id = ?");
+        $stmt->execute([$gameId]);
+        $oldScores = $stmt->fetchAll();
+        
+        // Get current score for the player being updated
         $stmt = $pdo->prepare("SELECT score FROM players WHERE id = ?");
         $stmt->execute([$playerId]);
         $currentScore = $stmt->fetchColumn();
@@ -129,6 +134,9 @@ function updateScore($gameId, $playerId, $pointsToAdd, $modifiedBy) {
         $stmt->execute([$gameId, $playerId, $modifiedBy, $currentScore, $newScore, $pointsToAdd]);
         
         $pdo->commit();
+
+        // Check for lead changes before committing
+        checkAndNotifyLeadChange($gameId, $oldScores);
         return ['success' => true];
         
     } catch (Exception $e) {
@@ -231,6 +239,18 @@ function getActiveTimers($gameId) {
     } catch (Exception $e) {
         error_log("Error getting active timers: " . $e->getMessage());
         return [];
+    }
+}
+
+function deleteTimer($timerId, $gameId) {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        $stmt = $pdo->prepare("DELETE FROM timers WHERE id = ? AND game_id = ?");
+        $stmt->execute([$timerId, $gameId]);
+        return ['success' => true];
+    } catch (Exception $e) {
+        error_log("Error deleting timer: " . $e->getMessage());
+        return ['success' => false, 'message' => 'Failed to delete timer.'];
     }
 }
 
@@ -517,6 +537,68 @@ function sendBumpNotification($gameId, $senderPlayerId) {
             'success' => false, 
             'message' => 'Failed to send bump: ' . $e->getMessage()
         ];
+    }
+}
+
+function checkAndNotifyLeadChange($gameId, $oldScores) {
+    try {
+        error_log("Checking lead change for game $gameId");
+        $pdo = Config::getDatabaseConnection();
+        
+        // Get current scores
+        $stmt = $pdo->prepare("SELECT id, first_name, score, fcm_token FROM players WHERE game_id = ? ORDER BY id ASC");
+        $stmt->execute([$gameId]);
+        $players = $stmt->fetchAll();
+        
+        if (count($players) !== 2) {
+            error_log("Not exactly 2 players found");
+            return;
+        }
+        
+        error_log("Old scores: " . json_encode($oldScores));
+        error_log("New scores: " . json_encode(array_map(function($p) { return ['id' => $p['id'], 'score' => $p['score']]; }, $players)));
+        
+        // Determine old leader
+        $oldLeader = null;
+        if ($oldScores[0]['score'] > $oldScores[1]['score']) {
+            $oldLeader = $oldScores[0]['id'];
+        } elseif ($oldScores[1]['score'] > $oldScores[0]['score']) {
+            $oldLeader = $oldScores[1]['id'];
+        }
+        
+        // Determine new leader
+        $newLeader = null;
+        if ($players[0]['score'] > $players[1]['score']) {
+            $newLeader = $players[0]['id'];
+        } elseif ($players[1]['score'] > $players[0]['score']) {
+            $newLeader = $players[1]['id'];
+        }
+        
+        error_log("Old leader: $oldLeader, New leader: $newLeader");
+        
+        // Check if leadership changed
+        if ($oldLeader !== $newLeader && $newLeader !== null) {
+            $leader = $players[0]['score'] > $players[1]['score'] ? $players[0] : $players[1];
+            $follower = $players[0]['score'] > $players[1]['score'] ? $players[1] : $players[0];
+            
+            error_log("Lead change detected! Sending notification to {$follower['first_name']}");
+            
+            // Send notification to follower
+            if ($follower['fcm_token']) {
+                $result = sendPushNotification(
+                    $follower['fcm_token'],
+                    'Lead Change!',
+                    $leader['first_name'] . ' has taken the lead! Current score: ' . $leader['score'] . '-' . $follower['score']
+                );
+                error_log("Notification send result: " . ($result ? 'success' : 'failed'));
+            } else {
+                error_log("No FCM token for follower");
+            }
+        } else {
+            error_log("No lead change detected");
+        }
+    } catch (Exception $e) {
+        error_log("Error checking lead change: " . $e->getMessage());
     }
 }
 

@@ -93,6 +93,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $result = createTimer($player['game_id'], $player['id'], $description, $minutes);
             echo json_encode($result);
             exit;
+
+        case 'delete_timer':
+            $timerId = intval($_POST['timer_id']);
+            $result = deleteTimer($timerId, $player['game_id']);
+            echo json_encode($result);
+            exit;
             
         case 'send_bump':
             $result = sendBumpNotification($player['game_id'], $player['id']);
@@ -447,6 +453,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             
             <button class="btn" onclick="createTimer()">Create Timer</button>
             <button class="btn btn-secondary" onclick="closeModal('timerModal')">Cancel</button>
+        </div>
+    </div>
+
+    <div class="modal" id="timerDeleteModal">
+        <div class="timer-delete-content">
+            <h3>Delete Timer?</h3>
+            <p id="timerDeleteDescription"></p>
+            <div class="timer-delete-buttons">
+                <button class="timer-delete-btn no" onclick="hideTimerDeleteModal()">No</button>
+                <button class="timer-delete-btn yes" onclick="deleteSelectedTimer()">Yes</button>
+            </div>
         </div>
     </div>
     

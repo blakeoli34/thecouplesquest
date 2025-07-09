@@ -10,6 +10,8 @@ let menuOpen = false;
 let currentAction = null;
 let currentTargetPlayerId = null;
 
+let selectedTimerId = null;
+
 $('.bottom-right-menu').on('click', function() {
     $(this).toggleClass('open');
 });
@@ -744,6 +746,50 @@ function createTimer() {
     });
 }
 
+function showTimerDeleteModal(timerId, description) {
+    selectedTimerId = timerId;
+    
+    // Create modal if it doesn't exist
+    let modal = document.getElementById('timerDeleteModal');
+    
+    document.getElementById('timerDeleteDescription').textContent = `"${description}"`;
+    modal.classList.add('active');
+}
+
+function hideTimerDeleteModal() {
+    const modal = document.getElementById('timerDeleteModal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+    selectedTimerId = null;
+}
+
+function deleteSelectedTimer() {
+    if (!selectedTimerId) return;
+    
+    fetch('game.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `action=delete_timer&timer_id=${selectedTimerId}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            refreshGameData();
+        } else {
+            alert('Failed to delete timer.');
+        }
+        hideTimerDeleteModal();
+    })
+    .catch(error => {
+        console.error('Error deleting timer:', error);
+        alert('Failed to delete timer.');
+        hideTimerDeleteModal();
+    });
+}
+
 // Bump notification function
 function sendBump() {
     let $bubble = $('.bump-send-display');
@@ -907,6 +953,7 @@ function updateTimerDisplay(timers) {
         const div = document.createElement('div');
         div.className = 'timer-badge';
         div.title = timer.description;
+        div.onclick = () => showTimerDeleteModal(timer.id, timer.description);
         
         // Treat database time as UTC
         const endTime = new Date(timer.end_time + 'Z');
@@ -1132,3 +1179,6 @@ window.enableNotifications = enableNotifications;
 window.enableNotificationsFromModal = enableNotificationsFromModal;
 window.hardRefresh = hardRefresh;
 window.endGame = endGame;
+window.showTimerDeleteModal = showTimerDeleteModal;
+window.hideTimerDeleteModal = hideTimerDeleteModal;
+window.deleteSelectedTimer = deleteSelectedTimer;
