@@ -39,6 +39,7 @@ if ($_POST) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://use.typekit.net/oqm2ymj.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <title>The Couple's Quest</title>
     <style>
         * {
@@ -49,18 +50,48 @@ if ($_POST) {
         
         body {
             font-family: 'museo-sans', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: linear-gradient(135deg, <?= Config::COLOR_GRAY ?> 0%, <?= Config::COLOR_BLACK ?> 100%);
+            background: linear-gradient(135deg, <?= Config::COLOR_BLUE ?> 0%, <?= Config::COLOR_PINK ?> 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 20px;
+            position: relative;
+        }
+
+        .animated-background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+        }
+
+        .icon-item {
+            position: absolute;
+            font-size: 2rem;
+            opacity: 0;
+            color: rgba(255, 255, 255, 0.5);
+            animation: float 15s linear infinite;
+        }
+
+        @keyframes float {
+            0% {
+                transform: translateY(120vh) rotate(0deg);
+                opacity: 1;
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(-120vh) rotate(360deg);
+            }
         }
         
         .container {
-            background: white;
+            background: rgba(255,255,255,0.3);
+            backdrop-filter: blur(8px);
             border-radius: 20px;
-            padding: 40px;
+            padding: 20px 40px;
             box-shadow: 0 20px 40px rgba(0,0,0,0.1);
             width: 100%;
             max-width: 400px;
@@ -69,13 +100,13 @@ if ($_POST) {
 
         .gameLogo {
             display: block;
-            width: 100%;
-            max-width: 200px;
-            margin: 0 auto 36px;
+            width: 90%;
+            max-width: 110px;
+            margin: 0 auto 24px;
         }
         
         h1 {
-            color: #333;
+            color: #111;
             margin-bottom: 30px;
             font-size: 2em;
             letter-spacing: -0.02em;
@@ -94,9 +125,11 @@ if ($_POST) {
         }
         
         input[type="text"] {
+            background: transparent;
+            color: #111;
             width: 100%;
             padding: 12px;
-            border: 2px solid #ddd;
+            border: 2px solid #555;
             border-radius: 10px;
             font-size: 16px;
             transition: border-color 0.3s;
@@ -104,7 +137,7 @@ if ($_POST) {
         
         input[type="text"]:focus {
             outline: none;
-            border-color: <?= Config::COLOR_BLUE ?>;
+            border-color: #111;
         }
         
         .gender-options {
@@ -182,6 +215,7 @@ if ($_POST) {
     </style>
 </head>
 <body>
+    <div class="animated-background" id="background"></div>
     <div class="container">
         <img class="gameLogo" src="logo.svg">
         <h1>The Couple's Quest</h1>
@@ -218,6 +252,26 @@ if ($_POST) {
             <a href="admin.php">Admin</a>
         </div>
     </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            const icons = ['fa-mars', 'fa-venus', 'fa-circle-arrow-up', 'fa-circle-question', 'fa-camera-retro', 'fa-hand-point-right', 'fa-pepper-hot'];
+            const $bg = $('#background');
+            
+            // Generate random icons
+            for (let i = 0; i < 100; i++) {
+                const randomIcon = icons[Math.floor(Math.random() * icons.length)];
+                const $icon = $('<i>').addClass('fas ' + randomIcon + ' icon-item');
+                
+                $icon.css({
+                    left: Math.random() * 100 + '%',
+                    animationDelay: Math.random() * 15 + 's'
+                });
+                
+                $bg.append($icon);
+            }
+        });
+    </script>
     
     <script>
         document.addEventListener('DOMContentLoaded', function() {
