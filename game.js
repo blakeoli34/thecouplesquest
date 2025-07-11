@@ -10,6 +10,9 @@ let menuOpen = false;
 let currentAction = null;
 let currentTargetPlayerId = null;
 
+let currentDiceCount = 1;
+let isDiceRolling = false;
+
 let selectedTimerId = null;
 
 $('.bottom-right-menu').on('click', function() {
@@ -1107,6 +1110,130 @@ function startNewGamePolling() {
     }, 5000);
 }
 
+function openDiceOverlay() {
+    const overlay = document.getElementById('diceOverlay');
+    if (overlay) {
+        overlay.classList.add('active');
+        
+        // Set dice color based on current player's gender
+        if (typeof gameData !== 'undefined' && gameData.currentPlayerGender) {
+            setDiceColor(gameData.currentPlayerGender);
+        }
+        
+        // Initialize dice to face 1 position
+        initializeDicePosition();
+    }
+}
+
+function initializeDicePosition() {
+    const die1 = document.getElementById('die1');
+    const die2 = document.getElementById('die2');
+    
+    if (die1) {
+        setDieRotation(die1, 1); // Start at face 1
+    }
+    if (die2) {
+        setDieRotation(die2, 1); // Start at face 1
+    }
+}
+
+function closeDiceOverlay() {
+    const overlay = document.getElementById('diceOverlay');
+    if (overlay) {
+        overlay.classList.remove('active');
+    }
+}
+
+function setDiceCount(count) {
+    currentDiceCount = count;
+    
+    // Update button states
+    document.querySelectorAll('.dice-count-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    event.target.classList.add('active');
+    
+    // Update dice container
+    const container = document.getElementById('diceContainer');
+    if (count === 2) {
+        container.classList.add('two-dice');
+    } else {
+        container.classList.remove('two-dice');
+    }
+    
+    // Clear previous result
+    const resultDiv = document.getElementById('diceResult');
+    if (resultDiv) {
+        resultDiv.classList.remove('show');
+    }
+}
+
+function rollDice() {
+    if (isDiceRolling) return;
+    
+    isDiceRolling = true;
+    const rollButton = document.getElementById('rollButton');
+    
+    if (rollButton) {
+        rollButton.disabled = true;
+        rollButton.textContent = 'Rolling...';
+    }
+    
+    // Generate random values
+    const die1Value = Math.floor(Math.random() * 6) + 1;
+    const die2Value = currentDiceCount === 2 ? Math.floor(Math.random() * 6) + 1 : 0;
+    
+    const die1 = document.getElementById('die1');
+    const die2 = document.getElementById('die2');
+    
+    if (die1) {
+        const extraSpins1 = Math.floor(Math.random() * 4) + 1; // extra spins
+        const finalRotation1 = getDieRotationForValue(die1Value);
+        die1.style.transform = `rotateX(${finalRotation1.x + (extraSpins1 * 360)}deg) rotateY(${finalRotation1.y + (extraSpins1 * 360)}deg)`;
+    }
+    
+    if (currentDiceCount === 2 && die2) {
+        const extraSpins2 = Math.floor(Math.random() * 4) + 3;
+        const finalRotation2 = getDieRotationForValue(die2Value);
+        die2.style.transform = `rotateX(${finalRotation2.x + (extraSpins2 * 360)}deg) rotateY(${finalRotation2.y + (extraSpins2 * 360)}deg)`;
+    }
+        
+    // Show result
+    setTimeout(() => {
+        if (rollButton) {
+            rollButton.disabled = false;
+            rollButton.textContent = 'Roll Again';
+        }
+        isDiceRolling = false;
+    }, 300);
+}
+
+function getDieRotationForValue(value) {
+    const rotations = {
+        1: { x: 0, y: 0 },       // front
+        2: { x: -90, y: 0 },     // top
+        3: { x: 0, y: 90 },      // right
+        4: { x: 0, y: -90 },     // left
+        5: { x: 90, y: 0 },      // bottom
+        6: { x: 0, y: 180 }      // back
+    };
+    return rotations[value];
+}
+
+function setDieRotation(die, value) {
+    const rotation = getDieRotationForValue(value);
+    die.style.transform = `rotateX(${rotation.x}deg) rotateY(${rotation.y}deg)`;
+}
+
+function setDiceColor(gender) {
+    document.querySelectorAll('.die').forEach(die => {
+        die.className = `die ${gender}`;
+        if (die.id === 'die2') {
+            die.classList.add('two');
+        }
+    });
+}
+
 // Initialize everything when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Game page loaded');
@@ -1272,3 +1399,7 @@ window.showTimerDeleteModal = showTimerDeleteModal;
 window.hideTimerDeleteModal = hideTimerDeleteModal;
 window.deleteSelectedTimer = deleteSelectedTimer;
 window.readyForNewGame = readyForNewGame;
+window.openDiceOverlay = openDiceOverlay;
+window.closeDiceOverlay = closeDiceOverlay;
+window.setDiceCount = setDiceCount;
+window.rollDice = rollDice;

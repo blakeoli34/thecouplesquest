@@ -464,6 +464,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         <div class="flyout-menu-item-icon"><i class="fa-solid fa-arrows-rotate"></i></div>
                         <div class="flyout-menu-item-text">Refresh Game...</div>
                     </div>
+                    <div class="flyout-menu-item" onclick="openDiceOverlay()">
+                        <div class="flyout-menu-item-icon"><i class="fa-solid fa-dice"></i></div>
+                        <div class="flyout-menu-item-text">Roll Dice</div>
+                    </div>
                     <div class="flyout-menu-item" onclick="openHistoryModal()">
                         <div class="flyout-menu-item-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
                         <div class="flyout-menu-item-text">History</div>
@@ -480,7 +484,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 window.gameDataFromPHP = {
                     currentPlayerId: <?= $currentPlayer['id'] ?>,
                     opponentPlayerId: <?= $opponentPlayer['id'] ?>,
-                    gameStatus: '<?= $gameStatus ?>'
+                    gameStatus: '<?= $gameStatus ?>',
+                    currentPlayerGender: '<?= $currentPlayer['gender'] ?>'
                 };
             </script>
         <?php endif; ?>
@@ -581,6 +586,94 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             <div class="modal-title">Score History (24h)</div>
             <div id="historyContent"></div>
             <button class="btn btn-secondary" onclick="closeModal('historyModal')" style="margin-top: 12px;">Close</button>
+        </div>
+    </div>
+
+    <!-- Dice Overlay -->
+    <div class="dice-overlay" id="diceOverlay">
+        <button class="close-dice" onclick="closeDiceOverlay()"><i class="fa-solid fa-xmark"></i></button>
+        <div class="dice-container" id="diceContainer">
+            <div class="die male" id="die1">
+                <div class="die-face front face-1">
+                    <div class="die-dot"></div>
+                </div>
+                <div class="die-face back face-6">
+                    <div class="die-dot"></div>
+                    <div class="die-dot"></div>
+                    <div class="die-dot"></div>
+                    <div class="die-dot"></div>
+                    <div class="die-dot"></div>
+                    <div class="die-dot"></div>
+                </div>
+                <div class="die-face right face-3">
+                    <div class="die-dot"></div>
+                    <div class="die-dot"></div>
+                    <div class="die-dot"></div>
+                </div>
+                <div class="die-face left face-4">
+                    <div class="die-dot"></div>
+                    <div class="die-dot"></div>
+                    <div class="die-dot"></div>
+                    <div class="die-dot"></div>
+                </div>
+                <div class="die-face top face-2">
+                    <div class="die-dot"></div>
+                    <div class="die-dot"></div>
+                </div>
+                <div class="die-face bottom face-5">
+                    <div class="die-dot"></div>
+                    <div class="die-dot"></div>
+                    <div class="die-dot"></div>
+                    <div class="die-dot"></div>
+                    <div class="die-dot"></div>
+                </div>
+            </div>
+            <div class="die male two" id="die2">
+                <div class="die-face front face-1">
+                    <div class="die-dot"></div>
+                </div>
+                <div class="die-face back face-6">
+                    <div class="die-dot"></div>
+                    <div class="die-dot"></div>
+                    <div class="die-dot"></div>
+                    <div class="die-dot"></div>
+                    <div class="die-dot"></div>
+                    <div class="die-dot"></div>
+                </div>
+                <div class="die-face right face-3">
+                    <div class="die-dot"></div>
+                    <div class="die-dot"></div>
+                    <div class="die-dot"></div>
+                </div>
+                <div class="die-face left face-4">
+                    <div class="die-dot"></div>
+                    <div class="die-dot"></div>
+                    <div class="die-dot"></div>
+                    <div class="die-dot"></div>
+                </div>
+                <div class="die-face top face-2">
+                    <div class="die-dot"></div>
+                    <div class="die-dot"></div>
+                </div>
+                <div class="die-face bottom face-5">
+                    <div class="die-dot"></div>
+                    <div class="die-dot"></div>
+                    <div class="die-dot"></div>
+                    <div class="die-dot"></div>
+                    <div class="die-dot"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="dice-controls">
+            <div class="dice-count-selector">
+                <button class="dice-count-btn active" onclick="setDiceCount(1)">1 Die</button>
+                <button class="dice-count-btn" onclick="setDiceCount(2)">2 Dice</button>
+            </div>
+            
+            <button class="roll-button" id="rollButton" onclick="rollDice()">
+                Roll Dice
+            </button>
         </div>
     </div>
     
