@@ -180,14 +180,6 @@ function cleanupExpiredGames() {
         $stmt->execute();
         $updatedGames = $stmt->rowCount();
         
-        // Clean up old invite codes (older than 30 days and unused)
-        $stmt = $pdo->prepare("
-            DELETE FROM invite_codes 
-            WHERE is_used = FALSE AND created_at < DATE_SUB(NOW(), INTERVAL 30 DAY)
-        ");
-        $stmt->execute();
-        $deletedCodes = $stmt->rowCount();
-        
         // Clean up inactive timers older than 7 days
         $stmt = $pdo->prepare("
             DELETE FROM timers 
@@ -196,8 +188,8 @@ function cleanupExpiredGames() {
         $stmt->execute();
         $deletedTimers = $stmt->rowCount();
         
-        error_log("Cleanup completed: {$updatedGames} games marked as completed, {$deletedCodes} old codes deleted, {$deletedTimers} old timers deleted");
-        echo "Cleanup completed: {$updatedGames} games marked as completed, {$deletedCodes} old codes deleted, {$deletedTimers} old timers deleted\n";
+        error_log("Cleanup completed: {$updatedGames} games marked as completed, {$deletedTimers} old timers deleted");
+        echo "Cleanup completed: {$updatedGames} games marked as completed, {$deletedTimers} old timers deleted\n";
         
     } catch (Exception $e) {
         error_log("Error during cleanup: " . $e->getMessage());

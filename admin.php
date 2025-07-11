@@ -35,21 +35,56 @@ if (!isset($_SESSION['admin_logged_in']) || !$_SESSION['admin_logged_in']) {
 // Handle generate invite code
 if ($_POST && isset($_POST['generate_code'])) {
     $code = generateNewInviteCode();
-    $message = $code ? "Generated invite code: <strong>$code</strong>" : "Failed to generate code";
+    if(!$code) {
+        $code = 'error';
+    }
+    header('Location: admin.php?code=' . $code);
+}
+
+if(isset($_GET['code'])) {
+    if($_GET['code'] !== 'error') {
+        $message = 'Generated invite code: <strong>' . $_GET['code'] . '</strong>';
+    } else {
+        $message = 'Failed to generate code';
+    }
 }
 
 // Handle delete invite code
 if ($_POST && isset($_POST['delete_code'])) {
     $codeId = intval($_POST['code_id']);
     $result = deleteInviteCode($codeId);
-    $message = $result ? "Invite code deleted successfully" : "Failed to delete invite code";
+    if($result) {
+        header('Location: admin.php?deletecode=1');
+    } else {
+        header('Location: admin.php?deletecode=0');
+    }
+}
+
+if(isset($_GET['deletecode'])) {
+    if($_GET['deletecode'] === '1') {
+        $message = 'Invite code deleted successfully';
+    } else {
+        $message = 'Failed to delete invite code';
+    }
 }
 
 // Handle delete game
 if ($_POST && isset($_POST['delete_game'])) {
     $gameId = intval($_POST['game_id']);
     $result = deleteGame($gameId);
-    $message = $result ? "Game deleted successfully" : "Failed to delete game";
+    if($result) {
+        header('Location: admin.php?deletegame=1');
+    } else {
+        header('Location: admin.php?deletegame=0');
+    }
+}
+
+if(isset($_GET['deletegame'])) {
+    if($_GET['deletegame'] === '1') {
+        $message = 'Game deleted successfully';
+    } else {
+        $message = 'Failed to delete game';
+    }
 }
 
 // Get statistics
@@ -446,6 +481,21 @@ function showLoginForm($error = null) {
             color: #155724;
             border-radius: 8px;
             margin-bottom: 20px;
+            position: fixed;
+            left: -100%;
+            opacity: 0;
+            animation: notify 6s ease;
+        }
+
+        @keyframes notify {
+            0%, 100% {
+                left: -100%;
+                opacity: 0;
+            }
+            16%, 84% {
+                left: 20px;
+                opacity: 1;
+            }
         }
         
         .games-table {
@@ -623,6 +673,9 @@ function showLoginForm($error = null) {
     </div>
     
     <div class="container">
+        <?php if (isset($message)): ?>
+            <div class="message"><?= $message ?></div>
+        <?php endif; ?>
         <!-- Statistics -->
         <div class="stats-grid">
             <div class="stat-card">
@@ -654,11 +707,6 @@ function showLoginForm($error = null) {
         <!-- Generate Invite Code -->
         <div class="section">
             <h2>Generate Invite Code</h2>
-            
-            <?php if (isset($message)): ?>
-                <div class="message"><?= $message ?></div>
-            <?php endif; ?>
-            
             <form method="POST" class="generate-form">
                 <button type="submit" name="generate_code" class="btn">Generate New Invite Code</button>
             </form>
