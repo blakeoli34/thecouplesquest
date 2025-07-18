@@ -367,12 +367,12 @@ function showInAppNotification(title, body) {
     alertSound.play();
 
     
-    // Remove after 5 seconds
+    // Remove after 10 seconds
     setTimeout(() => {
         $notification.removeClass('show');
         $title.empty();
         $body.empty();
-    }, 5000);
+    }, 10000);
 }
 
 // ===========================================

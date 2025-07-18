@@ -73,7 +73,14 @@ if ($_POST) {
             font-size: 2rem;
             opacity: 0;
             color: rgba(255, 255, 255, 0.5);
+        }
+
+        .icon-item:nth-child(even) {
             animation: float 15s linear infinite;
+        }
+
+        .icon-item:nth-child(odd) {
+            animation: float2 15s linear infinite;
         }
 
         @keyframes float {
@@ -83,7 +90,17 @@ if ($_POST) {
             }
             100% {
                 opacity: 1;
-                transform: translateY(-120vh) rotate(360deg);
+                transform: translateY(-120vh) rotate(45deg);
+            }
+        }
+        @keyframes float2 {
+            0% {
+                transform: translateY(120vh) rotate(0deg);
+                opacity: 1;
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(-120vh) rotate(-45deg);
             }
         }
         
@@ -91,7 +108,7 @@ if ($_POST) {
             background: rgba(255,255,255,0.3);
             backdrop-filter: blur(8px);
             border-radius: 20px;
-            padding: 20px 40px;
+            padding: 28px;
             box-shadow: 0 20px 40px rgba(0,0,0,0.1);
             width: 100%;
             max-width: 400px;
@@ -102,7 +119,7 @@ if ($_POST) {
             display: block;
             width: 90%;
             max-width: 110px;
-            margin: 0 auto 24px;
+            margin: 0 auto 12px;
         }
         
         h1 {
@@ -153,17 +170,18 @@ if ($_POST) {
             border-radius: 10px;
             cursor: pointer;
             text-align: center;
+            color: #111;
             transition: all 0.3s;
         }
         
         .gender-option.male {
             border-color: <?= Config::COLOR_BLUE ?>;
-            color: <?= Config::COLOR_BLUE ?>;
+            background: rgba(75, 192, 217, 0.3);
         }
         
         .gender-option.female {
             border-color: <?= Config::COLOR_PINK ?>;
-            color: <?= Config::COLOR_PINK ?>;
+            background: rgba(253, 155, 199, 0.3);
         }
         
         .gender-option.selected.male {
@@ -200,18 +218,6 @@ if ($_POST) {
             border-radius: 5px;
             margin-bottom: 20px;
         }
-        
-        .admin-link {
-            margin-top: 20px;
-            padding-top: 20px;
-            border-top: 1px solid #eee;
-        }
-        
-        .admin-link a {
-            color: #666;
-            text-decoration: none;
-            font-size: 14px;
-        }
     </style>
 </head>
 <body>
@@ -247,10 +253,6 @@ if ($_POST) {
             
             <button type="submit" class="submit-btn">Join Game</button>
         </form>
-        
-        <div class="admin-link">
-            <a href="admin.php">Admin</a>
-        </div>
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <script>
