@@ -32,6 +32,35 @@ if (!isset($_SESSION['admin_logged_in']) || !$_SESSION['admin_logged_in']) {
     exit;
 }
 
+// Handle card management actions
+if ($_POST && isset($_POST['action'])) {
+    switch($_POST['action']) {    
+        case 'get_card':
+            $id = intval($_POST['id']);
+            $card = getCardById($id);
+            echo json_encode(['success' => true, 'card' => $card]);
+            exit;
+            
+        case 'save_card':
+            $result = saveCard($_POST);
+            echo json_encode($result);
+            exit;
+            
+        case 'delete_card':
+            $id = intval($_POST['id']);
+            $result = deleteCard($id);
+            echo json_encode($result);
+            exit;
+
+        case 'get_cards':
+            $type = $_POST['type'];
+            $cards = getCardsByType($type);
+            $counts = getCardCounts($type);
+            echo json_encode(['success' => true, 'cards' => $cards, 'counts' => $counts]);
+            exit;
+    }
+}
+
 // Handle generate invite code
 if ($_POST && isset($_POST['generate_code'])) {
     $code = generateNewInviteCode();
@@ -89,6 +118,209 @@ if(isset($_GET['deletegame'])) {
 
 // Get statistics
 $stats = getGameStatistics();
+
+function getCardsByType($type) {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        $stmt = $pdo->prepare("SELECT * FROM cards WHERE card_type = ? ORDER BY card_name ASC");
+        $stmt->execute([$type]);
+        return $stmt->fetchAll();
+    } catch (Exception $e) {
+        error_log("Error getting cards: " . $e->getMessage());
+        return [];
+    }
+}
+
+function getCardById($id) {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        $stmt = $pdo->prepare("SELECT * FROM cards WHERE id = ?");
+        $stmt->execute([$id]);
+        return $stmt->fetch();
+    } catch (Exception $e) {
+        error_log("Error getting card: " . $e->getMessage());
+        return null;
+    }
+}
+
+function getCardCounts($type) {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        
+        if ($type === 'serve') {
+            $stmt = $pdo->prepare("
+                SELECT 
+                    SUM(CASE WHEN serve_to_her = 1 THEN quantity ELSE 0 END) as her_count,
+                    SUM(CASE WHEN serve_to_him = 1 THEN quantity ELSE 0 END) as him_count
+                FROM cards WHERE card_type = ?
+            ");
+        } elseif (in_array($type, ['chance', 'spicy'])) {
+            $stmt = $pdo->prepare("
+                SELECT 
+                    SUM(CASE WHEN for_her = 1 THEN quantity ELSE 0 END) as her_count,
+                    SUM(CASE WHEN for_him = 1 THEN quantity ELSE 0 END) as him_count
+                FROM cards WHERE card_type = ?
+            ");
+        } else {
+            // snap, dare cards don't have gender
+            $stmt = $pdo->prepare("SELECT SUM(quantity) as total FROM cards WHERE card_type = ?");
+            $stmt->execute([$type]);
+            $total = $stmt->fetchColumn();
+            return ['total' => $total ?: 0];
+        }
+        
+        $stmt->execute([$type]);
+        return $stmt->fetch();
+    } catch (Exception $e) {
+        return ['her_count' => 0, 'him_count' => 0];
+    }
+}
+
+function saveCard($data) {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        
+        $id = !empty($data['id']) ? intval($data['id']) : null;
+        $cardType = $data['card_type'];
+        $cardName = trim($data['card_name']);
+        $cardDescription = trim($data['card_description']);
+        
+        if (empty($cardName) || empty($cardDescription)) {
+            return ['success' => false, 'message' => 'Card name and description are required'];
+        }
+        
+        if ($id) {
+            // Update existing card
+            $sql = "UPDATE cards SET card_name = ?, card_description = ?, quantity = ?";
+            $params = [$cardName, $cardDescription, intval($data['quantity']) ?: 1];
+            
+            // Add type-specific fields
+            if ($cardType === 'serve') {
+                $sql .= ", card_points = ?, serve_to_her = ?, serve_to_him = ?, veto_subtract = ?, veto_steal = ?, veto_draw_chance = ?, veto_draw_snap_dare = ?, veto_draw_spicy = ?";
+                $params = array_merge($params, [
+                    !empty($data['card_points']) ? intval($data['card_points']) : null,
+                    intval($data['serve_to_her']),
+                    intval($data['serve_to_him']),
+                    !empty($data['veto_subtract']) ? intval($data['veto_subtract']) : null,
+                    !empty($data['veto_steal']) ? intval($data['veto_steal']) : null,
+                    !empty($data['veto_draw_chance']) ? intval($data['veto_draw_chance']) : null,
+                    !empty($data['veto_draw_snap_dare']) ? intval($data['veto_draw_snap_dare']) : null,
+                    !empty($data['veto_draw_spicy']) ? intval($data['veto_draw_spicy']) : null
+                ]);
+            } elseif ($cardType === 'chance') {
+                $sql .= ", for_her = ?, for_him = ?, before_next_challenge = ?, challenge_modify = ?, opponent_challenge_modify = ?, draw_snap_dare = ?, draw_spicy = ?, score_modify = ?, timer = ?, veto_modify = ?, snap_modify = ?, dare_modify = ?, spicy_modify = ?, score_add = ?, score_subtract = ?, score_steal = ?, repeat_count = ?, roll_dice = ?, dice_condition = ?, dice_threshold = ?, double_it = ?";
+                $params = array_merge($params, [
+                    intval($data['for_her']),
+                    intval($data['for_him']),
+                    intval($data['before_next_challenge']),
+                    intval($data['challenge_modify']),
+                    intval($data['opponent_challenge_modify']),
+                    intval($data['draw_snap_dare']),
+                    intval($data['draw_spicy']),
+                    $data['score_modify'] ?: 'none',
+                    !empty($data['timer']) ? intval($data['timer']) : null,
+                    $data['veto_modify'] ?: 'none',
+                    intval($data['snap_modify']),
+                    intval($data['dare_modify']),
+                    intval($data['spicy_modify']),
+                    !empty($data['score_add']) ? intval($data['score_add']) : null,
+                    !empty($data['score_subtract']) ? intval($data['score_subtract']) : null,
+                    !empty($data['score_steal']) ? intval($data['score_steal']) : null,
+                    !empty($data['repeat_count']) ? intval($data['repeat_count']) : null,
+                    intval($data['roll_dice']),
+                    !empty($data['dice_condition']) ? $data['dice_condition'] : null,
+                    !empty($data['dice_threshold']) ? intval($data['dice_threshold']) : null,
+                    intval($data['double_it'])
+                ]);
+            } elseif ($cardType === 'spicy') {
+                $sql .= ", for_her = ?, for_him = ?, extra_spicy = ?";
+                $params = array_merge($params, [
+                    intval($data['for_her']),
+                    intval($data['for_him']),
+                    intval($data['extra_spicy'])
+                ]);
+            }
+            
+            $sql .= " WHERE id = ?";
+            $params[] = $id;
+            
+        } else {
+            // Insert new card
+            if ($cardType === 'serve') {
+                $sql = "INSERT INTO cards (card_type, card_name, card_description, quantity, card_points, serve_to_her, serve_to_him, veto_subtract, veto_steal, veto_draw_chance, veto_draw_snap_dare, veto_draw_spicy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                $params = [
+                    $cardType, $cardName, $cardDescription, intval($data['quantity']) ?: 1,
+                    !empty($data['card_points']) ? intval($data['card_points']) : null,
+                    intval($data['serve_to_her']),
+                    intval($data['serve_to_him']),
+                    !empty($data['veto_subtract']) ? intval($data['veto_subtract']) : null,
+                    !empty($data['veto_steal']) ? intval($data['veto_steal']) : null,
+                    !empty($data['veto_draw_chance']) ? intval($data['veto_draw_chance']) : null,
+                    !empty($data['veto_draw_snap_dare']) ? intval($data['veto_draw_snap_dare']) : null,
+                    !empty($data['veto_draw_spicy']) ? intval($data['veto_draw_spicy']) : null
+                ];
+            } elseif ($cardType === 'chance') {
+                $sql = "INSERT INTO cards (card_type, card_name, card_description, quantity, for_her, for_him, before_next_challenge, challenge_modify, opponent_challenge_modify, draw_snap_dare, draw_spicy, score_modify, timer, veto_modify, snap_modify, dare_modify, spicy_modify, score_add, score_subtract, score_steal, repeat_count, roll_dice, dice_condition, dice_threshold, double_it) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                $params = [
+                    $cardType, $cardName, $cardDescription, intval($data['quantity']) ?: 1,
+                    intval($data['for_her']),
+                    intval($data['for_him']),
+                    intval($data['before_next_challenge']),
+                    intval($data['challenge_modify']),
+                    intval($data['opponent_challenge_modify']),
+                    intval($data['draw_snap_dare']),
+                    intval($data['draw_spicy']),
+                    $data['score_modify'] ?: 'none',
+                    !empty($data['timer']) ? intval($data['timer']) : null,
+                    $data['veto_modify'] ?: 'none',
+                    intval($data['snap_modify']),
+                    intval($data['dare_modify']),
+                    intval($data['spicy_modify']),
+                    !empty($data['score_add']) ? intval($data['score_add']) : null,
+                    !empty($data['score_subtract']) ? intval($data['score_subtract']) : null,
+                    !empty($data['score_steal']) ? intval($data['score_steal']) : null,
+                    !empty($data['repeat_count']) ? intval($data['repeat_count']) : null,
+                    intval($data['roll_dice']),
+                    !empty($data['dice_condition']) ? $data['dice_condition'] : null,
+                    !empty($data['dice_threshold']) ? intval($data['dice_threshold']) : null,
+                    intval($data['double_it'])
+                ];
+            } else {
+                // snap, dare, or spicy (simple cards)
+                $sql = "INSERT INTO cards (card_type, card_name, card_description, quantity, for_her, for_him, extra_spicy) VALUES (?, ?, ?, ?, ?, ?, ?)";
+                $params = [
+                    $cardType, $cardName, $cardDescription, intval($data['quantity']) ?: 1,
+                    ($cardType === 'spicy') ? intval($data['for_her']) : 0,
+                    ($cardType === 'spicy') ? intval($data['for_him']) : 0,
+                    ($cardType === 'spicy') ? intval($data['extra_spicy']) : 0
+                ];
+            }
+        }
+        
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        
+        return ['success' => true];
+        
+    } catch (Exception $e) {
+        error_log("Error saving card: " . $e->getMessage());
+        return ['success' => false, 'message' => 'Failed to save card'];
+    }
+}
+
+function deleteCard($id) {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        $stmt = $pdo->prepare("DELETE FROM cards WHERE id = ?");
+        $stmt->execute([$id]);
+        
+        return ['success' => true];
+        
+    } catch (Exception $e) {
+        error_log("Error deleting card: " . $e->getMessage());
+        return ['success' => false, 'message' => 'Failed to delete card'];
+    }
+}
 
 function authenticateAdmin($username, $password) {
     try {
@@ -644,7 +876,7 @@ function showLoginForm($error = null) {
             align-items: center;
             justify-content: center;
         }
-        
+
         .confirm-dialog.active {
             display: flex;
         }
@@ -663,6 +895,125 @@ function showLoginForm($error = null) {
             gap: 15px;
             margin-top: 20px;
             justify-content: center;
+        }
+        
+        .card-tabs {
+            display: flex;
+            border-bottom: 2px solid #eee;
+            margin-bottom: 20px;
+        }
+        
+        .card-tab {
+            padding: 12px 24px;
+            background: none;
+            border: none;
+            color: #666;
+            font-weight: 600;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s ease;
+        }
+        
+        .card-tab.active {
+            color: #333;
+            border-bottom-color: <?= Config::COLOR_BLUE ?>;
+        }
+        
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .card-item {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-left: 4px solid <?= Config::COLOR_BLUE ?>;
+        }
+        
+        .card-item h4 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        .card-item p {
+            color: #666;
+            margin-bottom: 15px;
+            line-height: 1.4;
+        }
+        
+        .card-meta {
+            display: flex;
+            gap: 15px;
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 10px;
+        }
+        
+        .card-actions {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .modal-form {
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+        
+        .form-row {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .form-row .form-group {
+            flex: 1;
+        }
+        
+        .checkbox-group {
+            display: flex;
+            gap: 20px;
+            margin-top: 10px;
+        }
+        
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .checkbox-item input[type="checkbox"] {
+            width: auto;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+        
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            font-size: 16px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: transparent;
+            color: darkgray;
+            outline: none;
+            font-family: inherit;
+        }
+        
+        .btn-secondary, .btn.dark {
+            background: #6b7280;
         }
     </style>
 </head>
@@ -815,6 +1166,300 @@ function showLoginForm($error = null) {
                 </tbody>
             </table>
         </div>
+
+        <!-- Playing Cards Management -->
+        <div class="section">
+            <h2>Playing Cards Management</h2>
+            
+            <!-- Card Type Tabs -->
+            <div class="card-tabs">
+                <button class="card-tab active" onclick="showCardType('serve')">Serve Cards</button>
+                <button class="card-tab" onclick="showCardType('chance')">Chance Cards</button>
+                <button class="card-tab" onclick="showCardType('snap')">Snap Cards</button>
+                <button class="card-tab" onclick="showCardType('dare')">Dare Cards</button>
+                <button class="card-tab" onclick="showCardType('spicy')">Spicy Cards</button>
+            </div>
+            
+            <div class="card-type-content" id="serve-cards">
+                <div class="card-header">
+                    <h3>Serve Cards</h3>
+                    <button class="btn" onclick="openCardModal('serve')">Add New Serve Card</button>
+                </div>
+                <div class="cards-list" id="serve-cards-list">
+                    <!-- Cards will be loaded here -->
+                </div>
+            </div>
+            
+            <div class="card-type-content" id="chance-cards" style="display: none;">
+                <div class="card-header">
+                    <h3>Chance Cards</h3>
+                    <button class="btn" onclick="openCardModal('chance')">Add New Chance Card</button>
+                </div>
+                <div class="cards-list" id="chance-cards-list">
+                    <!-- Cards will be loaded here -->
+                </div>
+            </div>
+            
+            <div class="card-type-content" id="snap-cards" style="display: none;">
+                <div class="card-header">
+                    <h3>Snap Cards</h3>
+                    <button class="btn" onclick="openCardModal('snap')">Add New Snap Card</button>
+                </div>
+                <div class="cards-list" id="snap-cards-list">
+                    <!-- Cards will be loaded here -->
+                </div>
+            </div>
+            
+            <div class="card-type-content" id="dare-cards" style="display: none;">
+                <div class="card-header">
+                    <h3>Dare Cards</h3>
+                    <button class="btn" onclick="openCardModal('dare')">Add New Dare Card</button>
+                </div>
+                <div class="cards-list" id="dare-cards-list">
+                    <!-- Cards will be loaded here -->
+                </div>
+            </div>
+            
+            <div class="card-type-content" id="spicy-cards" style="display: none;">
+                <div class="card-header">
+                    <h3>Spicy Cards</h3>
+                    <button class="btn" onclick="openCardModal('spicy')">Add New Spicy Card</button>
+                </div>
+                <div class="cards-list" id="spicy-cards-list">
+                    <!-- Cards will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card Management Modal -->
+    <div class="confirm-dialog" id="cardModal">
+        <div class="confirm-content" style="max-width: 600px;">
+            <h3 id="cardModalTitle">Add Card</h3>
+            <form id="cardForm" class="modal-form">
+                <input type="hidden" id="cardId">
+                <input type="hidden" id="cardType">
+                
+                <div class="form-group">
+                    <label for="cardName">Card Name</label>
+                    <input type="text" id="cardName" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="cardDescription">Card Description</label>
+                    <textarea id="cardDescription" rows="3" required></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="cardQuantity">Quantity</label>
+                    <input type="number" id="cardQuantity" min="1" value="1" required>
+                </div>
+                
+                <!-- Serve Card Fields -->
+                <div id="serveFields" style="display: none;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="cardPoints">Points (1-5)</label>
+                            <input type="number" id="cardPoints" min="1" max="5">
+                        </div>
+                    </div>
+                    
+                    <div class="checkbox-group">
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="serveToHer">
+                            <label for="serveToHer">Serve to Her</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="serveToHim">
+                            <label for="serveToHim">Serve to Him</label>
+                        </div>
+                    </div>
+                    
+                    <h4 style="margin-top: 20px;">Veto Options</h4>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="vetoSubtract">Veto Subtract</label>
+                            <input type="number" id="vetoSubtract" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="vetoSteal">Veto Steal</label>
+                            <input type="number" id="vetoSteal" min="0">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="vetoDrawChance">Veto Draw Chance</label>
+                            <input type="number" id="vetoDrawChance" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="vetoDrawSnapDare">Veto Draw Snap/Dare</label>
+                            <input type="number" id="vetoDrawSnapDare" min="0">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="vetoDrawSpicy">Veto Draw Spicy</label>
+                        <input type="number" id="vetoDrawSpicy" min="0">
+                    </div>
+                </div>
+                
+                <!-- Chance Card Fields -->
+                <div id="chanceFields" style="display: none;">
+                    <div class="checkbox-group">
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="forHer">
+                            <label for="forHer">For Her</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="forHim">
+                            <label for="forHim">For Him</label>
+                        </div>
+                    </div>
+                    
+                    <div class="checkbox-group">
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="beforeNextChallenge">
+                            <label for="beforeNextChallenge">Before Next Challenge</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="challengeModify">
+                            <label for="challengeModify">Challenge Modify</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="opponentChallengeModify">
+                            <label for="opponentChallengeModify">Opponent Challenge Modify</label>
+                        </div>
+                    </div>
+                    
+                    <div class="checkbox-group">
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="drawSnapDareChance">
+                            <label for="drawSnapDareChance">Draw Snap/Dare</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="drawSpicyChance">
+                            <label for="drawSpicyChance">Draw Spicy</label>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="scoreModify">Score Modify</label>
+                            <select id="scoreModify">
+                                <option value="none">None</option>
+                                <option value="half">Half</option>
+                                <option value="opponent_double">Opponent Double</option>
+                                <option value="zero">Zero</option>
+                                <option value="opponent_extra_point">Opponent Extra Point</option>
+                                <option value="challenge_reward_opponent">Challenge Reward Opponent</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="timer">Timer (minutes)</label>
+                            <input type="number" id="timer" min="0">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="vetoModify">Veto Modify</label>
+                        <select id="vetoModify">
+                            <option value="none">None</option>
+                            <option value="double">Double</option>
+                            <option value="skip">Skip</option>
+                            <option value="opponent_double">Opponent Double</option>
+                            <option value="opponent_reward">Opponent Reward</option>
+                        </select>
+                    </div>
+                    
+                    <div class="checkbox-group">
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="snapModify">
+                            <label for="snapModify">Snap Modify</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="dareModify">
+                            <label for="dareModify">Dare Modify</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="spicyModify">
+                            <label for="spicyModify">Spicy Modify</label>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="scoreAdd">Score Add</label>
+                            <input type="number" id="scoreAdd">
+                        </div>
+                        <div class="form-group">
+                            <label for="scoreSubtract">Score Subtract</label>
+                            <input type="number" id="scoreSubtract">
+                        </div>
+                        <div class="form-group">
+                            <label for="scoreSteal">Score Steal</label>
+                            <input type="number" id="scoreSteal">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="repeatCount">Repeat</label>
+                            <input type="number" id="repeatCount" min="0">
+                        </div>
+                        <div class="checkbox-item" style="align-self: end; padding-bottom: 12px;">
+                            <input type="checkbox" id="rollDice">
+                            <label for="rollDice">Roll Dice</label>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="diceCondition">Dice Condition</label>
+                            <select id="diceCondition">
+                                <option value="">None</option>
+                                <option value="Even">Even</option>
+                                <option value="Odd">Odd</option>
+                                <option value="Same">Same</option>
+                                <option value="Doubles">Doubles</option>
+                                <option value="Above">Above</option>
+                                <option value="Below">Below</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="diceThreshold">Dice Threshold</label>
+                            <input type="number" id="diceThreshold" min="2" max="12">
+                        </div>
+                        <div class="checkbox-item" style="align-self: end; padding-bottom: 12px;">
+                            <input type="checkbox" id="doubleIt">
+                            <label for="doubleIt">Double It</label>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Spicy Card Fields -->
+                <div id="spicyFields" style="display: none;">
+                    <div class="checkbox-group">
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="forHerSpicy">
+                            <label for="forHerSpicy">For Her</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="forHimSpicy">
+                            <label for="forHimSpicy">For Him</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="extraSpicy">
+                            <label for="extraSpicy">Extra Spicy</label>
+                        </div>
+                    </div>
+                </div>
+                
+            </form>
+            
+            <div class="confirm-buttons">
+                <button class="btn btn-secondary" onclick="closeCardModal()">Cancel</button>
+                <button class="btn" onclick="saveCard()">Save Card</button>
+            </div>
+        </div>
     </div>
 
     <!-- Confirmation Dialogs -->
@@ -847,26 +1492,310 @@ function showLoginForm($error = null) {
             </div>
         </div>
     </div>
-    
     <script>
+        let currentCardType = 'serve';
+
+        function showCardType(type) {
+            currentCardType = type;
+            
+            // Update tab states
+            document.querySelectorAll('.card-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // Show/hide content
+            document.querySelectorAll('.card-type-content').forEach(content => {
+                content.style.display = 'none';
+            });
+            document.getElementById(type + '-cards').style.display = 'block';
+            
+            // Load cards for this type
+            loadCards(type);
+        }
+
+        function loadCards(type) {
+            fetch('admin.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'action=get_cards&type=' + type
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    displayCards(type, data.cards);
+                    updateCardCounts(type, data.counts);
+                }
+            });
+        }
+
+        function updateCardCounts(type, counts) {
+            const header = document.querySelector(`#${type}-cards .card-header h3`);
+            let countText = '';
+            
+            if (counts.total !== undefined) {
+                countText = ` (${counts.total} cards)`;
+            } else {
+                const herCount = counts.her_count || 0;
+                const himCount = counts.him_count || 0;
+                countText = ` (Her: ${herCount}, Him: ${himCount})`;
+            }
+            
+            const baseTitle = type.charAt(0).toUpperCase() + type.slice(1) + ' Cards';
+            header.textContent = baseTitle + countText;
+        }
+
+        function displayCards(type, cards) {
+            const container = document.getElementById(type + '-cards-list');
+            const header = document.querySelector(`#${type}-cards .card-header h3`);
+            container.innerHTML = '';
+            
+            if (cards.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">No cards yet</p>';
+                return;
+            }
+            
+            cards.forEach(card => {
+                const cardElement = document.createElement('div');
+                cardElement.className = 'card-item';
+                cardElement.innerHTML = `
+                    <h4>${card.card_name}</h4>
+                    <p>${card.card_description}</p>
+                    <div class="card-meta">
+                        ${getCardMeta(card)}
+                    </div>
+                    <div class="card-actions">
+                        <button class="btn-small btn-warning" onclick="editCard(${card.id})">Edit</button>
+                        <button class="btn-small btn-danger" onclick="confirmDeleteCard(${card.id}, '${card.card_name}')">Delete</button>
+                    </div>
+                `;
+                container.appendChild(cardElement);
+            });
+        }
+
+        function getCardMeta(card) {
+            let meta = [];
+            
+            if (card.card_type === 'serve') {
+                if (card.card_points) meta.push(`${card.card_points} points`);
+                if (card.serve_to_her && card.serve_to_him) meta.push('Both genders');
+                else if (card.serve_to_her) meta.push('For her');
+                else if (card.serve_to_him) meta.push('For him');
+            } else if (card.card_type === 'chance') {
+                if (card.for_her && card.for_him) meta.push('Both genders');
+                else if (card.for_her) meta.push('For her');
+                else if (card.for_him) meta.push('For him');
+                if (card.timer) meta.push(`${card.timer}min timer`);
+            } else if (card.card_type === 'spicy') {
+                if (card.for_her && card.for_him) meta.push('Both genders');
+                else if (card.for_her) meta.push('For her');
+                else if (card.for_him) meta.push('For him');
+                if (card.extra_spicy) meta.push('Extra spicy');
+            }
+
+            if (card.quantity && card.quantity > 1) meta.push(`${card.quantity}x`);
+            
+            return meta.join(' • ');
+        }
+
+        function openCardModal(type, cardId = null) {
+            currentCardType = type;
+            const modal = document.getElementById('cardModal');
+            const title = document.getElementById('cardModalTitle');
+            
+            // Reset form
+            document.getElementById('cardForm').reset();
+            document.getElementById('cardId').value = cardId || '';
+            document.getElementById('cardType').value = type;
+            
+            // Show/hide field groups
+            document.getElementById('serveFields').style.display = type === 'serve' ? 'block' : 'none';
+            document.getElementById('chanceFields').style.display = type === 'chance' ? 'block' : 'none';
+            document.getElementById('spicyFields').style.display = type === 'spicy' ? 'block' : 'none';
+            
+            title.textContent = cardId ? 'Edit ' + type.charAt(0).toUpperCase() + type.slice(1) + ' Card' : 'Add ' + type.charAt(0).toUpperCase() + type.slice(1) + ' Card';
+            
+            if (cardId) {
+                loadCardData(cardId);
+            }
+            
+            modal.classList.add('active');
+        }
+
+        function loadCardData(cardId) {
+            fetch('admin.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'action=get_card&id=' + cardId
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    populateForm(data.card);
+                }
+            });
+        }
+
+        function populateForm(card) {
+            document.getElementById('cardName').value = card.card_name;
+            document.getElementById('cardDescription').value = card.card_description;
+            if (card.quantity) document.getElementById('cardQuantity').value = card.quantity;
+            
+            if (card.card_type === 'serve') {
+                if (card.card_points) document.getElementById('cardPoints').value = card.card_points;
+                document.getElementById('serveToHer').checked = card.serve_to_her;
+                document.getElementById('serveToHim').checked = card.serve_to_him;
+                if (card.veto_subtract) document.getElementById('vetoSubtract').value = card.veto_subtract;
+                if (card.veto_steal) document.getElementById('vetoSteal').value = card.veto_steal;
+                if (card.veto_draw_chance) document.getElementById('vetoDrawChance').value = card.veto_draw_chance;
+                if (card.veto_draw_snap_dare) document.getElementById('vetoDrawSnapDare').value = card.veto_draw_snap_dare;
+                if (card.veto_draw_spicy) document.getElementById('vetoDrawSpicy').value = card.veto_draw_spicy;
+            } else if (card.card_type === 'chance') {
+                document.getElementById('forHer').checked = card.for_her;
+                document.getElementById('forHim').checked = card.for_him;
+                document.getElementById('beforeNextChallenge').checked = card.before_next_challenge;
+                document.getElementById('challengeModify').checked = card.challenge_modify;
+                document.getElementById('opponentChallengeModify').checked = card.opponent_challenge_modify;
+                document.getElementById('drawSnapDareChance').checked = card.draw_snap_dare;
+                document.getElementById('drawSpicyChance').checked = card.draw_spicy;
+                document.getElementById('scoreModify').value = card.score_modify;
+                if (card.timer) document.getElementById('timer').value = card.timer;
+                document.getElementById('vetoModify').value = card.veto_modify;
+                document.getElementById('snapModify').checked = card.snap_modify;
+                document.getElementById('dareModify').checked = card.dare_modify;
+                document.getElementById('spicyModify').checked = card.spicy_modify;
+                if (card.score_add) document.getElementById('scoreAdd').value = card.score_add;
+                if (card.score_subtract) document.getElementById('scoreSubtract').value = card.score_subtract;
+                if (card.score_steal) document.getElementById('scoreSteal').value = card.score_steal;
+                if (card.repeat_count) document.getElementById('repeatCount').value = card.repeat_count;
+                document.getElementById('rollDice').checked = card.roll_dice;
+                if (card.dice_condition) document.getElementById('diceCondition').value = card.dice_condition;
+                if (card.dice_threshold) document.getElementById('diceThreshold').value = card.dice_threshold;
+                document.getElementById('doubleIt').checked = card.double_it;
+            } else if (card.card_type === 'spicy') {
+                document.getElementById('forHerSpicy').checked = card.for_her;
+                document.getElementById('forHimSpicy').checked = card.for_him;
+                document.getElementById('extraSpicy').checked = card.extra_spicy;
+            }
+        }
+
+        function closeCardModal() {
+            document.getElementById('cardModal').classList.remove('active');
+        }
+
+        function saveCard() {
+            const formData = new FormData();
+            formData.append('action', 'save_card');
+            
+            // Basic fields
+            formData.append('id', document.getElementById('cardId').value);
+            formData.append('card_type', document.getElementById('cardType').value);
+            formData.append('card_name', document.getElementById('cardName').value);
+            formData.append('card_description', document.getElementById('cardDescription').value);
+            formData.append('quantity', document.getElementById('cardQuantity').value || '1');
+            
+            const cardType = document.getElementById('cardType').value;
+            
+            if (cardType === 'serve') {
+                formData.append('card_points', document.getElementById('cardPoints').value || '');
+                formData.append('serve_to_her', document.getElementById('serveToHer').checked ? '1' : '0');
+                formData.append('serve_to_him', document.getElementById('serveToHim').checked ? '1' : '0');
+                formData.append('veto_subtract', document.getElementById('vetoSubtract').value || '');
+                formData.append('veto_steal', document.getElementById('vetoSteal').value || '');
+                formData.append('veto_draw_chance', document.getElementById('vetoDrawChance').value || '');
+                formData.append('veto_draw_snap_dare', document.getElementById('vetoDrawSnapDare').value || '');
+                formData.append('veto_draw_spicy', document.getElementById('vetoDrawSpicy').value || '');
+            } else if (cardType === 'chance') {
+                formData.append('for_her', document.getElementById('forHer').checked ? '1' : '0');
+                formData.append('for_him', document.getElementById('forHim').checked ? '1' : '0');
+                formData.append('before_next_challenge', document.getElementById('beforeNextChallenge').checked ? '1' : '0');
+                formData.append('challenge_modify', document.getElementById('challengeModify').checked ? '1' : '0');
+                formData.append('opponent_challenge_modify', document.getElementById('opponentChallengeModify').checked ? '1' : '0');
+                formData.append('draw_snap_dare', document.getElementById('drawSnapDareChance').checked ? '1' : '0');
+                formData.append('draw_spicy', document.getElementById('drawSpicyChance').checked ? '1' : '0');
+                formData.append('score_modify', document.getElementById('scoreModify').value);
+                formData.append('timer', document.getElementById('timer').value || '');
+                formData.append('veto_modify', document.getElementById('vetoModify').value);
+                formData.append('snap_modify', document.getElementById('snapModify').checked ? '1' : '0');
+                formData.append('dare_modify', document.getElementById('dareModify').checked ? '1' : '0');
+                formData.append('spicy_modify', document.getElementById('spicyModify').checked ? '1' : '0');
+                formData.append('score_add', document.getElementById('scoreAdd').value || '');
+                formData.append('score_subtract', document.getElementById('scoreSubtract').value || '');
+                formData.append('score_steal', document.getElementById('scoreSteal').value || '');
+                formData.append('repeat_count', document.getElementById('repeatCount').value || '');
+                formData.append('roll_dice', document.getElementById('rollDice').checked ? '1' : '0');
+                formData.append('dice_condition', document.getElementById('diceCondition').value || '');
+                formData.append('dice_threshold', document.getElementById('diceThreshold').value || '');
+                formData.append('double_it', document.getElementById('doubleIt').checked ? '1' : '0');
+            } else if (cardType === 'spicy') {
+                formData.append('for_her', document.getElementById('forHerSpicy').checked ? '1' : '0');
+                formData.append('for_him', document.getElementById('forHimSpicy').checked ? '1' : '0');
+                formData.append('extra_spicy', document.getElementById('extraSpicy').checked ? '1' : '0');
+            }
+            
+            fetch('admin.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    closeCardModal();
+                    loadCards(currentCardType);
+                } else {
+                    alert('Error saving card: ' + (data.message || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error saving card');
+            });
+        }
+
+        function editCard(cardId) {
+            openCardModal(currentCardType, cardId);
+        }
+
+        function confirmDeleteCard(cardId, cardName) {
+            if (confirm(`Are you sure you want to delete the card "${cardName}"?`)) {
+                deleteCard(cardId);
+            }
+        }
+
+        function deleteCard(cardId) {
+            fetch('admin.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'action=delete_card&id=' + cardId
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    loadCards(currentCardType);
+                } else {
+                    alert('Error deleting card: ' + (data.message || 'Unknown error'));
+                }
+            });
+        }
+
         function confirmDeleteCode(codeId, codeValue) {
             document.getElementById('deleteCodeId').value = codeId;
             document.getElementById('deleteCodeValue').textContent = codeValue;
             document.getElementById('confirmDeleteCode').classList.add('active');
         }
-        
+
         function confirmDeleteGame(gameId, gameCode) {
             document.getElementById('deleteGameId').value = gameId;
             document.getElementById('deleteGameValue').textContent = gameCode;
             document.getElementById('confirmDeleteGame').classList.add('active');
         }
-        
+
         function closeConfirmDialog() {
             document.querySelectorAll('.confirm-dialog').forEach(dialog => {
                 dialog.classList.remove('active');
             });
         }
-        
+
         // Close dialog when clicking outside
         document.querySelectorAll('.confirm-dialog').forEach(dialog => {
             dialog.addEventListener('click', function(e) {
@@ -874,6 +1803,11 @@ function showLoginForm($error = null) {
                     closeConfirmDialog();
                 }
             });
+        });
+
+        // Load initial cards when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            loadCards('serve');
         });
     </script>
 </body>
