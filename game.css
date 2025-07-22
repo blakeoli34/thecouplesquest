@@ -1176,29 +1176,68 @@ body {
     display: flex;
 }
 
+/* Overlay backdrop when card is selected */
+.card-overlay.has-selection::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.3);
+    z-index: 999;
+    pointer-events: auto;
+}
+
 .card-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    display: flex;
+    flex-flow: row wrap;
+    justify-content: center;
     gap: 20px;
     max-width: 100vw;
     max-height: 100vh;
     overflow-y: auto;
     padding: 10vh 0;
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.card-grid.has-selection {
+    pointer-events: none;
 }
 
 .game-card {
+    width: calc(50% - 10px);
     background: white;
     border-radius: 15px;
     padding: 20px;
     padding-left: 5px;
     box-shadow: 0 8px 25px rgba(0,0,0,0.2);
     cursor: pointer;
-    transition: all 0.3s ease;
     position: relative;
     min-height: 60vw;
     display: flex;
     flex-direction: column;
     border-left: solid 15px #ccc;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    z-index: 1;
+}
+
+.game-card.selected {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(1.6);
+    z-index: 1000;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+    pointer-events: auto;
+    cursor: default;
+}
+
+.card-grid.has-selection .game-card:not(.selected) {
+    opacity: 0;
+    transform: scale(0.95);
+    pointer-events: none;
 }
 
 body.male .game-card {
@@ -1271,11 +1310,6 @@ body.female .game-card {
     color: #ef6c00;
 }
 
-.card-badge.gender {
-    background: #f3e5f5;
-    color: #7b1fa2;
-}
-
 .card-badge.penalty {
     background: #ffebee;
     color: #c62828;
@@ -1303,6 +1337,75 @@ body.female .game-card {
 
 .card-overlay-close:hover {
     background: rgba(255,255,255,0.3);
+}
+
+/* Card action buttons for selected card */
+.card-selection-actions {
+    position: fixed;
+    top: 80%;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 20px;
+    z-index: 1001;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.3s ease;
+}
+
+.card-selection-actions.show {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.card-selection-actions .btn {
+    min-width: 120px;
+    padding: 15px 25px;
+    font-size: 16px;
+    font-weight: 600;
+    border-radius: 10px;
+    border: solid 2px #fff;
+    color: #fff;
+    background: transparent;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.card-selection-actions .btn-complete {
+    color: #1565c0;
+    border-color: #1565c0;
+}
+
+.card-selection-actions .btn-complete:hover {
+    background: #0d47a1;
+    color: #fff;
+}
+
+.card-selection-actions .btn-veto {
+    border-color: #c62828;
+    color: #c62828;
+}
+
+.card-selection-actions .btn-veto:hover {
+    background: #b71c1c;
+    color: #fff;
+}
+
+/* Card discard animation */
+.game-card.selected.discarding {
+    animation: cardDiscard 0.8s ease-in forwards;
+    z-index: 1002;
+}
+
+@keyframes cardDiscard {
+    0% {
+        transform: translate(-50%, -50%) scale(1.6);
+        opacity: 1;
+    }
+    100% {
+        transform: translate(-50%, -100vh) scale(0.2) rotate(720deg);
+        opacity: 0;
+    }
 }
 
 /* Card action buttons */

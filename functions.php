@@ -1091,6 +1091,172 @@ function addCardToHand($gameId, $playerId, $cardId, $cardType, $quantity = 1, $f
     }
 }
 
+function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        $pdo->beginTransaction();
+        
+        // Get card details
+        $stmt = $pdo->prepare("
+            SELECT pc.*, c.*
+            FROM player_cards pc
+            JOIN cards c ON pc.card_id = c.id
+            WHERE pc.id = ? AND pc.player_id = ? AND pc.game_id = ?
+        ");
+        $stmt->execute([$playerCardId, $playerId, $gameId]);
+        $playerCard = $stmt->fetch();
+        
+        if (!$playerCard) {
+            throw new Exception("Card not found in player's hand");
+        }
+        
+        $pointsAwarded = 0;
+        
+        // Handle completion based on card type
+        if (($playerCard['card_type'] === 'serve' || $playerCard['card_type'] === 'accepted_serve') 
+            && $playerCard['card_points']) {
+            updateScore($gameId, $playerId, $playerCard['card_points'], $playerId);
+            $pointsAwarded = $playerCard['card_points'];
+        }
+        
+        // Remove card from player's hand
+        if ($playerCard['quantity'] > 1) {
+            $stmt = $pdo->prepare("UPDATE player_cards SET quantity = quantity - 1 WHERE id = ?");
+            $stmt->execute([$playerCardId]);
+        } else {
+            $stmt = $pdo->prepare("DELETE FROM player_cards WHERE id = ?");
+            $stmt->execute([$playerCardId]);
+        }
+        
+        $pdo->commit();
+        return ['success' => true, 'points_awarded' => $pointsAwarded];
+        
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        error_log("Error completing hand card: " . $e->getMessage());
+        return ['success' => false, 'message' => $e->getMessage()];
+    }
+}
+
+function vetoHandCard($gameId, $playerId, $cardId, $playerCardId) {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        $pdo->beginTransaction();
+        
+        // Get card details
+        $stmt = $pdo->prepare("
+            SELECT pc.*, c.*
+            FROM player_cards pc
+            JOIN cards c ON pc.card_id = c.id
+            WHERE pc.id = ? AND pc.player_id = ? AND pc.game_id = ?
+        ");
+        $stmt->execute([$playerCardId, $playerId, $gameId]);
+        $playerCard = $stmt->fetch();
+        
+        if (!$playerCard) {
+            throw new Exception("Card not found in player's hand");
+        }
+        
+        $penalties = [];
+        
+        // Handle veto based on card type
+        switch ($playerCard['card_type']) {
+            case 'serve':
+            case 'accepted_serve':
+                // Apply original serve card veto penalties
+                if ($playerCard['veto_subtract']) {
+                    updateScore($gameId, $playerId, -$playerCard['veto_subtract'], $playerId);
+                    $penalties[] = "Lost {$playerCard['veto_subtract']} points";
+                }
+                
+                if ($playerCard['veto_steal']) {
+                    $stmt = $pdo->prepare("SELECT id FROM players WHERE game_id = ? AND id != ?");
+                    $stmt->execute([$gameId, $playerId]);
+                    $opponentId = $stmt->fetchColumn();
+                    
+                    if ($opponentId) {
+                        updateScore($gameId, $playerId, -$playerCard['veto_steal'], $playerId);
+                        updateScore($gameId, $opponentId, $playerCard['veto_steal'], $playerId);
+                        $penalties[] = "Lost {$playerCard['veto_steal']} points to opponent";
+                    }
+                }
+                
+                if ($playerCard['veto_draw_chance']) {
+                    drawCards($gameId, $playerId, 'chance', $playerCard['veto_draw_chance']);
+                    $penalties[] = "Drew {$playerCard['veto_draw_chance']} chance card(s)";
+                }
+                
+                if ($playerCard['veto_draw_snap_dare']) {
+                    $player = getPlayerById($playerId);
+                    $drawType = ($player['gender'] === 'female') ? 'snap' : 'dare';
+                    drawCards($gameId, $playerId, $drawType, $playerCard['veto_draw_snap_dare']);
+                    $penalties[] = "Drew {$playerCard['veto_draw_snap_dare']} {$drawType} card(s)";
+                }
+                
+                if ($playerCard['veto_draw_spicy']) {
+                    drawCards($gameId, $playerId, 'spicy', $playerCard['veto_draw_spicy']);
+                    $penalties[] = "Drew {$playerCard['veto_draw_spicy']} spicy card(s)";
+                }
+                break;
+                
+            case 'snap':
+            case 'dare':
+                // Lose 3 points, return to deck
+                updateScore($gameId, $playerId, -3, $playerId);
+                $penalties[] = "Lost 3 points";
+                returnCardToDeck($gameId, $playerCard['card_id'], 1);
+                break;
+                
+            case 'spicy':
+            case 'chance':
+                // Just return to deck
+                returnCardToDeck($gameId, $playerCard['card_id'], 1);
+                $penalties[] = "Card returned to deck";
+                break;
+        }
+        
+        // Remove from hand
+        if ($playerCard['quantity'] > 1) {
+            $stmt = $pdo->prepare("UPDATE player_cards SET quantity = quantity - 1 WHERE id = ?");
+            $stmt->execute([$playerCardId]);
+        } else {
+            $stmt = $pdo->prepare("DELETE FROM player_cards WHERE id = ?");
+            $stmt->execute([$playerCardId]);
+        }
+        
+        $pdo->commit();
+        return ['success' => true, 'penalties' => $penalties];
+        
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        error_log("Error vetoing hand card: " . $e->getMessage());
+        return ['success' => false, 'message' => $e->getMessage()];
+    }
+}
+
+function returnCardToDeck($gameId, $cardId, $quantity = 1) {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        
+        $stmt = $pdo->prepare("SELECT id FROM game_decks WHERE game_id = ? AND card_id = ?");
+        $stmt->execute([$gameId, $cardId]);
+        $deckCard = $stmt->fetch();
+        
+        if ($deckCard) {
+            $stmt = $pdo->prepare("UPDATE game_decks SET remaining_quantity = remaining_quantity + ? WHERE id = ?");
+            $stmt->execute([$quantity, $deckCard['id']]);
+        } else {
+            $stmt = $pdo->prepare("INSERT INTO game_decks (game_id, card_id, remaining_quantity) VALUES (?, ?, ?)");
+            $stmt->execute([$gameId, $cardId, $quantity]);
+        }
+        
+        return true;
+    } catch (Exception $e) {
+        error_log("Error returning card to deck: " . $e->getMessage());
+        return false;
+    }
+}
+
 function executeCardEffects($card, $gameId, $playerId) {
     $effects = [];
     

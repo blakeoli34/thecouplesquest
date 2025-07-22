@@ -24,6 +24,9 @@ let cardData = {
 let selectedCard = null;
 let currentServeId = null;
 
+let selectedHandCard = null;
+let isCardSelected = false;
+
 // Load card data for digital games
 function loadCardData() {
     if (!document.body.classList.contains('digital')) return;
@@ -453,37 +456,172 @@ function performManualDraw() {
 
 // Select hand card
 function selectHandCard(card) {
-    selectedCard = card;
-    if (card.card_type === 'serve') {
-        showCardActions('Complete Challenge', () => completeHandCard());
-    } else {
-        showCardActions('Play Card', () => playHandCard());
+    if (isCardSelected) return; // Prevent multiple selections
+    
+    selectedHandCard = card;
+    isCardSelected = true;
+    
+    // Find the clicked card element
+    const clickedCard = event.target.closest('.game-card');
+    if (!clickedCard) return;
+    
+    // Add selection state to grid and card
+    const grid = document.getElementById('handCardsGrid');
+    grid.classList.add('has-selection');
+    clickedCard.classList.add('selected');
+    
+    // Add selection state to overlay
+    const overlay = document.getElementById('handCardsOverlay');
+    overlay.classList.add('has-selection');
+    
+    // Show action buttons after animation
+    setTimeout(() => {
+        showCardSelectionActions();
+    }, 400);
+}
+
+// Show action buttons
+function showCardSelectionActions() {
+    const actions = document.getElementById('cardSelectionActions');
+    if (actions) {
+        actions.classList.add('show');
     }
 }
 
-// Complete hand card (for serve cards)
-function completeHandCard() {
-    // For now, just award points and remove from hand
-    if (selectedCard && selectedCard.card_points) {
-        updateScore(gameData.currentPlayerId, selectedCard.card_points);
-        removeCardFromHand(selectedCard);
-        closeCardOverlay('handCardsOverlay');
-        showInAppNotification('Challenge Complete!', `Gained ${selectedCard.card_points} points`);
+// Hide action buttons
+function hideCardSelectionActions() {
+    const actions = document.getElementById('cardSelectionActions');
+    if (actions) {
+        actions.classList.remove('show');
     }
 }
 
-// Play hand card (for other card types)  
-function playHandCard() {
-    // For now, just remove from hand
-    removeCardFromHand(selectedCard);
-    closeCardOverlay('handCardsOverlay');
-    showInAppNotification('Card Played!', `Played "${selectedCard.card_name}"`);
+// Clear card selection
+function clearCardSelection() {
+    if (!isCardSelected) return;
+    
+    const grid = document.getElementById('handCardsGrid');
+    const overlay = document.getElementById('handCardsOverlay');
+    const selectedCard = document.querySelector('.game-card.selected');
+    
+    if (grid) grid.classList.remove('has-selection');
+    if (overlay) overlay.classList.remove('has-selection');
+    if (selectedCard) selectedCard.classList.remove('selected');
+    
+    hideCardSelectionActions();
+    selectedHandCard = null;
+    isCardSelected = false;
 }
 
-// Remove card from hand (placeholder - implement server-side)
-function removeCardFromHand(card) {
-    // TODO: Implement server-side card removal
-    loadCardData(); // Refresh for now
+// Complete selected card
+function completeSelectedCard() {
+    if (!selectedHandCard) return;
+    
+    const cardName = selectedHandCard.card_name;
+    const selectedCardElement = document.querySelector('.game-card.selected');
+    
+    // Start discard animation
+    if (selectedCardElement) {
+        selectedCardElement.classList.add('discarding');
+    }
+    
+    hideCardSelectionActions();
+    
+    // Make API call
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `action=complete_hand_card&card_id=${selectedHandCard.card_id || selectedHandCard.id}&player_card_id=${selectedHandCard.id}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Wait for animation to complete
+            setTimeout(() => {
+                closeCardOverlay('handCardsOverlay');
+                loadCardData();
+                refreshGameData();
+                
+                if (data.points_awarded) {
+                    showInAppNotification('Card Completed!', `Gained ${data.points_awarded} points from "${cardName}"`);
+                } else {
+                    showInAppNotification('Card Completed!', `Completed "${cardName}"`);
+                }
+            }, 800);
+        } else {
+            clearCardSelection();
+            alert('Failed to complete card: ' + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        clearCardSelection();
+        console.error('Error completing card:', error);
+        alert('Failed to complete card');
+    });
+}
+
+// Veto selected card
+function vetoSelectedCard() {
+    if (!selectedHandCard) return;
+    
+    const cardName = selectedHandCard.card_name;
+    const selectedCardElement = document.querySelector('.game-card.selected');
+    
+    // Start discard animation
+    if (selectedCardElement) {
+        selectedCardElement.classList.add('discarding');
+    }
+    
+    hideCardSelectionActions();
+    
+    // Make API call
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `action=veto_hand_card&card_id=${selectedHandCard.card_id || selectedHandCard.id}&player_card_id=${selectedHandCard.id}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Wait for animation to complete
+            setTimeout(() => {
+                closeCardOverlay('handCardsOverlay');
+                loadCardData();
+                refreshGameData();
+                
+                if (data.penalties && data.penalties.length > 0) {
+                    showInAppNotification('Card Vetoed!', data.penalties.join(', '));
+                } else {
+                    showInAppNotification('Card Vetoed!', `Vetoed "${cardName}"`);
+                }
+            }, 800);
+        } else {
+            clearCardSelection();
+            alert('Failed to veto card: ' + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        clearCardSelection();
+        console.error('Error vetoing card:', error);
+        alert('Failed to veto card');
+    });
+}
+
+function closeCardOverlay(overlayId) {
+    clearCardSelection();
+    document.getElementById(overlayId).classList.remove('active');
+    selectedCard = null;
+    closeCardActions();
+}
+
+function handleOverlayClick(event, overlayId) {
+    if (event.target.classList.contains('card-overlay')) {
+        if (isCardSelected) {
+            clearCardSelection();
+        } else {
+            closeCardOverlay(overlayId);
+        }
+    }
 }
 
 $('.bottom-right-menu').on('click', function() {
@@ -1946,8 +2084,11 @@ window.manualDrawCard = manualDrawCard;
 window.openManualDrawModal = openManualDrawModal;
 window.performManualDraw = performManualDraw;
 window.selectHandCard = selectHandCard;
-window.completeHandCard = completeHandCard;
-window.playHandCard = playHandCard;
+window.completeSelectedCard = completeSelectedCard;
+window.vetoSelectedCard = vetoSelectedCard;
+window.clearCardSelection = clearCardSelection;
+window.handleOverlayClick = handleOverlayClick;
+window.closeCardOverlay = closeCardOverlay;
 window.openNotifyModal = openNotifyModal;
 window.openTimerModal = openTimerModal;
 window.openHistoryModal = openHistoryModal;

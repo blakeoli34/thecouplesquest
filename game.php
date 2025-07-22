@@ -272,6 +272,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             echo json_encode($result);
             exit;
 
+        case 'complete_hand_card':
+            if ($gameMode !== 'digital') {
+                echo json_encode(['success' => false, 'message' => 'Not a digital game']);
+                exit;
+            }
+            
+            $cardId = intval($_POST['card_id']);
+            $playerCardId = intval($_POST['player_card_id']);
+            $result = completeHandCard($player['game_id'], $player['id'], $cardId, $playerCardId);
+            echo json_encode($result);
+            exit;
+
+        case 'veto_hand_card':
+            if ($gameMode !== 'digital') {
+                echo json_encode(['success' => false, 'message' => 'Not a digital game']);
+                exit;
+            }
+            
+            $cardId = intval($_POST['card_id']);
+            $playerCardId = intval($_POST['player_card_id']);
+            $result = vetoHandCard($player['game_id'], $player['id'], $cardId, $playerCardId);
+            echo json_encode($result);
+            exit;
+
         case 'manual_draw':
             if ($gameMode !== 'digital') {
                 echo json_encode(['success' => false, 'message' => 'Not a digital game']);
@@ -705,12 +729,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     </div>
 
     <!-- Hand Cards Overlay -->
-    <div class="card-overlay" id="handCardsOverlay">
+    <div class="card-overlay" id="handCardsOverlay" onclick="handleOverlayClick(event, 'handCardsOverlay')">
         <button class="card-overlay-close" onclick="closeCardOverlay('handCardsOverlay')">
             <i class="fa-solid fa-xmark"></i>
         </button>
         <div class="card-grid" id="handCardsGrid">
             <!-- Hand cards will be populated here -->
+        </div>
+        
+        <!-- Card Selection Actions -->
+        <div class="card-selection-actions" id="cardSelectionActions">
+            <button class="btn btn-complete" onclick="completeSelectedCard()">Complete</button>
+            <button class="btn btn-veto" onclick="vetoSelectedCard()">Veto</button>
         </div>
     </div>
 
