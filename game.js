@@ -125,13 +125,6 @@ function openPendingServes() {
     document.getElementById('pendingServesOverlay').classList.add('active');
 }
 
-// Close card overlay
-function closeCardOverlay(overlayId) {
-    document.getElementById(overlayId).classList.remove('active');
-    selectedCard = null;
-    closeCardActions();
-}
-
 // Populate card grid
 function populateCardGrid(gridId, cards, type) {
     const grid = document.getElementById(gridId);
@@ -247,23 +240,58 @@ function getCardDisplayInfo(card, context = 'serve') {
 
 // Select serve card
 function selectServeCard(card) {
-    selectedCard = card;
-    showCardActions('Serve to Opponent', () => serveSelectedCard());
-}
-
-// Show card actions panel
-function showCardActions(actionText, actionFunction) {
-    const panel = document.getElementById('cardActions');
-    const button = document.getElementById('primaryCardAction');
+    if (isCardSelected) return; // Prevent multiple selections
     
-    button.textContent = actionText;
-    button.onclick = actionFunction;
-    panel.classList.add('active');
+    selectedCard = card;
+    isCardSelected = true;
+    
+    // Find the clicked card element
+    const clickedCard = event.target.closest('.game-card');
+    if (!clickedCard) return;
+    
+    // Add selection state to grid and card
+    const grid = document.getElementById('serveCardsGrid');
+    grid.classList.add('has-selection');
+    clickedCard.classList.add('selected');
+    
+    // Add selection state to overlay
+    const overlay = document.getElementById('serveCardsOverlay');
+    overlay.classList.add('has-selection');
+    
+    // Show action buttons after animation
+    setTimeout(() => {
+        showServeSelectionActions();
+    }, 400);
 }
 
-// Close card actions panel
-function closeCardActions() {
-    document.getElementById('cardActions').classList.remove('active');
+function showServeSelectionActions() {
+    const actions = document.getElementById('serveSelectionActions');
+    if (actions) {
+        actions.classList.add('show');
+    }
+}
+
+function hideServeSelectionActions() {
+    const actions = document.getElementById('serveSelectionActions');
+    if (actions) {
+        actions.classList.remove('show');
+    }
+}
+
+function clearServeSelection() {
+    if (!isCardSelected) return;
+    
+    const grid = document.getElementById('serveCardsGrid');
+    const overlay = document.getElementById('serveCardsOverlay');
+    const selectedCardElement = document.querySelector('.game-card.selected');
+    
+    if (grid) grid.classList.remove('has-selection');
+    if (overlay) overlay.classList.remove('has-selection');
+    if (selectedCardElement) selectedCardElement.classList.remove('selected');
+    
+    hideServeSelectionActions();
+    selectedCard = null;
+    isCardSelected = false;
 }
 
 // Serve selected card
@@ -271,7 +299,15 @@ function serveSelectedCard() {
     if (!selectedCard) return;
     
     const opponentId = gameData.opponentPlayerId;
-    const cardName = selectedCard.card_name; // Store name before clearing
+    const cardName = selectedCard.card_name;
+    const selectedCardElement = document.querySelector('.game-card.selected');
+    
+    // Start serving animation
+    if (selectedCardElement) {
+        selectedCardElement.classList.add('serving');
+    }
+    
+    hideServeSelectionActions();
     
     fetch('game.php', {
         method: 'POST',
@@ -281,14 +317,19 @@ function serveSelectedCard() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            closeCardOverlay('serveCardsOverlay');
-            loadCardData(); // Refresh card data
-            showInAppNotification('Card Served!', `Served "${cardName}" to opponent`);
+            // Wait for animation to complete
+            setTimeout(() => {
+                closeCardOverlay('serveCardsOverlay');
+                loadCardData();
+                showInAppNotification('Card Served!', `Served "${cardName}" to opponent`);
+            }, 1000);
         } else {
+            clearServeSelection();
             alert('Failed to serve card: ' + (data.message || 'Unknown error'));
         }
     })
     .catch(error => {
+        clearServeSelection();
         console.error('Error serving card:', error);
         alert('Failed to serve card');
     });
@@ -547,7 +588,7 @@ function completeSelectedCard() {
                 } else {
                     showInAppNotification('Card Completed!', `Completed "${cardName}"`);
                 }
-            }, 800);
+            }, 1000);
         } else {
             clearCardSelection();
             alert('Failed to complete card: ' + (data.message || 'Unknown error'));
@@ -594,7 +635,7 @@ function vetoSelectedCard() {
                 } else {
                     showInAppNotification('Card Vetoed!', `Vetoed "${cardName}"`);
                 }
-            }, 800);
+            }, 1000);
         } else {
             clearCardSelection();
             alert('Failed to veto card: ' + (data.message || 'Unknown error'));
@@ -608,22 +649,28 @@ function vetoSelectedCard() {
 }
 
 function closeCardOverlay(overlayId) {
-    clearCardSelection();
+    if (overlayId === 'serveCardsOverlay') {
+        clearServeSelection();
+    } else {
+        clearCardSelection();
+    }
     document.getElementById(overlayId).classList.remove('active');
     selectedCard = null;
-    closeCardActions();
 }
 
 function handleOverlayClick(event, overlayId) {
     if (event.target.classList.contains('card-overlay')) {
         if (isCardSelected) {
-            clearCardSelection();
+            if (overlayId === 'serveCardsOverlay') {
+                clearServeSelection();
+            } else {
+                clearCardSelection();
+            }
         } else {
             closeCardOverlay(overlayId);
         }
     }
 }
-
 $('.bottom-right-menu').on('click', function() {
     $(this).toggleClass('open');
 });
@@ -2074,12 +2121,13 @@ window.addEventListener('load', function() {
 
 // Make functions globally available
 window.openServeCards = openServeCards;
+window.clearServeSelection = clearServeSelection;
+window.showServeSelectionActions = showServeSelectionActions;
+window.hideServeSelectionActions = hideServeSelectionActions;
 window.openHandCards = openHandCards;
 window.openPendingServes = openPendingServes;
-window.closeCardOverlay = closeCardOverlay;
 window.acceptCurrentServe = acceptCurrentServe;
 window.vetoCurrentServe = vetoCurrentServe;
-window.closeCardActions = closeCardActions;
 window.manualDrawCard = manualDrawCard;
 window.openManualDrawModal = openManualDrawModal;
 window.performManualDraw = performManualDraw;

@@ -719,12 +719,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     </div>
 
     <!-- Serve Cards Overlay -->
-    <div class="card-overlay" id="serveCardsOverlay">
+    <div class="card-overlay" id="serveCardsOverlay" onclick="handleOverlayClick(event, 'serveCardsOverlay')">
         <button class="card-overlay-close" onclick="closeCardOverlay('serveCardsOverlay')">
             <i class="fa-solid fa-xmark"></i>
         </button>
         <div class="card-grid" id="serveCardsGrid">
             <!-- Serve cards will be populated here -->
+        </div>
+        
+        <!-- Serve Selection Actions -->
+        <div class="card-selection-actions" id="serveSelectionActions">
+            <button class="btn" onclick="serveSelectedCard()">
+                Serve to <?= htmlspecialchars($opponentPlayer['first_name']) ?>
+            </button>
         </div>
     </div>
 
@@ -770,12 +777,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 <button class="btn" onclick="acceptCurrentServe()">Accept</button>
             </div>
         </div>
-    </div>
-
-    <!-- Card Actions Panel -->
-    <div class="card-actions" id="cardActions">
-        <button class="btn" id="primaryCardAction" onclick="performCardAction()">Action</button>
-        <button class="btn btn-secondary" onclick="closeCardActions()">Cancel</button>
     </div>
 
     <!-- Manual Draw Modal -->
