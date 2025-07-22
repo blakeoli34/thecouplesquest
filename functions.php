@@ -809,7 +809,6 @@ function getPlayerCards($gameId, $playerId, $cardType = null) {
 function serveCard($gameId, $fromPlayerId, $toPlayerId, $cardId) {
     try {
         $pdo = Config::getDatabaseConnection();
-        $pdo->beginTransaction();
         
         // Verify player has this serve card
         $stmt = $pdo->prepare("
@@ -823,7 +822,22 @@ function serveCard($gameId, $fromPlayerId, $toPlayerId, $cardId) {
             throw new Exception("Card not available to serve");
         }
         
-        // Remove card from player's hand
+        // Get card details for notification
+        $stmt = $pdo->prepare("SELECT card_name FROM cards WHERE id = ?");
+        $stmt->execute([$cardId]);
+        $cardName = $stmt->fetchColumn();
+        
+        // Get sender name for notification
+        $stmt = $pdo->prepare("SELECT first_name FROM players WHERE id = ?");
+        $stmt->execute([$fromPlayerId]);
+        $senderName = $stmt->fetchColumn();
+        
+        // Get recipient FCM token
+        $stmt = $pdo->prepare("SELECT fcm_token FROM players WHERE id = ?");
+        $stmt->execute([$toPlayerId]);
+        $recipientToken = $stmt->fetchColumn();
+        
+        // Remove card from sender's hand
         if ($quantity > 1) {
             $stmt = $pdo->prepare("
                 UPDATE player_cards 
@@ -838,141 +852,26 @@ function serveCard($gameId, $fromPlayerId, $toPlayerId, $cardId) {
         }
         $stmt->execute([$gameId, $fromPlayerId, $cardId]);
         
-        // Create pending serve
-        $stmt = $pdo->prepare("
-            INSERT INTO pending_serves (game_id, from_player_id, to_player_id, card_id)
-            VALUES (?, ?, ?, ?)
-        ");
-        $stmt->execute([$gameId, $fromPlayerId, $toPlayerId, $cardId]);
+        // Add card directly to recipient's hand as accepted_serve
+        $success = addCardToHand($gameId, $toPlayerId, $cardId, 'accepted_serve', 1, true);
         
-        $pdo->commit();
+        if (!$success) {
+            return ['success' => false, 'message' => 'Failed to add card to hand'];
+        }
+        
+        // Send push notification
+        if ($recipientToken) {
+            sendPushNotification(
+                $recipientToken,
+                "You've been served!",
+                "$senderName has served you the $cardName card, check it out in your hand."
+            );
+        }
+        
         return ['success' => true];
         
     } catch (Exception $e) {
-        $pdo->rollBack();
         error_log("Error serving card: " . $e->getMessage());
-        return ['success' => false, 'message' => $e->getMessage()];
-    }
-}
-
-function getPendingServes($gameId, $playerId) {
-    try {
-        $pdo = Config::getDatabaseConnection();
-        $stmt = $pdo->prepare("
-            SELECT ps.*, c.card_name, c.card_description, c.card_points,
-                   c.veto_subtract, c.veto_steal, c.veto_draw_chance, 
-                   c.veto_draw_snap_dare, c.veto_draw_spicy, c.timer,
-                   p.first_name as from_player_name
-            FROM pending_serves ps
-            JOIN cards c ON ps.card_id = c.id
-            JOIN players p ON ps.from_player_id = p.id
-            WHERE ps.game_id = ? AND ps.to_player_id = ?
-            ORDER BY ps.served_at ASC
-        ");
-        $stmt->execute([$gameId, $playerId]);
-        return $stmt->fetchAll();
-    } catch (Exception $e) {
-        error_log("Error getting pending serves: " . $e->getMessage());
-        return [];
-    }
-}
-
-function acceptServe($gameId, $playerId, $serveId) {
-    try {
-        $pdo = Config::getDatabaseConnection();
-        $pdo->beginTransaction();
-        
-        // Get serve details
-        $stmt = $pdo->prepare("
-            SELECT ps.*, c.*
-            FROM pending_serves ps
-            JOIN cards c ON ps.card_id = c.id
-            WHERE ps.id = ? AND ps.to_player_id = ?
-        ");
-        $stmt->execute([$serveId, $playerId]);
-        $serve = $stmt->fetch();
-        
-        if (!$serve) {
-            throw new Exception("Serve not found");
-        }
-        
-        // Execute card effects
-        $result = executeCardEffects($serve, $gameId, $playerId);
-        
-        // Remove pending serve
-        $stmt = $pdo->prepare("DELETE FROM pending_serves WHERE id = ?");
-        $stmt->execute([$serveId]);
-        
-        $pdo->commit();
-        return ['success' => true, 'effects' => $result];
-        
-    } catch (Exception $e) {
-        $pdo->rollBack();
-        error_log("Error accepting serve: " . $e->getMessage());
-        return ['success' => false, 'message' => $e->getMessage()];
-    }
-}
-
-function vetoServe($gameId, $playerId, $serveId) {
-    try {
-        $pdo = Config::getDatabaseConnection();
-        $pdo->beginTransaction();
-        
-        // Get serve details
-        $stmt = $pdo->prepare("
-            SELECT ps.*, c.*
-            FROM pending_serves ps
-            JOIN cards c ON ps.card_id = c.id
-            WHERE ps.id = ? AND ps.to_player_id = ?
-        ");
-        $stmt->execute([$serveId, $playerId]);
-        $serve = $stmt->fetch();
-        
-        if (!$serve) {
-            throw new Exception("Serve not found");
-        }
-        
-        // Apply veto penalties
-        $penalties = [];
-        
-        if ($serve['veto_subtract']) {
-            updateScore($gameId, $playerId, -$serve['veto_subtract'], $playerId);
-            $penalties[] = "Lost {$serve['veto_subtract']} points";
-        }
-        
-        if ($serve['veto_steal']) {
-            updateScore($gameId, $playerId, -$serve['veto_steal'], $playerId);
-            updateScore($gameId, $serve['from_player_id'], $serve['veto_steal'], $playerId);
-            $penalties[] = "Lost {$serve['veto_steal']} points to opponent";
-        }
-        
-        if ($serve['veto_draw_chance']) {
-            drawCards($gameId, $playerId, 'chance', $serve['veto_draw_chance']);
-            $penalties[] = "Drew {$serve['veto_draw_chance']} chance card(s)";
-        }
-        
-        if ($serve['veto_draw_snap_dare']) {
-            $player = getPlayerById($playerId);
-            $cardType = ($player['gender'] === 'female') ? 'snap' : 'dare';
-            drawCards($gameId, $playerId, $cardType, $serve['veto_draw_snap_dare']);
-            $penalties[] = "Drew {$serve['veto_draw_snap_dare']} {$cardType} card(s)";
-        }
-        
-        if ($serve['veto_draw_spicy']) {
-            drawCards($gameId, $playerId, 'spicy', $serve['veto_draw_spicy']);
-            $penalties[] = "Drew {$serve['veto_draw_spicy']} spicy card(s)";
-        }
-        
-        // Remove pending serve
-        $stmt = $pdo->prepare("DELETE FROM pending_serves WHERE id = ?");
-        $stmt->execute([$serveId]);
-        
-        $pdo->commit();
-        return ['success' => true, 'penalties' => $penalties];
-        
-    } catch (Exception $e) {
-        $pdo->rollBack();
-        error_log("Error vetoing serve: " . $e->getMessage());
         return ['success' => false, 'message' => $e->getMessage()];
     }
 }

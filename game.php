@@ -227,13 +227,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 }
             }
             
-            $pendingServes = getPendingServes($player['game_id'], $player['id']);
-            
             echo json_encode([
                 'success' => true,
                 'serve_cards' => $serveCards,
-                'hand_cards' => $handCards,
-                'pending_serves' => $pendingServes
+                'hand_cards' => $handCards
             ]);
             exit;
 
@@ -247,28 +244,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $toPlayerId = intval($_POST['to_player_id']);
             
             $result = serveCard($player['game_id'], $player['id'], $toPlayerId, $cardId);
-            echo json_encode($result);
-            exit;
-
-        case 'accept_serve':
-            if ($gameMode !== 'digital') {
-                echo json_encode(['success' => false, 'message' => 'Not a digital game']);
-                exit;
-            }
-            
-            $serveId = intval($_POST['serve_id']);
-            $result = acceptServe($player['game_id'], $player['id'], $serveId);
-            echo json_encode($result);
-            exit;
-
-        case 'veto_serve':
-            if ($gameMode !== 'digital') {
-                echo json_encode(['success' => false, 'message' => 'Not a digital game']);
-                exit;
-            }
-            
-            $serveId = intval($_POST['serve_id']);
-            $result = vetoServe($player['game_id'], $player['id'], $serveId);
             echo json_encode($result);
             exit;
 
@@ -709,10 +684,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         <?php endif; ?>
     </div>
 
-    <div class="pending-serves-indicator" id="pendingServesIndicator" onclick="openPendingServes()">
-        <span id="pendingServesCount">0</span> Pending Serves
-    </div>
-
     <div class="iAN">
         <div class="iAN-title"></div>
         <div class="iAN-body"></div>
@@ -748,34 +719,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         <div class="card-selection-actions" id="cardSelectionActions">
             <button class="btn btn-complete" onclick="completeSelectedCard()">Complete</button>
             <button class="btn btn-veto" onclick="vetoSelectedCard()">Veto</button>
-        </div>
-    </div>
-
-    <!-- Pending Serves Overlay -->
-    <div class="card-overlay" id="pendingServesOverlay">
-        <button class="card-overlay-close" onclick="closeCardOverlay('pendingServesOverlay')">
-            <i class="fa-solid fa-xmark"></i>
-        </button>
-        <div class="card-grid" id="pendingServesGrid">
-            <!-- Pending serves will be populated here -->
-        </div>
-    </div>
-
-    <!-- Serve Response Modal -->
-    <div class="serve-response-modal" id="serveResponseModal">
-        <div class="serve-response-content">
-            <h3 id="serveResponseTitle">Card Served to You</h3>
-            <div class="game-card" id="serveResponseCard">
-                <div class="card-header">
-                    <div class="card-name" id="serveResponseName"></div>
-                </div>
-                <div class="card-description" id="serveResponseDescription"></div>
-                <div class="card-meta" id="serveResponseMeta"></div>
-            </div>
-            <div class="serve-response-buttons">
-                <button class="btn btn-secondary" onclick="vetoCurrentServe()">Veto</button>
-                <button class="btn" onclick="acceptCurrentServe()">Accept</button>
-            </div>
         </div>
     </div>
 

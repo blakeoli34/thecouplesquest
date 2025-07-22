@@ -22,7 +22,6 @@ let cardData = {
 };
 
 let selectedCard = null;
-let currentServeId = null;
 
 let selectedHandCard = null;
 let isCardSelected = false;
@@ -46,13 +45,6 @@ function loadCardData() {
                 console.log('No serve cards, initializing...');
                 initializeCards();
                 return;
-            }
-            
-            updatePendingServesIndicator();
-            
-            // Auto-show pending serves if any exist
-            if (data.pending_serves && data.pending_serves.length > 0) {
-                showServeResponseModal(data.pending_serves[0]);
             }
         }
     })
@@ -83,23 +75,6 @@ function initializeCards() {
     });
 }
 
-// Update pending serves indicator
-function updatePendingServesIndicator() {
-    const indicator = document.getElementById('pendingServesIndicator');
-    const count = document.getElementById('pendingServesCount');
-    
-    if (!indicator || !count) return;
-    
-    const pendingCount = cardData.pending_serves ? cardData.pending_serves.length : 0;
-    
-    if (pendingCount > 0) {
-        count.textContent = pendingCount;
-        indicator.classList.add('active');
-    } else {
-        indicator.classList.remove('active');
-    }
-}
-
 // Open serve cards overlay
 function openServeCards() {
     populateCardGrid('serveCardsGrid', cardData.serve_cards || [], 'serve');
@@ -117,12 +92,6 @@ function openHandCards() {
     ];
     populateCardGrid('handCardsGrid', allHandCards, 'hand');
     document.getElementById('handCardsOverlay').classList.add('active');
-}
-
-// Open pending serves overlay
-function openPendingServes() {
-    populateCardGrid('pendingServesGrid', cardData.pending_serves || [], 'pending');
-    document.getElementById('pendingServesOverlay').classList.add('active');
 }
 
 // Populate card grid
@@ -150,8 +119,6 @@ function createCardElement(card, type) {
    
    if (type === 'serve') {
        div.onclick = () => selectServeCard(card);
-   } else if (type === 'pending') {
-       div.onclick = () => showServeResponseModal(card);
    } else if (type === 'hand') {
        div.onclick = () => selectHandCard(card);
    }
@@ -307,7 +274,6 @@ function serveSelectedCard() {
         selectedCardElement.classList.add('serving');
     }
     
-    hideServeSelectionActions();
     
     fetch('game.php', {
         method: 'POST',
@@ -319,6 +285,7 @@ function serveSelectedCard() {
         if (data.success) {
             // Wait for animation to complete
             setTimeout(() => {
+                hideServeSelectionActions();
                 closeCardOverlay('serveCardsOverlay');
                 loadCardData();
                 showInAppNotification('Card Served!', `Served "${cardName}" to opponent`);
@@ -332,83 +299,6 @@ function serveSelectedCard() {
         clearServeSelection();
         console.error('Error serving card:', error);
         alert('Failed to serve card');
-    });
-}
-
-// Show serve response modal
-function showServeResponseModal(serve) {
-    currentServeId = serve.id;
-    
-    document.getElementById('serveResponseTitle').textContent = 
-        `${serve.from_player_name} served you a card:`;
-    document.getElementById('serveResponseName').textContent = serve.card_name;
-    document.getElementById('serveResponseDescription').textContent = serve.card_description;
-    
-    const meta = document.getElementById('serveResponseMeta');
-    meta.innerHTML = getCardDisplayInfo(serve, 'pending');
-    
-    document.getElementById('serveResponseModal').classList.add('active');
-}
-
-// Accept current serve
-function acceptCurrentServe() {
-    if (!currentServeId) return;
-    
-    fetch('game.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `action=accept_serve&serve_id=${currentServeId}`
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            document.getElementById('serveResponseModal').classList.remove('active');
-            loadCardData();
-            refreshGameData();
-            
-            if (data.effects && data.effects.length > 0) {
-                showInAppNotification('Card Accepted!', data.effects.join(', '));
-            } else {
-                showInAppNotification('Card Accepted!', 'Card effect applied');
-            }
-        } else {
-            alert('Failed to accept serve: ' + (data.message || 'Unknown error'));
-        }
-    })
-    .catch(error => {
-        console.error('Error accepting serve:', error);
-        alert('Failed to accept serve');
-    });
-}
-
-// Veto current serve
-function vetoCurrentServe() {
-    if (!currentServeId) return;
-    
-    fetch('game.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `action=veto_serve&serve_id=${currentServeId}`
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            document.getElementById('serveResponseModal').classList.remove('active');
-            loadCardData();
-            refreshGameData();
-            
-            if (data.penalties && data.penalties.length > 0) {
-                showInAppNotification('Card Vetoed!', data.penalties.join(', '));
-            } else {
-                showInAppNotification('Card Vetoed!', 'Veto penalties applied');
-            }
-        } else {
-            alert('Failed to veto serve: ' + (data.message || 'Unknown error'));
-        }
-    })
-    .catch(error => {
-        console.error('Error vetoing serve:', error);
-        alert('Failed to veto serve');
     });
 }
 
@@ -566,7 +456,6 @@ function completeSelectedCard() {
         selectedCardElement.classList.add('discarding');
     }
     
-    hideCardSelectionActions();
     
     // Make API call
     fetch('game.php', {
@@ -579,6 +468,7 @@ function completeSelectedCard() {
         if (data.success) {
             // Wait for animation to complete
             setTimeout(() => {
+                hideCardSelectionActions();
                 closeCardOverlay('handCardsOverlay');
                 loadCardData();
                 refreshGameData();
@@ -613,8 +503,6 @@ function vetoSelectedCard() {
         selectedCardElement.classList.add('discarding');
     }
     
-    hideCardSelectionActions();
-    
     // Make API call
     fetch('game.php', {
         method: 'POST',
@@ -626,6 +514,7 @@ function vetoSelectedCard() {
         if (data.success) {
             // Wait for animation to complete
             setTimeout(() => {
+                hideCardSelectionActions();
                 closeCardOverlay('handCardsOverlay');
                 loadCardData();
                 refreshGameData();
@@ -2125,9 +2014,6 @@ window.clearServeSelection = clearServeSelection;
 window.showServeSelectionActions = showServeSelectionActions;
 window.hideServeSelectionActions = hideServeSelectionActions;
 window.openHandCards = openHandCards;
-window.openPendingServes = openPendingServes;
-window.acceptCurrentServe = acceptCurrentServe;
-window.vetoCurrentServe = vetoCurrentServe;
 window.manualDrawCard = manualDrawCard;
 window.openManualDrawModal = openManualDrawModal;
 window.performManualDraw = performManualDraw;
