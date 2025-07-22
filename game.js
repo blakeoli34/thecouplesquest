@@ -162,6 +162,7 @@ function createCardElement(card, type) {
    
    div.innerHTML = `
        <div class="card-header">
+           <div class="card-type">${getCardType(card.card_type)}</div>
            <div class="card-name">${card.card_name}</div>
            ${card.quantity > 1 ? `<div class="card-quantity">${card.quantity}x</div>` : ''}
        </div>
@@ -174,35 +175,62 @@ function createCardElement(card, type) {
    return div;
 }
 
+function getCardType(type) {
+    let iconDisplay = '<i class="fa-solid fa-square"></i>';
+    let typeDisplay = 'Unknown Card Type';
+    if(type === 'serve' || type === 'accepted_serve') {
+        iconDisplay = '<i class="fa-solid fa-circle-arrow-up"></i>';
+        typeDisplay = 'Serve';
+    }
+    if(type === 'chance') {
+        iconDisplay = '<i class="fa-solid fa-circle-question"></i>';
+        typeDisplay = 'Chance';
+    }
+    if(type === 'snap') {
+        iconDisplay = '<i class="fa-solid fa-camera-retro"></i>';
+        typeDisplay = 'Snap';
+    }
+    if(type === 'dare') {
+        iconDisplay = '<i class="fa-solid fa-hand-point-right"></i>';
+        typeDisplay = 'Dare';
+    }
+    if(type === 'spicy') {
+        iconDisplay = '<i class="fa-solid fa-pepper-hot"></i>';
+        typeDisplay = 'Spicy';
+    }
+    let cardTypeDisplay = iconDisplay + ' ' + typeDisplay;
+    return cardTypeDisplay;
+}
+
 function getCardDisplayInfo(card, context = 'serve') {
     let badges = [];
     
     // Points
     if (card.card_points) {
-        badges.push(`<span class="card-badge points">${card.card_points} pts</span>`);
+        badges.push(`<span class="card-badge points">+${card.card_points}</span>`);
     }
     
     // Veto penalties (for serve cards)
     if (card.veto_subtract || card.veto_steal || card.veto_draw_chance || card.veto_draw_snap_dare || card.veto_draw_spicy) {
         let penalties = [];
-        if (card.veto_subtract) penalties.push(`-${card.veto_subtract} pts`);
-        if (card.veto_steal) penalties.push(`steal ${card.veto_steal}`);
-        if (card.veto_draw_chance) penalties.push(`${card.veto_draw_chance} chance`);
+        if (card.veto_subtract) penalties.push(`-${card.veto_subtract}`);
+        if (card.veto_steal) penalties.push(`<i class="fa-solid fa-hand-paper"></i> ${card.veto_steal}`);
+        if (card.veto_draw_chance) penalties.push(`<i class="fa-solid fa-circle-question"></i> ${card.veto_draw_chance}`);
         
         if (card.veto_draw_snap_dare) {
             let snapDareText = 'snap/dare';
             if (context === 'serve' && gameData.opponentPlayerGender) {
-                snapDareText = gameData.opponentPlayerGender === 'female' ? 'snap' : 'dare';
+                snapDareText = gameData.opponentPlayerGender === 'female' ? '<i class="fa-solid fa-camera-retro"></i>' : '<i class="fa-solid fa-hand-point-right"></i>';
             } else if (context === 'hand' || context === 'pending') {
-                snapDareText = gameData.currentPlayerGender === 'female' ? 'snap' : 'dare';
+                snapDareText = gameData.currentPlayerGender === 'female' ? '<i class="fa-solid fa-camera-retro"></i>' : '<i class="fa-solid fa-hand-point-right"></i>';
             }
-            penalties.push(`${card.veto_draw_snap_dare} ${snapDareText}`);
+            penalties.push(`${snapDareText} ${card.veto_draw_snap_dare}`);
         }
         
-        if (card.veto_draw_spicy) penalties.push(`${card.veto_draw_spicy} spicy`);
+        if (card.veto_draw_spicy) penalties.push(`<i class="fa-solid fa-pepper-hot"></i> ${card.veto_draw_spicy}`);
         
         if (penalties.length > 0) {
-            badges.push(`<span class="card-badge penalty">Veto: ${penalties.join(', ')}</span>`);
+            badges.push(`<span class="card-badge penalty">${penalties.join('&nbsp;&nbsp;|&nbsp;&nbsp;')}</span>`);
         }
     }
     

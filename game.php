@@ -398,7 +398,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="<?= Config::COLOR_BLUE ?>">
     <link rel="stylesheet" href="https://use.typekit.net/oqm2ymj.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/aquawolf04/font-awesome-pro@5cd1511/css/all.css">
     <link rel="manifest" href="/manifest.json">
     <link rel="apple-touch-icon" href="/icon-180x180.png">
     <meta name="apple-mobile-web-app-title" content="TCQ">
@@ -415,7 +415,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     </style>
     <link rel="stylesheet" href="/game.css">
 </head>
-<body>
+<body class="<?php if($player['gender'] === 'male') { echo 'male'; } else { echo 'female'; } ?>">
     <div class="largeScreen">
         <div class="largeScreenTitle">Please Use a Phone</div>
         <div class="largeScreenMessage">This game was designed for mobile phone use only. (iPhone Recommended)<br>Please use a smaller screen size to see the game UI.</div>
@@ -620,11 +620,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     <div class="menu-item-icon"><i class="fa-solid fa-hand-paper"></i></div>
                     <div class="menu-item-text">Hand</div>
                 </div>
-                <div class="menu-item" onclick="sendBump()">
+                <div class="menu-item digital-menu-item" onclick="openManualDrawModal()">
+                    <div class="menu-item-icon"><i class="fa-solid fa-cards-blank"></i></div>
+                    <div class="menu-item-text">Draw</div>
+                </div>
+                <div class="menu-item digital-menu-item" onclick="openDiceOverlay()">
+                    <div class="menu-item-icon"><i class="fa-solid fa-dice"></i></div>
+                    <div class="menu-item-text">Roll</div>
+                </div>
+                <div class="menu-item hybrid-menu-item" onclick="sendBump()">
                     <div class="menu-item-icon"><i class="fa-solid fa-bullhorn"></i></div>
                     <div class="menu-item-text">Bump</div>
                 </div>
-                <div class="menu-item" onclick="openTimerModal()">
+                <div class="menu-item hybrid-menu-item" onclick="openTimerModal()">
                     <div class="menu-item-icon"><i class="fa-solid fa-stopwatch"></i></div>
                     <div class="menu-item-text">Timer</div>
                 </div>
@@ -641,13 +649,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         <div class="flyout-menu-item-icon"><i class="fa-solid fa-arrows-rotate"></i></div>
                         <div class="flyout-menu-item-text">Refresh Game...</div>
                     </div>
-                    <div class="flyout-menu-item digital-menu-item" onclick="openManualDrawModal()">
-                        <div class="flyout-menu-item-icon"><i class="fa-solid fa-hand-holding"></i></div>
-                        <div class="flyout-menu-item-text">Draw Cards</div>
-                    </div>
-                    <div class="flyout-menu-item" onclick="openDiceOverlay()">
+                    <div class="flyout-menu-item hybrid-menu-item" onclick="openDiceOverlay()">
                         <div class="flyout-menu-item-icon"><i class="fa-solid fa-dice"></i></div>
                         <div class="flyout-menu-item-text">Roll Dice</div>
+                    </div>
+                    <div class="flyout-menu-item digital-menu-item" onclick="sendBump()">
+                        <div class="flyout-menu-item-icon"><i class="fa-solid fa-bullhorn"></i></div>
+                        <div class="flyout-menu-item-text">Bump</div>
+                    </div>
+                    <div class="flyout-menu-item digital-menu-item" onclick="openTimerModal()">
+                        <div class="flyout-menu-item-icon"><i class="fa-solid fa-stopwatch"></i></div>
+                        <div class="flyout-menu-item-text">Timer</div>
                     </div>
                     <div class="flyout-menu-item" onclick="openHistoryModal()">
                         <div class="flyout-menu-item-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
