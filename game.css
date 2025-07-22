@@ -1108,6 +1108,316 @@ body {
     display: block;
 }
 
+.mode-options {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    margin-bottom: 20px;
+    max-width: 400px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.mode-btn {
+    padding: 25px;
+    border: 3px solid #ddd;
+    background: rgba(255,255,255,0.9);
+    border-radius: 20px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+}
+
+.mode-btn:hover {
+    border-color: var(--color-blue);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+}
+
+.mode-btn:active {
+    transform: translateY(0);
+}
+
+.mode-icon {
+    font-size: 40px;
+    margin-bottom: 15px;
+}
+
+.mode-title {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: #333;
+}
+
+.mode-description {
+    font-size: 16px;
+    color: #666;
+    line-height: 1.4;
+}
+
+.card-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.8);
+    backdrop-filter: blur(8px);
+    z-index: 2000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.card-overlay.active {
+    display: flex;
+}
+
+.card-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    max-width: 100vw;
+    max-height: 80vh;
+    overflow-y: auto;
+    padding: 0;
+}
+
+.game-card {
+    background: white;
+    border-radius: 15px;
+    padding: 20px;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    min-height: 180px;
+    display: flex;
+    flex-direction: column;
+}
+
+.game-card.serve-card {
+    border-left: 5px solid var(--color-blue);
+}
+
+.game-card.chance-card {
+    border-left: 5px solid #ff9800;
+}
+
+.game-card.snap-card {
+    border-left: 5px solid var(--color-pink);
+}
+
+.game-card.dare-card {
+    border-left: 5px solid #4caf50;
+}
+
+.game-card.spicy-card {
+    border-left: 5px solid #f44336;
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+}
+
+.card-name {
+    font-size: 18px;
+    font-weight: 700;
+    color: #333;
+    flex: 1;
+}
+
+.card-quantity {
+    background: rgba(0,0,0,0.1);
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #666;
+}
+
+.card-description {
+    font-size: 14px;
+    color: #666;
+    line-height: 1.4;
+    margin-bottom: 15px;
+    flex: 1;
+}
+
+.card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: auto;
+}
+
+.card-badge {
+    padding: 4px 8px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.card-badge.points {
+    background: #e3f2fd;
+    color: #1565c0;
+}
+
+.card-badge.timer {
+    background: #fff3e0;
+    color: #ef6c00;
+}
+
+.card-badge.gender {
+    background: #f3e5f5;
+    color: #7b1fa2;
+}
+
+.card-badge.penalty {
+    background: #ffebee;
+    color: #c62828;
+}
+
+/* Close button */
+.card-overlay-close {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: white;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 24px;
+    cursor: pointer;
+    transition: background 0.3s ease;
+}
+
+.card-overlay-close:hover {
+    background: rgba(255,255,255,0.3);
+}
+
+/* Card action buttons */
+.card-actions {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: white;
+    padding: 20px;
+    box-shadow: 0 -5px 20px rgba(0,0,0,0.1);
+    display: none;
+    z-index: 2001;
+}
+
+.card-actions.active {
+    display: block;
+}
+
+.card-actions .btn {
+    width: 100%;
+    margin-bottom: 10px;
+}
+
+/* Digital mode specific buttons */
+body.digital .bottom-menu {
+    justify-content: space-between;
+    max-width: 500px;
+}
+
+.digital-menu-item {
+    display: none;
+}
+
+body.digital .digital-menu-item {
+    display: flex;
+}
+
+/* Pending serves notification */
+.pending-serves-indicator {
+    position: fixed;
+    top: 80px;
+    left: 20px;
+    background: #ff5722;
+    color: white;
+    padding: 10px 15px;
+    border-radius: 25px;
+    font-weight: 600;
+    z-index: 1001;
+    display: none;
+    cursor: pointer;
+    animation: pulse 2s infinite;
+}
+
+.pending-serves-indicator.active {
+    display: block;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+/* Serve response modal */
+.serve-response-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.8);
+    backdrop-filter: blur(8px);
+    z-index: 3000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.serve-response-modal.active {
+    display: flex;
+}
+
+.serve-response-content {
+    background: white;
+    border-radius: 20px;
+    padding: 30px;
+    max-width: 400px;
+    width: 100%;
+    text-align: center;
+}
+
+.serve-response-content h3 {
+    margin-bottom: 15px;
+    color: #333;
+}
+
+.serve-response-content .card-description {
+    margin-bottom: 25px;
+    text-align: left;
+}
+
+.serve-response-buttons {
+    display: flex;
+    gap: 15px;
+}
+
+.serve-response-buttons .btn {
+    flex: 1;
+}
+
 @media (prefers-color-scheme: dark) {
     .player-score.female {
         background: var(--color-pink-dark);
@@ -1206,6 +1516,54 @@ body {
     .dice-count-btn.active {
         background: #ccc;
         color: #111;
+    }
+
+    .mode-btn {
+        background: rgba(25,25,25,0.9);
+        border-color: #555;
+    }
+    
+    .mode-btn:hover {
+        border-color: var(--color-blue);
+    }
+    
+    .mode-title {
+        color: #e1e1e1;
+    }
+    
+    .mode-description {
+        color: #ccc;
+    }
+
+    .game-card {
+        background: #2a2a2a;
+        color: #e6e6e6;
+    }
+    
+    .card-name {
+        color: #e6e6e6;
+    }
+    
+    .card-description {
+        color: #ccc;
+    }
+    
+    .card-quantity {
+        background: rgba(255,255,255,0.1);
+        color: #ccc;
+    }
+    
+    .card-actions {
+        background: #2a2a2a;
+    }
+    
+    .serve-response-content {
+        background: #2a2a2a;
+        color: #e6e6e6;
+    }
+    
+    .serve-response-content h3 {
+        color: #e6e6e6;
     }
 }
 

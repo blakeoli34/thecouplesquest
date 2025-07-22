@@ -707,4 +707,414 @@ function getNewGameReadyStatus($gameId) {
         return [];
     }
 }
+
+function initializeDigitalGame($gameId) {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        
+        // Get all cards and populate game decks
+        $stmt = $pdo->prepare("SELECT * FROM cards ORDER BY card_type, card_name");
+        $stmt->execute();
+        $cards = $stmt->fetchAll();
+        
+        foreach ($cards as $card) {
+            // Only add cards with quantity > 0
+            if ($card['quantity'] > 0) {
+                $stmt = $pdo->prepare("
+                    INSERT INTO game_decks (game_id, card_id, remaining_quantity) 
+                    VALUES (?, ?, ?)
+                ");
+                $stmt->execute([$gameId, $card['id'], $card['quantity']]);
+            }
+        }
+        
+        // Give players their serve cards
+        $players = getGamePlayers($gameId);
+        foreach ($players as $player) {
+            giveInitialServeCards($gameId, $player['id'], $player['gender']);
+        }
+        
+        return ['success' => true];
+    } catch (Exception $e) {
+        error_log("Error initializing digital game: " . $e->getMessage());
+        return ['success' => false, 'message' => 'Failed to initialize cards'];
+    }
+}
+
+function giveInitialServeCards($gameId, $playerId, $playerGender) {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        
+        // Get serve cards for this player's gender
+        $genderField = ($playerGender === 'male') ? 'serve_to_her' : 'serve_to_him';
+        
+        $stmt = $pdo->prepare("
+            SELECT c.id, c.quantity 
+            FROM cards c
+            JOIN game_decks gd ON c.id = gd.card_id
+            WHERE gd.game_id = ? AND c.card_type = 'serve' AND c.$genderField = 1
+        ");
+        $stmt->execute([$gameId]);
+        $serveCards = $stmt->fetchAll();
+        
+        foreach ($serveCards as $card) {
+            // Add to player's hand
+            $stmt = $pdo->prepare("
+                INSERT INTO player_cards (game_id, player_id, card_id, card_type, quantity)
+                VALUES (?, ?, ?, 'serve', ?)
+            ");
+            $stmt->execute([$gameId, $playerId, $card['id'], $card['quantity']]);
+        }
+        
+        return true;
+    } catch (Exception $e) {
+        error_log("Error giving initial serve cards: " . $e->getMessage());
+        return false;
+    }
+}
+
+function getPlayerCards($gameId, $playerId, $cardType = null) {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        
+        $sql = "
+            SELECT pc.*, c.card_name, c.card_description, c.card_points,
+                   c.serve_to_her, c.serve_to_him, c.for_her, c.for_him,
+                   c.extra_spicy, c.veto_subtract, c.veto_steal,
+                   c.veto_draw_chance, c.veto_draw_snap_dare, c.veto_draw_spicy,
+                   c.timer
+            FROM player_cards pc
+            JOIN cards c ON pc.card_id = c.id
+            WHERE pc.game_id = ? AND pc.player_id = ?
+        ";
+        
+        $params = [$gameId, $playerId];
+        
+        if ($cardType) {
+            $sql .= " AND pc.card_type = ?";
+            $params[] = $cardType;
+        }
+        
+        $sql .= " ORDER BY c.card_name";
+        
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    } catch (Exception $e) {
+        error_log("Error getting player cards: " . $e->getMessage());
+        return [];
+    }
+}
+
+function serveCard($gameId, $fromPlayerId, $toPlayerId, $cardId) {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        $pdo->beginTransaction();
+        
+        // Verify player has this serve card
+        $stmt = $pdo->prepare("
+            SELECT quantity FROM player_cards 
+            WHERE game_id = ? AND player_id = ? AND card_id = ? AND card_type = 'serve'
+        ");
+        $stmt->execute([$gameId, $fromPlayerId, $cardId]);
+        $quantity = $stmt->fetchColumn();
+        
+        if (!$quantity || $quantity < 1) {
+            throw new Exception("Card not available to serve");
+        }
+        
+        // Remove card from player's hand
+        if ($quantity > 1) {
+            $stmt = $pdo->prepare("
+                UPDATE player_cards 
+                SET quantity = quantity - 1 
+                WHERE game_id = ? AND player_id = ? AND card_id = ? AND card_type = 'serve'
+            ");
+        } else {
+            $stmt = $pdo->prepare("
+                DELETE FROM player_cards 
+                WHERE game_id = ? AND player_id = ? AND card_id = ? AND card_type = 'serve'
+            ");
+        }
+        $stmt->execute([$gameId, $fromPlayerId, $cardId]);
+        
+        // Create pending serve
+        $stmt = $pdo->prepare("
+            INSERT INTO pending_serves (game_id, from_player_id, to_player_id, card_id)
+            VALUES (?, ?, ?, ?)
+        ");
+        $stmt->execute([$gameId, $fromPlayerId, $toPlayerId, $cardId]);
+        
+        $pdo->commit();
+        return ['success' => true];
+        
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        error_log("Error serving card: " . $e->getMessage());
+        return ['success' => false, 'message' => $e->getMessage()];
+    }
+}
+
+function getPendingServes($gameId, $playerId) {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        $stmt = $pdo->prepare("
+            SELECT ps.*, c.card_name, c.card_description, c.card_points,
+                   c.veto_subtract, c.veto_steal, c.veto_draw_chance, 
+                   c.veto_draw_snap_dare, c.veto_draw_spicy, c.timer,
+                   p.first_name as from_player_name
+            FROM pending_serves ps
+            JOIN cards c ON ps.card_id = c.id
+            JOIN players p ON ps.from_player_id = p.id
+            WHERE ps.game_id = ? AND ps.to_player_id = ?
+            ORDER BY ps.served_at ASC
+        ");
+        $stmt->execute([$gameId, $playerId]);
+        return $stmt->fetchAll();
+    } catch (Exception $e) {
+        error_log("Error getting pending serves: " . $e->getMessage());
+        return [];
+    }
+}
+
+function acceptServe($gameId, $playerId, $serveId) {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        $pdo->beginTransaction();
+        
+        // Get serve details
+        $stmt = $pdo->prepare("
+            SELECT ps.*, c.*
+            FROM pending_serves ps
+            JOIN cards c ON ps.card_id = c.id
+            WHERE ps.id = ? AND ps.to_player_id = ?
+        ");
+        $stmt->execute([$serveId, $playerId]);
+        $serve = $stmt->fetch();
+        
+        if (!$serve) {
+            throw new Exception("Serve not found");
+        }
+        
+        // Execute card effects
+        $result = executeCardEffects($serve, $gameId, $playerId);
+        
+        // Remove pending serve
+        $stmt = $pdo->prepare("DELETE FROM pending_serves WHERE id = ?");
+        $stmt->execute([$serveId]);
+        
+        $pdo->commit();
+        return ['success' => true, 'effects' => $result];
+        
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        error_log("Error accepting serve: " . $e->getMessage());
+        return ['success' => false, 'message' => $e->getMessage()];
+    }
+}
+
+function vetoServe($gameId, $playerId, $serveId) {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        $pdo->beginTransaction();
+        
+        // Get serve details
+        $stmt = $pdo->prepare("
+            SELECT ps.*, c.*
+            FROM pending_serves ps
+            JOIN cards c ON ps.card_id = c.id
+            WHERE ps.id = ? AND ps.to_player_id = ?
+        ");
+        $stmt->execute([$serveId, $playerId]);
+        $serve = $stmt->fetch();
+        
+        if (!$serve) {
+            throw new Exception("Serve not found");
+        }
+        
+        // Apply veto penalties
+        $penalties = [];
+        
+        if ($serve['veto_subtract']) {
+            updateScore($gameId, $playerId, -$serve['veto_subtract'], $playerId);
+            $penalties[] = "Lost {$serve['veto_subtract']} points";
+        }
+        
+        if ($serve['veto_steal']) {
+            updateScore($gameId, $playerId, -$serve['veto_steal'], $playerId);
+            updateScore($gameId, $serve['from_player_id'], $serve['veto_steal'], $playerId);
+            $penalties[] = "Lost {$serve['veto_steal']} points to opponent";
+        }
+        
+        if ($serve['veto_draw_chance']) {
+            drawCards($gameId, $playerId, 'chance', $serve['veto_draw_chance']);
+            $penalties[] = "Drew {$serve['veto_draw_chance']} chance card(s)";
+        }
+        
+        if ($serve['veto_draw_snap_dare']) {
+            $player = getPlayerById($playerId);
+            $cardType = ($player['gender'] === 'female') ? 'snap' : 'dare';
+            drawCards($gameId, $playerId, $cardType, $serve['veto_draw_snap_dare']);
+            $penalties[] = "Drew {$serve['veto_draw_snap_dare']} {$cardType} card(s)";
+        }
+        
+        if ($serve['veto_draw_spicy']) {
+            drawCards($gameId, $playerId, 'spicy', $serve['veto_draw_spicy']);
+            $penalties[] = "Drew {$serve['veto_draw_spicy']} spicy card(s)";
+        }
+        
+        // Remove pending serve
+        $stmt = $pdo->prepare("DELETE FROM pending_serves WHERE id = ?");
+        $stmt->execute([$serveId]);
+        
+        $pdo->commit();
+        return ['success' => true, 'penalties' => $penalties];
+        
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        error_log("Error vetoing serve: " . $e->getMessage());
+        return ['success' => false, 'message' => $e->getMessage()];
+    }
+}
+
+function drawCards($gameId, $playerId, $cardType, $quantity = 1) {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        
+        // Get player info for gender restrictions
+        $player = getPlayerById($playerId);
+        
+        // Build gender restriction
+        $genderWhere = "";
+        if ($cardType === 'snap') {
+            $genderWhere = "AND c.for_her = 1";
+        } elseif ($cardType === 'dare') {
+            $genderWhere = "AND c.for_him = 1";
+        } elseif ($cardType === 'spicy' || $cardType === 'chance') {
+            $genderField = ($player['gender'] === 'male') ? 'for_him' : 'for_her';
+            $genderWhere = "AND c.$genderField = 1";
+        }
+        
+        // Get available cards from deck
+        $stmt = $pdo->prepare("
+            SELECT gd.card_id, gd.remaining_quantity, c.card_name
+            FROM game_decks gd
+            JOIN cards c ON gd.card_id = c.id
+            WHERE gd.game_id = ? AND c.card_type = ? AND gd.remaining_quantity > 0 $genderWhere
+            ORDER BY RAND()
+            LIMIT ?
+        ");
+        $stmt->execute([$gameId, $cardType, $quantity]);
+        $availableCards = $stmt->fetchAll();
+        
+        $drawnCards = [];
+        foreach ($availableCards as $card) {
+            $drawQuantity = min(1, $card['remaining_quantity']);
+            
+            // Remove from deck
+            $stmt = $pdo->prepare("
+                UPDATE game_decks 
+                SET remaining_quantity = remaining_quantity - ? 
+                WHERE game_id = ? AND card_id = ?
+            ");
+            $stmt->execute([$drawQuantity, $gameId, $card['card_id']]);
+            
+            // Add to player hand - force add even if at limit for veto penalties
+            $success = addCardToHand($gameId, $playerId, $card['card_id'], $cardType, $drawQuantity, true);
+            
+            if ($success) {
+                $drawnCards[] = $card['card_name'];
+            }
+            
+            if (count($drawnCards) >= $quantity) break;
+        }
+        
+        return $drawnCards;
+    } catch (Exception $e) {
+        error_log("Error drawing cards: " . $e->getMessage());
+        return [];
+    }
+}
+
+function addCardToHand($gameId, $playerId, $cardId, $cardType, $quantity = 1, $forceAdd = false) {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        
+        // Check current hand count for this type (limit 5, unless forced)
+        if (!$forceAdd) {
+            $stmt = $pdo->prepare("
+                SELECT COALESCE(SUM(quantity), 0) as total 
+                FROM player_cards 
+                WHERE game_id = ? AND player_id = ? AND card_type = ?
+            ");
+            $stmt->execute([$gameId, $playerId, $cardType]);
+            $currentCount = $stmt->fetchColumn();
+            
+            if ($currentCount >= 5) {
+                return false; // Hand full
+            }
+            
+            $addQuantity = min($quantity, 5 - $currentCount);
+        } else {
+            $addQuantity = $quantity;
+        }
+        
+        // Check if player already has this card
+        $stmt = $pdo->prepare("
+            SELECT id, quantity FROM player_cards 
+            WHERE game_id = ? AND player_id = ? AND card_id = ? AND card_type = ?
+        ");
+        $stmt->execute([$gameId, $playerId, $cardId, $cardType]);
+        $existing = $stmt->fetch();
+        
+        if ($existing) {
+            // Update existing
+            $stmt = $pdo->prepare("
+                UPDATE player_cards 
+                SET quantity = quantity + ? 
+                WHERE id = ?
+            ");
+            $stmt->execute([$addQuantity, $existing['id']]);
+        } else {
+            // Insert new
+            $stmt = $pdo->prepare("
+                INSERT INTO player_cards (game_id, player_id, card_id, card_type, quantity)
+                VALUES (?, ?, ?, ?, ?)
+            ");
+            $stmt->execute([$gameId, $playerId, $cardId, $cardType, $addQuantity]);
+        }
+        
+        return true;
+    } catch (Exception $e) {
+        error_log("Error adding card to hand: " . $e->getMessage());
+        return false;
+    }
+}
+
+function executeCardEffects($card, $gameId, $playerId) {
+    $effects = [];
+    
+    // For serve cards, add to hand with original card type
+    if ($card['card_type'] === 'serve') {
+        // Add serve card to player's hand for completion later
+        $result = addCardToHand($gameId, $playerId, $card['card_id'], 'accepted_serve', 1);
+        if ($result) {
+            $effects[] = "Added \"{$card['card_name']}\" to your hand";
+        }
+    }
+    
+    return $effects;
+}
+
+function getPlayerById($playerId) {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        $stmt = $pdo->prepare("SELECT * FROM players WHERE id = ?");
+        $stmt->execute([$playerId]);
+        return $stmt->fetch();
+    } catch (Exception $e) {
+        error_log("Error getting player by ID: " . $e->getMessage());
+        return null;
+    }
+}
 ?>

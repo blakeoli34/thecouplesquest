@@ -444,15 +444,15 @@ function getGameStatistics() {
         // Recent games with player details including device IDs
         $stmt = $pdo->query("
             SELECT g.*, 
-                   COUNT(p.id) as player_count,
-                   GROUP_CONCAT(
-                       CONCAT(
-                           p.first_name, ' (', p.gender, ') - Device: ', 
-                           SUBSTRING(p.device_id, 1, 8), '...'
-                       ) 
-                       ORDER BY p.joined_at 
-                       SEPARATOR ' | '
-                   ) as players_with_devices
+                COUNT(p.id) as player_count,
+                GROUP_CONCAT(
+                    CONCAT(
+                        p.first_name, ' (', p.gender, ') - Device: ', 
+                        SUBSTRING(p.device_id, 1, 8), '...'
+                    ) 
+                    ORDER BY p.joined_at 
+                    SEPARATOR ' | '
+                ) as players_with_devices
             FROM games g
             LEFT JOIN players p ON g.id = p.game_id
             GROUP BY g.id
@@ -1015,6 +1015,24 @@ function showLoginForm($error = null) {
         .btn-secondary, .btn.dark {
             background: #6b7280;
         }
+
+        .mode-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .mode-hybrid {
+            background: #e3f2fd;
+            color: #1565c0;
+        }
+
+        .mode-digital {
+            background: #f3e5f5;
+            color: #7b1fa2;
+        }
     </style>
 </head>
 <body>
@@ -1130,6 +1148,7 @@ function showLoginForm($error = null) {
                 <thead>
                     <tr>
                         <th>Invite Code</th>
+                        <th>Mode</th>
                         <th>Status</th>
                         <th>Players & Devices</th>
                         <th>Duration</th>
@@ -1141,6 +1160,11 @@ function showLoginForm($error = null) {
                     <?php foreach ($stats['recentGames'] as $game): ?>
                         <tr>
                             <td><strong><?= htmlspecialchars($game['invite_code']) ?></strong></td>
+                            <td>
+                                <span class="mode-badge mode-<?= $game['game_mode'] ?>">
+                                    <?= $game['game_mode'] === 'digital' ? '📱 Digital' : '🃏 Hybrid' ?>
+                                </span>
+                            </td>
                             <td>
                                 <span class="status-badge status-<?= $game['status'] ?>">
                                     <?= ucfirst($game['status']) ?>

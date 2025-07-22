@@ -15,6 +15,449 @@ let isDiceRolling = false;
 
 let selectedTimerId = null;
 
+let cardData = {
+    serve_cards: [],
+    hand_cards: { snap: [], dare: [], spicy: [] },
+    pending_serves: []
+};
+
+let selectedCard = null;
+let currentServeId = null;
+
+// Load card data for digital games
+function loadCardData() {
+    if (!document.body.classList.contains('digital')) return;
+    
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'action=get_card_data'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            cardData = data;
+            
+            // Auto-initialize if no serve cards
+            if (!data.serve_cards || data.serve_cards.length === 0) {
+                console.log('No serve cards, initializing...');
+                initializeCards();
+                return;
+            }
+            
+            updatePendingServesIndicator();
+            
+            // Auto-show pending serves if any exist
+            if (data.pending_serves && data.pending_serves.length > 0) {
+                showServeResponseModal(data.pending_serves[0]);
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error loading card data:', error);
+    });
+}
+
+// Initialize cards if not already done
+function initializeCards() {
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'action=initialize_digital_cards'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            console.log('Cards initialized successfully');
+            // Reload card data after initialization
+            setTimeout(() => loadCardData(), 1000);
+        } else {
+            console.log('Failed to initialize cards:', data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error initializing cards:', error);
+    });
+}
+
+// Update pending serves indicator
+function updatePendingServesIndicator() {
+    const indicator = document.getElementById('pendingServesIndicator');
+    const count = document.getElementById('pendingServesCount');
+    
+    if (!indicator || !count) return;
+    
+    const pendingCount = cardData.pending_serves ? cardData.pending_serves.length : 0;
+    
+    if (pendingCount > 0) {
+        count.textContent = pendingCount;
+        indicator.classList.add('active');
+    } else {
+        indicator.classList.remove('active');
+    }
+}
+
+// Open serve cards overlay
+function openServeCards() {
+    populateCardGrid('serveCardsGrid', cardData.serve_cards || [], 'serve');
+    document.getElementById('serveCardsOverlay').classList.add('active');
+}
+
+// Open hand cards overlay
+function openHandCards() {
+    const allHandCards = [
+        ...(cardData.hand_cards.accepted_serve || []),
+        ...(cardData.hand_cards.snap || []),
+        ...(cardData.hand_cards.dare || []), 
+        ...(cardData.hand_cards.spicy || []),
+        ...(cardData.hand_cards.chance || [])
+    ];
+    populateCardGrid('handCardsGrid', allHandCards, 'hand');
+    document.getElementById('handCardsOverlay').classList.add('active');
+}
+
+// Open pending serves overlay
+function openPendingServes() {
+    populateCardGrid('pendingServesGrid', cardData.pending_serves || [], 'pending');
+    document.getElementById('pendingServesOverlay').classList.add('active');
+}
+
+// Close card overlay
+function closeCardOverlay(overlayId) {
+    document.getElementById(overlayId).classList.remove('active');
+    selectedCard = null;
+    closeCardActions();
+}
+
+// Populate card grid
+function populateCardGrid(gridId, cards, type) {
+    const grid = document.getElementById(gridId);
+    grid.innerHTML = '';
+    
+    if (cards.length === 0) {
+        grid.innerHTML = '<p style="color: white; text-align: center; width: 100%;">No cards available</p>';
+        return;
+    }
+    
+    cards.forEach(card => {
+        const cardElement = createCardElement(card, type);
+        grid.appendChild(cardElement);
+    });
+}
+
+// Create card element
+function createCardElement(card, type) {
+   const div = document.createElement('div');
+   div.className = `game-card ${card.card_type || 'serve'}-card`;
+   div.dataset.cardId = card.card_id || card.id;
+   div.dataset.type = type;
+   
+   if (type === 'serve') {
+       div.onclick = () => selectServeCard(card);
+   } else if (type === 'pending') {
+       div.onclick = () => showServeResponseModal(card);
+   } else if (type === 'hand') {
+       div.onclick = () => selectHandCard(card);
+   }
+   
+   div.innerHTML = `
+       <div class="card-header">
+           <div class="card-name">${card.card_name}</div>
+           ${card.quantity > 1 ? `<div class="card-quantity">${card.quantity}x</div>` : ''}
+       </div>
+       <div class="card-description">${card.card_description}</div>
+       <div class="card-meta">
+           ${getCardDisplayInfo(card, type)}
+       </div>
+   `;
+   
+   return div;
+}
+
+function getCardDisplayInfo(card, context = 'serve') {
+    let badges = [];
+    
+    // Points
+    if (card.card_points) {
+        badges.push(`<span class="card-badge points">${card.card_points} pts</span>`);
+    }
+    
+    // Veto penalties (for serve cards)
+    if (card.veto_subtract || card.veto_steal || card.veto_draw_chance || card.veto_draw_snap_dare || card.veto_draw_spicy) {
+        let penalties = [];
+        if (card.veto_subtract) penalties.push(`-${card.veto_subtract} pts`);
+        if (card.veto_steal) penalties.push(`steal ${card.veto_steal}`);
+        if (card.veto_draw_chance) penalties.push(`${card.veto_draw_chance} chance`);
+        
+        if (card.veto_draw_snap_dare) {
+            let snapDareText = 'snap/dare';
+            if (context === 'serve' && gameData.opponentPlayerGender) {
+                snapDareText = gameData.opponentPlayerGender === 'female' ? 'snap' : 'dare';
+            } else if (context === 'hand' || context === 'pending') {
+                snapDareText = gameData.currentPlayerGender === 'female' ? 'snap' : 'dare';
+            }
+            penalties.push(`${card.veto_draw_snap_dare} ${snapDareText}`);
+        }
+        
+        if (card.veto_draw_spicy) penalties.push(`${card.veto_draw_spicy} spicy`);
+        
+        if (penalties.length > 0) {
+            badges.push(`<span class="card-badge penalty">Veto: ${penalties.join(', ')}</span>`);
+        }
+    }
+    
+    // Timer
+    if (card.timer) {
+        badges.push(`<span class="card-badge timer">${card.timer}min</span>`);
+    }
+    
+    return badges.join('');
+}
+
+// Select serve card
+function selectServeCard(card) {
+    selectedCard = card;
+    showCardActions('Serve to Opponent', () => serveSelectedCard());
+}
+
+// Show card actions panel
+function showCardActions(actionText, actionFunction) {
+    const panel = document.getElementById('cardActions');
+    const button = document.getElementById('primaryCardAction');
+    
+    button.textContent = actionText;
+    button.onclick = actionFunction;
+    panel.classList.add('active');
+}
+
+// Close card actions panel
+function closeCardActions() {
+    document.getElementById('cardActions').classList.remove('active');
+}
+
+// Serve selected card
+function serveSelectedCard() {
+    if (!selectedCard) return;
+    
+    const opponentId = gameData.opponentPlayerId;
+    const cardName = selectedCard.card_name; // Store name before clearing
+    
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `action=serve_card&card_id=${selectedCard.card_id || selectedCard.id}&to_player_id=${opponentId}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            closeCardOverlay('serveCardsOverlay');
+            loadCardData(); // Refresh card data
+            showInAppNotification('Card Served!', `Served "${cardName}" to opponent`);
+        } else {
+            alert('Failed to serve card: ' + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error serving card:', error);
+        alert('Failed to serve card');
+    });
+}
+
+// Show serve response modal
+function showServeResponseModal(serve) {
+    currentServeId = serve.id;
+    
+    document.getElementById('serveResponseTitle').textContent = 
+        `${serve.from_player_name} served you a card:`;
+    document.getElementById('serveResponseName').textContent = serve.card_name;
+    document.getElementById('serveResponseDescription').textContent = serve.card_description;
+    
+    const meta = document.getElementById('serveResponseMeta');
+    meta.innerHTML = getCardDisplayInfo(serve, 'pending');
+    
+    document.getElementById('serveResponseModal').classList.add('active');
+}
+
+// Accept current serve
+function acceptCurrentServe() {
+    if (!currentServeId) return;
+    
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `action=accept_serve&serve_id=${currentServeId}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('serveResponseModal').classList.remove('active');
+            loadCardData();
+            refreshGameData();
+            
+            if (data.effects && data.effects.length > 0) {
+                showInAppNotification('Card Accepted!', data.effects.join(', '));
+            } else {
+                showInAppNotification('Card Accepted!', 'Card effect applied');
+            }
+        } else {
+            alert('Failed to accept serve: ' + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error accepting serve:', error);
+        alert('Failed to accept serve');
+    });
+}
+
+// Veto current serve
+function vetoCurrentServe() {
+    if (!currentServeId) return;
+    
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `action=veto_serve&serve_id=${currentServeId}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('serveResponseModal').classList.remove('active');
+            loadCardData();
+            refreshGameData();
+            
+            if (data.penalties && data.penalties.length > 0) {
+                showInAppNotification('Card Vetoed!', data.penalties.join(', '));
+            } else {
+                showInAppNotification('Card Vetoed!', 'Veto penalties applied');
+            }
+        } else {
+            alert('Failed to veto serve: ' + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error vetoing serve:', error);
+        alert('Failed to veto serve');
+    });
+}
+
+// Manual card draw function
+function manualDrawCard(cardType) {
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `action=manual_draw&card_type=${cardType}&quantity=1`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            loadCardData();
+            if (data.drawn_cards.length > 0) {
+                showInAppNotification('Card Drawn!', `Drew: ${data.drawn_cards.join(', ')}`);
+            } else {
+                showInAppNotification('No Cards', `No ${cardType} cards available`);
+            }
+        } else {
+            alert('Failed to draw card: ' + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error drawing card:', error);
+        alert('Failed to draw card');
+    });
+}
+
+// Open manual draw modal
+function openManualDrawModal() {
+    const modal = document.getElementById('manualDrawModal');
+    const select = document.getElementById('drawCardType');
+    
+    // Add gender-specific option
+    const existingGenderOption = select.querySelector('[data-gender]');
+    if (existingGenderOption) {
+        existingGenderOption.remove();
+    }
+    
+    const genderOption = document.createElement('option');
+    genderOption.dataset.gender = 'true';
+    
+    if (gameData.currentPlayerGender === 'female') {
+        genderOption.value = 'snap';
+        genderOption.textContent = 'Snap Cards';
+        select.insertBefore(genderOption, select.children[1]);
+    } else {
+        genderOption.value = 'dare';
+        genderOption.textContent = 'Dare Cards';
+        select.insertBefore(genderOption, select.children[1]);
+    }
+    
+    modal.classList.add('active');
+}
+
+// Perform manual draw
+function performManualDraw() {
+    const cardType = document.getElementById('drawCardType').value;
+    const quantity = document.getElementById('drawQuantity').value;
+    
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `action=manual_draw&card_type=${cardType}&quantity=${quantity}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            closeModal('manualDrawModal');
+            loadCardData();
+            if (data.drawn_cards.length > 0) {
+                showInAppNotification('Cards Drawn!', `Drew: ${data.drawn_cards.join(', ')}`);
+            } else {
+                showInAppNotification('No Cards', `No ${cardType} cards available`);
+            }
+        } else {
+            alert('Failed to draw cards: ' + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error drawing cards:', error);
+        alert('Failed to draw cards');
+    });
+}
+
+// Select hand card
+function selectHandCard(card) {
+    selectedCard = card;
+    if (card.card_type === 'serve') {
+        showCardActions('Complete Challenge', () => completeHandCard());
+    } else {
+        showCardActions('Play Card', () => playHandCard());
+    }
+}
+
+// Complete hand card (for serve cards)
+function completeHandCard() {
+    // For now, just award points and remove from hand
+    if (selectedCard && selectedCard.card_points) {
+        updateScore(gameData.currentPlayerId, selectedCard.card_points);
+        removeCardFromHand(selectedCard);
+        closeCardOverlay('handCardsOverlay');
+        showInAppNotification('Challenge Complete!', `Gained ${selectedCard.card_points} points`);
+    }
+}
+
+// Play hand card (for other card types)  
+function playHandCard() {
+    // For now, just remove from hand
+    removeCardFromHand(selectedCard);
+    closeCardOverlay('handCardsOverlay');
+    showInAppNotification('Card Played!', `Played "${selectedCard.card_name}"`);
+}
+
+// Remove card from hand (placeholder - implement server-side)
+function removeCardFromHand(card) {
+    // TODO: Implement server-side card removal
+    loadCardData(); // Refresh for now
+}
+
 $('.bottom-right-menu').on('click', function() {
     $(this).toggleClass('open');
 });
@@ -1234,6 +1677,50 @@ function setDiceColor(gender) {
     });
 }
 
+// Mode selection handler
+function setupModeButtons() {
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const mode = this.dataset.mode;
+            
+            fetch('game.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'action=set_game_mode&mode=' + mode
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Add body class for digital mode
+                    if (mode === 'digital') {
+                        document.body.classList.add('digital');
+                    }
+                    location.reload();
+                } else {
+                    alert('Failed to set game mode. Please try again.');
+                }
+            })
+            .catch(error => {
+                console.error('Error setting mode:', error);
+                alert('Failed to set game mode. Please try again.');
+            });
+        });
+    });
+}
+
+function initializeDigitalCards() {
+    if (document.body.classList.contains('digital')) {
+        loadCardData();
+        
+        // Refresh card data periodically
+        setInterval(() => {
+            loadCardData();
+        }, 15000); // Every 15 seconds
+    }
+}
+
 // Initialize everything when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Game page loaded');
@@ -1256,8 +1743,10 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Setup event handlers
     setupDurationButtons();
+    setupModeButtons();
     setupModalHandlers();
     setupAnimatedMenu(); // New animated menu system
+    initializeDigitalCards();
 
     // Check if we're waiting on an opponent
     if (document.querySelector('.waiting-screen.no-opponent')) {
@@ -1292,6 +1781,41 @@ document.addEventListener('DOMContentLoaded', function() {
         // Clear interval when page unloads
         window.addEventListener('beforeunload', () => {
             clearInterval(statusInterval);
+        });
+    }
+
+    if (document.querySelector('.waiting-screen.mode-selection')) {
+        console.log('Starting mode selection polling...');
+        
+        function checkForModeSelection() {
+            fetch('game.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'action=check_game_status'
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Game status check:', data);
+                
+                // If mode has been selected, reload
+                if (data.success && data.game_mode) {
+                    console.log('Game mode selected, reloading...');
+                    window.location.reload();
+                }
+            })
+            .catch(error => {
+                console.error('Error checking game status:', error);
+            });
+        }
+        
+        // Check every 5 seconds
+        const modeInterval = setInterval(checkForModeSelection, 5000);
+        
+        // Clear interval when page unloads
+        window.addEventListener('beforeunload', () => {
+            clearInterval(modeInterval);
         });
     }
 
@@ -1383,6 +1907,19 @@ window.addEventListener('load', function() {
 });
 
 // Make functions globally available
+window.openServeCards = openServeCards;
+window.openHandCards = openHandCards;
+window.openPendingServes = openPendingServes;
+window.closeCardOverlay = closeCardOverlay;
+window.acceptCurrentServe = acceptCurrentServe;
+window.vetoCurrentServe = vetoCurrentServe;
+window.closeCardActions = closeCardActions;
+window.manualDrawCard = manualDrawCard;
+window.openManualDrawModal = openManualDrawModal;
+window.performManualDraw = performManualDraw;
+window.selectHandCard = selectHandCard;
+window.completeHandCard = completeHandCard;
+window.playHandCard = playHandCard;
 window.openNotifyModal = openNotifyModal;
 window.openTimerModal = openTimerModal;
 window.openHistoryModal = openHistoryModal;

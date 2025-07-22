@@ -26,8 +26,15 @@ if (!$player) {
     exit;
 }
 
+// Get fresh game data to check current mode
+$pdo = Config::getDatabaseConnection();
+$stmt = $pdo->prepare("SELECT * FROM games WHERE id = ?");
+$stmt->execute([$player['game_id']]);
+$gameData = $stmt->fetch();
+
 $players = getGamePlayers($player['game_id']);
-$gameStatus = $player['status'];
+$gameStatus = $gameData['status']; // Use fresh game data
+$gameMode = $gameData['game_mode']; // Get current mode
 
 $now = new DateTime();
 $endDate = new DateTime($player['end_date']);
@@ -57,12 +64,45 @@ if ($timeRemaining) {
 // Handle AJAX requests
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     header('Content-Type: application/json');
+
+    // Get fresh game mode for AJAX calls
+    $pdo = Config::getDatabaseConnection();
+    $stmt = $pdo->prepare("SELECT game_mode FROM games WHERE id = ?");
+    $stmt->execute([$player['game_id']]);
+    $gameMode = $stmt->fetchColumn();
     
     switch ($_POST['action']) {
         case 'set_duration':
             $duration = intval($_POST['duration']);
             $result = setGameDuration($player['game_id'], $duration);
+            
+            // Initialize digital cards if this is a digital game
+            if ($result['success'] && $gameMode === 'digital') {
+                $initResult = initializeDigitalGame($player['game_id']);
+                if (!$initResult['success']) {
+                    $result['warning'] = 'Game started but failed to initialize cards';
+                }
+            }
+            
             echo json_encode($result);
+            exit;
+
+        case 'set_game_mode':
+            $mode = $_POST['mode'];
+            if (!in_array($mode, ['hybrid', 'digital'])) {
+                echo json_encode(['success' => false, 'message' => 'Invalid game mode']);
+                exit;
+            }
+            
+            try {
+                $pdo = Config::getDatabaseConnection();
+                $stmt = $pdo->prepare("UPDATE games SET game_mode = ? WHERE id = ?");
+                $stmt->execute([$mode, $player['game_id']]);
+                echo json_encode(['success' => true]);
+            } catch (Exception $e) {
+                error_log("Error setting game mode: " . $e->getMessage());
+                echo json_encode(['success' => false, 'message' => 'Failed to set game mode']);
+            }
             exit;
 
         case 'debug_timers':
@@ -137,13 +177,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
         case 'check_game_status':
             try {
+                $pdo = Config::getDatabaseConnection();
                 $gameId = $player['game_id'];
+                
+                // Get updated game info including mode
+                $stmt = $pdo->prepare("SELECT status, game_mode FROM games WHERE id = ?");
+                $stmt->execute([$gameId]);
+                $gameInfo = $stmt->fetch();
+                
                 $currentPlayers = getGamePlayers($gameId);
-                $currentStatus = $player['status']; // or get fresh from DB if needed
                 
                 echo json_encode([
                     'success' => true,
-                    'status' => $currentStatus,
+                    'status' => $gameInfo['status'],
+                    'game_mode' => $gameInfo['game_mode'],
                     'player_count' => count($currentPlayers)
                 ]);
             } catch (Exception $e) {
@@ -152,6 +199,105 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     'error' => $e->getMessage()
                 ]);
             }
+            exit;
+
+        case 'get_card_data':
+            if ($gameMode !== 'digital') {
+                echo json_encode(['success' => false, 'message' => 'Not a digital game']);
+                exit;
+            }
+            
+            $serveCards = getPlayerCards($player['game_id'], $player['id'], 'serve');
+            
+            // Initialize hand cards structure
+            $handCards = [
+                'accepted_serve' => [],
+                'snap' => [],
+                'dare' => [],
+                'spicy' => [],
+                'chance' => []
+            ];
+            
+            // Get all non-serve cards in hand and organize by type
+            $allHandCards = getPlayerCards($player['game_id'], $player['id']);
+            
+            foreach ($allHandCards as $card) {
+                if ($card['card_type'] !== 'serve') {
+                    $handCards[$card['card_type']][] = $card;
+                }
+            }
+            
+            $pendingServes = getPendingServes($player['game_id'], $player['id']);
+            
+            echo json_encode([
+                'success' => true,
+                'serve_cards' => $serveCards,
+                'hand_cards' => $handCards,
+                'pending_serves' => $pendingServes
+            ]);
+            exit;
+
+        case 'serve_card':
+            if ($gameMode !== 'digital') {
+                echo json_encode(['success' => false, 'message' => 'Not a digital game']);
+                exit;
+            }
+            
+            $cardId = intval($_POST['card_id']);
+            $toPlayerId = intval($_POST['to_player_id']);
+            
+            $result = serveCard($player['game_id'], $player['id'], $toPlayerId, $cardId);
+            echo json_encode($result);
+            exit;
+
+        case 'accept_serve':
+            if ($gameMode !== 'digital') {
+                echo json_encode(['success' => false, 'message' => 'Not a digital game']);
+                exit;
+            }
+            
+            $serveId = intval($_POST['serve_id']);
+            $result = acceptServe($player['game_id'], $player['id'], $serveId);
+            echo json_encode($result);
+            exit;
+
+        case 'veto_serve':
+            if ($gameMode !== 'digital') {
+                echo json_encode(['success' => false, 'message' => 'Not a digital game']);
+                exit;
+            }
+            
+            $serveId = intval($_POST['serve_id']);
+            $result = vetoServe($player['game_id'], $player['id'], $serveId);
+            echo json_encode($result);
+            exit;
+
+        case 'manual_draw':
+            if ($gameMode !== 'digital') {
+                echo json_encode(['success' => false, 'message' => 'Not a digital game']);
+                exit;
+            }
+            
+            $cardType = $_POST['card_type'];
+            $quantity = intval($_POST['quantity']) ?: 1;
+            
+            if (!in_array($cardType, ['chance', 'snap', 'dare', 'spicy'])) {
+                echo json_encode(['success' => false, 'message' => 'Invalid card type']);
+                exit;
+            }
+            
+            $drawnCards = drawCards($player['game_id'], $player['id'], $cardType, $quantity);
+            echo json_encode(['success' => true, 'drawn_cards' => $drawnCards]);
+            exit;
+
+        case 'initialize_digital_cards':
+            if ($gameMode !== 'digital') {
+                echo json_encode(['success' => false, 'message' => 'Not a digital game']);
+                exit;
+            }
+            
+            $result = initializeDigitalGame($player['game_id']);
+            echo json_encode($result);
             exit;
 
         case 'end_game':
@@ -291,7 +437,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 </div>
             </div>
             
-        <?php elseif ($gameStatus === 'waiting' && count($players) === 2 && !$player['duration_days']): ?>
+       <?php elseif ($gameStatus === 'waiting' && count($players) === 2 && !$gameMode): ?>
+            <!-- Set game mode -->
+            <div class="waiting-screen mode-selection">
+                <h2>Choose Game Mode</h2>
+                <p>How would you like to play?</p>
+                <div class="mode-options">
+                    <div class="mode-btn" data-mode="hybrid">
+                        <div class="mode-icon">🃏📱</div>
+                        <div class="mode-title">Hybrid</div>
+                        <div class="mode-description">Physical cards + app for scoring</div>
+                    </div>
+                    <div class="mode-btn" data-mode="digital">
+                        <div class="mode-icon">📱✨</div>
+                        <div class="mode-title">Digital</div>
+                        <div class="mode-description">Play entirely within the app</div>
+                    </div>
+                </div>
+            </div>
+            
+        <?php elseif ($gameStatus === 'waiting' && count($players) === 2 && $gameMode && !$gameData['duration_days']): ?>
             <!-- Set game duration -->
             <div class="waiting-screen duration">
                 <div class="notify-bubble" style="margin-bottom: 30px; padding: 20px; border-radius: 15px;">
@@ -354,6 +519,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         <?php else: ?>
             <!-- Active game -->
             <?php
+            if ($gameMode === 'digital') {
+                echo '<script>document.body.classList.add("digital");</script>';
+            }
+            
             $currentPlayer = null;
             $opponentPlayer = null;
             
@@ -443,6 +612,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             <!-- Bottom Menu -->
             <div class="bottom-menu">
                 <div class="bump-send-display"></div>
+                <div class="menu-item digital-menu-item" onclick="openServeCards()">
+                    <div class="menu-item-icon"><i class="fa-solid fa-circle-arrow-up"></i></div>
+                    <div class="menu-item-text">Serve</div>
+                </div>
+                <div class="menu-item digital-menu-item" onclick="openHandCards()">
+                    <div class="menu-item-icon"><i class="fa-solid fa-hand-paper"></i></div>
+                    <div class="menu-item-text">Hand</div>
+                </div>
                 <div class="menu-item" onclick="sendBump()">
                     <div class="menu-item-icon"><i class="fa-solid fa-bullhorn"></i></div>
                     <div class="menu-item-text">Bump</div>
@@ -463,6 +640,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     <div class="flyout-menu-item" onclick="hardRefresh()">
                         <div class="flyout-menu-item-icon"><i class="fa-solid fa-arrows-rotate"></i></div>
                         <div class="flyout-menu-item-text">Refresh Game...</div>
+                    </div>
+                    <div class="flyout-menu-item digital-menu-item" onclick="openManualDrawModal()">
+                        <div class="flyout-menu-item-icon"><i class="fa-solid fa-hand-holding"></i></div>
+                        <div class="flyout-menu-item-text">Draw Cards</div>
                     </div>
                     <div class="flyout-menu-item" onclick="openDiceOverlay()">
                         <div class="flyout-menu-item-icon"><i class="fa-solid fa-dice"></i></div>
@@ -485,15 +666,101 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     currentPlayerId: <?= $currentPlayer['id'] ?>,
                     opponentPlayerId: <?= $opponentPlayer['id'] ?>,
                     gameStatus: '<?= $gameStatus ?>',
-                    currentPlayerGender: '<?= $currentPlayer['gender'] ?>'
+                    currentPlayerGender: '<?= $currentPlayer['gender'] ?>',
+                    opponentPlayerGender: '<?= $opponentPlayer['gender'] ?>'
                 };
             </script>
         <?php endif; ?>
     </div>
 
+    <div class="pending-serves-indicator" id="pendingServesIndicator" onclick="openPendingServes()">
+        <span id="pendingServesCount">0</span> Pending Serves
+    </div>
+
     <div class="iAN">
         <div class="iAN-title"></div>
         <div class="iAN-body"></div>
+    </div>
+
+    <!-- Serve Cards Overlay -->
+    <div class="card-overlay" id="serveCardsOverlay">
+        <button class="card-overlay-close" onclick="closeCardOverlay('serveCardsOverlay')">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
+        <div class="card-grid" id="serveCardsGrid">
+            <!-- Serve cards will be populated here -->
+        </div>
+    </div>
+
+    <!-- Hand Cards Overlay -->
+    <div class="card-overlay" id="handCardsOverlay">
+        <button class="card-overlay-close" onclick="closeCardOverlay('handCardsOverlay')">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
+        <div class="card-grid" id="handCardsGrid">
+            <!-- Hand cards will be populated here -->
+        </div>
+    </div>
+
+    <!-- Pending Serves Overlay -->
+    <div class="card-overlay" id="pendingServesOverlay">
+        <button class="card-overlay-close" onclick="closeCardOverlay('pendingServesOverlay')">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
+        <div class="card-grid" id="pendingServesGrid">
+            <!-- Pending serves will be populated here -->
+        </div>
+    </div>
+
+    <!-- Serve Response Modal -->
+    <div class="serve-response-modal" id="serveResponseModal">
+        <div class="serve-response-content">
+            <h3 id="serveResponseTitle">Card Served to You</h3>
+            <div class="game-card" id="serveResponseCard">
+                <div class="card-header">
+                    <div class="card-name" id="serveResponseName"></div>
+                </div>
+                <div class="card-description" id="serveResponseDescription"></div>
+                <div class="card-meta" id="serveResponseMeta"></div>
+            </div>
+            <div class="serve-response-buttons">
+                <button class="btn btn-secondary" onclick="vetoCurrentServe()">Veto</button>
+                <button class="btn" onclick="acceptCurrentServe()">Accept</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card Actions Panel -->
+    <div class="card-actions" id="cardActions">
+        <button class="btn" id="primaryCardAction" onclick="performCardAction()">Action</button>
+        <button class="btn btn-secondary" onclick="closeCardActions()">Cancel</button>
+    </div>
+
+    <!-- Manual Draw Modal -->
+    <div class="modal" id="manualDrawModal">
+        <div class="modal-content">
+            <div class="modal-title">Draw Cards Manually</div>
+            
+            <div class="form-group">
+                <label>Card Type</label>
+                <select id="drawCardType">
+                    <option value="chance">Chance Cards</option>
+                    <option value="spicy">Spicy Cards</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>Quantity</label>
+                <select id="drawQuantity">
+                    <option value="1">1 Card</option>
+                    <option value="2">2 Cards</option>
+                    <option value="3">3 Cards</option>
+                </select>
+            </div>
+            
+            <button class="btn" onclick="performManualDraw()">Draw Cards</button>
+            <button class="btn btn-secondary" onclick="closeModal('manualDrawModal')">Cancel</button>
+        </div>
     </div>
 
     <!-- Notify Modal -->
