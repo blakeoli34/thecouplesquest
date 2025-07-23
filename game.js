@@ -313,7 +313,9 @@ function manualDrawCard(cardType) {
     .then(data => {
         if (data.success) {
             loadCardData();
-            if (data.drawn_cards.length > 0) {
+            if (data.drawn_cards.length > 0 && data.card_details) {
+                showCardDrawAnimation(data.card_details);
+            } else if (data.drawn_cards.length > 0) {
                 showInAppNotification('Card Drawn!', `Drew: ${data.drawn_cards.join(', ')}`);
             } else {
                 showInAppNotification('No Cards', `No ${cardType} cards available`);
@@ -326,6 +328,59 @@ function manualDrawCard(cardType) {
         console.error('Error drawing card:', error);
         alert('Failed to draw card');
     });
+}
+
+function showCardDrawAnimation(cardData) {
+    const overlay = document.getElementById('cardDrawOverlay');
+    const deckContainer = document.getElementById('deckContainer');
+    const drawnCard = document.getElementById('drawnCard');
+    
+    // Set card content
+    document.getElementById('drawCardType').innerHTML = getCardType(cardData.card_type);
+    document.getElementById('drawCardName').textContent = cardData.card_name;
+    document.getElementById('drawCardDescription').textContent = cardData.card_description;
+    
+    // Add points badge if applicable
+    const metaContainer = document.getElementById('drawCardMeta');
+    metaContainer.innerHTML = '';
+    if (cardData.card_points) {
+        const pointsBadge = document.createElement('span');
+        pointsBadge.className = 'card-badge points';
+        pointsBadge.textContent = `+${cardData.card_points}`;
+        metaContainer.appendChild(pointsBadge);
+    }
+    
+    // Reset states
+    overlay.classList.add('active');
+    deckContainer.classList.remove('shuffling');
+    drawnCard.classList.remove('flip-in', 'slide-out');
+    
+    // Step 1: Show deck scaling up
+    setTimeout(() => {
+        deckContainer.classList.add('show');
+    }, 100);
+    
+    // Step 2: Start shuffle animation
+    setTimeout(() => {
+        deckContainer.classList.add('shuffling');
+    }, 400);
+    
+    // Step 3: Hide deck and show card flipping in
+    setTimeout(() => {
+        deckContainer.classList.remove('show', 'shuffling');
+        drawnCard.classList.add('flip-in');
+    }, 1400);
+    
+    // Step 4: Slide card out (show card longer)
+    setTimeout(() => {
+        drawnCard.classList.add('slide-out');
+    }, 3400);
+    
+    // Step 5: Hide overlay
+    setTimeout(() => {
+        overlay.classList.remove('active');
+        drawnCard.classList.remove('flip-in', 'slide-out');
+    }, 4200);
 }
 
 function openDrawPopover() {

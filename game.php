@@ -286,7 +286,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
             
             $drawnCards = drawCards($player['game_id'], $player['id'], $cardType, $quantity);
-            echo json_encode(['success' => true, 'drawn_cards' => $drawnCards]);
+            
+            // Get card details for animation
+            $cardDetails = null;
+            if (!empty($drawnCards)) {
+                try {
+                    $pdo = Config::getDatabaseConnection();
+                    $stmt = $pdo->prepare("SELECT * FROM cards WHERE card_name = ? AND card_type = ? LIMIT 1");
+                    $stmt->execute([$drawnCards[0], $cardType]);
+                    $cardDetails = $stmt->fetch();
+                } catch (Exception $e) {
+                    error_log("Error getting card details: " . $e->getMessage());
+                }
+            }
+            
+            echo json_encode([
+                'success' => true, 
+                'drawn_cards' => $drawnCards,
+                'card_details' => $cardDetails
+            ]);
             exit;
 
         case 'initialize_digital_cards':
@@ -918,6 +936,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             <button class="roll-button" id="rollButton" onclick="rollDice()">
                 Roll Dice
             </button>
+        </div>
+    </div>
+
+    <!-- Card Draw Animation Overlay -->
+    <div class="card-draw-overlay" id="cardDrawOverlay">
+        <div class="deck-container" id="deckContainer">
+            <div class="deck-card">The<br>Couple's<br>Quest</div>
+            <div class="deck-card">The<br>Couple's<br>Quest</div>
+            <div class="deck-card">The<br>Couple's<br>Quest</div>
+            <div class="deck-card">The<br>Couple's<br>Quest</div>
+            <div class="deck-card">The<br>Couple's<br>Quest</div>
+        </div>
+        
+        <div class="drawn-card" id="drawnCard">
+            <div class="card-type" id="drawCardType">Chance</div>
+            <div class="card-name" id="drawCardName">Card Name</div>
+            <div class="card-description" id="drawCardDescription">
+                Card description text
+            </div>
+            <div class="card-meta" id="drawCardMeta">
+                <!-- Points badge will be added here if applicable -->
+            </div>
         </div>
     </div>
     

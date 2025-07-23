@@ -1628,6 +1628,188 @@ body.digital .hybrid-menu-item {
     transform: translateY(0);
 }
 
+.card-draw-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    backdrop-filter: blur(0px);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    transition: all 0.3s ease;
+}
+
+.card-draw-overlay.active {
+    background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(8px);
+    pointer-events: all;
+}
+
+/* Deck container */
+.deck-container {
+    position: relative;
+    width: 120px;
+    height: 180px;
+    transform: scale(0);
+    transition: transform 0.3s ease-out;
+}
+
+.deck-container.show {
+    transform: scale(1);
+}
+
+/* Individual cards in deck */
+.deck-card {
+    position: absolute;
+    width: 120px;
+    height: 180px;
+    padding: 40px 6px;
+    background: #000;
+    border: 2px solid #222;
+    border-radius: 12px;
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    transform-origin: center bottom;
+}
+
+.deck-card:nth-child(1) { 
+    transform: translateY(0px) rotate(-2deg);
+    z-index: 5;
+}
+.deck-card:nth-child(2) { 
+    transform: translateY(-2px) rotate(1deg);
+    z-index: 4;
+}
+.deck-card:nth-child(3) { 
+    transform: translateY(-4px) rotate(-1deg);
+    z-index: 3;
+}
+.deck-card:nth-child(4) { 
+    transform: translateY(-6px) rotate(2deg);
+    z-index: 2;
+}
+.deck-card:nth-child(5) { 
+    transform: translateY(-8px) rotate(-1deg);
+    z-index: 1;
+}
+
+/* Shuffle animation */
+.deck-container.shuffling .deck-card {
+    animation: shuffle 1s ease-in-out;
+}
+
+.deck-container.shuffling .deck-card:nth-child(1) { animation-delay: 0ms; }
+.deck-container.shuffling .deck-card:nth-child(2) { animation-delay: 100ms; }
+.deck-container.shuffling .deck-card:nth-child(3) { animation-delay: 200ms; }
+.deck-container.shuffling .deck-card:nth-child(4) { animation-delay: 300ms; }
+.deck-container.shuffling .deck-card:nth-child(5) { animation-delay: 400ms; }
+
+@keyframes shuffle {
+    0%, 100% { transform: translateY(var(--original-y, 0)) rotate(var(--original-rotation, 0deg)); }
+    25% { transform: translateY(var(--original-y, 0)) translateX(20px) rotate(calc(var(--original-rotation, 0deg) + 15deg)); }
+    50% { transform: translateY(var(--original-y, 0)) translateX(-15px) rotate(calc(var(--original-rotation, 0deg) - 10deg)); }
+    75% { transform: translateY(var(--original-y, 0)) translateX(10px) rotate(calc(var(--original-rotation, 0deg) + 5deg)); }
+}
+
+/* Drawn card */
+.drawn-card {
+    position: absolute;
+    width: 160px;
+    height: 240px;
+    background: white;
+    border: 2px solid #ddd;
+    border-radius: 15px;
+    border-left: solid 15px #ccc;
+    transform-origin: center;
+    transform: scale(0);
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    padding: 20px 20px 20px 5px;
+    color: #333;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+
+body.male .drawn-card {
+    border-left-color: var(--color-blue);
+}
+
+body.female .drawn-card {
+    border-left-color: var(--color-pink);
+}
+
+.drawn-card.flip-in {
+    animation: flipIn 0.6s ease-out forwards;
+}
+
+.drawn-card.slide-out {
+    animation: slideOut 0.8s ease-in forwards;
+}
+
+@keyframes flipIn {
+    0% { 
+        transform: scale(0) rotateY(180deg);
+        opacity: 0;
+    }
+    50% { 
+        transform: scale(1.1) rotateY(90deg);
+        opacity: 1;
+    }
+    100% { 
+        transform: scale(1) rotateY(0deg);
+        opacity: 1;
+    }
+}
+
+@keyframes slideOut {
+    0% { 
+        transform: scale(1) translateY(0);
+        opacity: 1;
+    }
+    100% { 
+        transform: scale(0.5) translateY(120vh);
+        opacity: 1;
+    }
+}
+
+/* Card draw content styling */
+.drawn-card .card-type {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #666;
+    margin-bottom: 8px;
+}
+
+.drawn-card .card-name {
+    font-size: 14px;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: #333;
+    margin-bottom: 10px;
+    line-height: 1.2;
+}
+
+.drawn-card .card-description {
+    font-size: 11px;
+    color: #666;
+    line-height: 1.3;
+    flex: 1;
+}
+
+.drawn-card .card-meta {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+}
+
 @media (prefers-color-scheme: dark) {
     .player-score.female {
         background: var(--color-pink-dark);
@@ -1786,6 +1968,25 @@ body.digital .hybrid-menu-item {
     
     .draw-card-btn:hover {
         background: #3a3a3a;
+    }
+
+    .deck-card {
+        background: #2a2a2a;
+        border-color: #444;
+    }
+    
+    .drawn-card {
+        background: #2a2a2a;
+        color: #e6e6e6;
+        border-color: #444;
+    }
+    
+    .drawn-card .card-name {
+        color: #e6e6e6;
+    }
+    
+    .drawn-card .card-description {
+        color: #ccc;
     }
 }
 

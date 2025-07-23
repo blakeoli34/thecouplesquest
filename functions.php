@@ -886,9 +886,9 @@ function drawCards($gameId, $playerId, $cardType, $quantity = 1) {
         // Build gender restriction
         $genderWhere = "";
         if ($cardType === 'snap') {
-            $genderWhere = "AND c.for_her = 1";
+            $genderWhere = ""; // Remove gender restriction since snap cards are inherently for females
         } elseif ($cardType === 'dare') {
-            $genderWhere = "AND c.for_him = 1";
+            $genderWhere = ""; // Remove gender restriction since dare cards are inherently for males
         } elseif ($cardType === 'spicy' || $cardType === 'chance') {
             $genderField = ($player['gender'] === 'male') ? 'for_him' : 'for_her';
             $genderWhere = "AND c.$genderField = 1";
