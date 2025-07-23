@@ -58,6 +58,11 @@ function sendDailyNotifications() {
         
         $players = $stmt->fetchAll();
         error_log("Found " . count($players) . " players with FCM tokens for daily notifications");
+
+        // Get game mode
+        $stmt = $pdo->prepare("SELECT game_mode FROM games WHERE id = ?");
+        $stmt->execute([$player['game_id']]);
+        $gameData = ['game_mode' => $stmt->fetchColumn()];
         
         $notificationsSent = 0;
         
@@ -78,7 +83,19 @@ function sendDailyNotifications() {
                     $scoreStatus = "It's a tie! Who will take the lead? 🤝";
                 }
                 
-                $message = "{$scoreStatus} {$daysLeft} days left in your game with {$player['opponent_name']}.";
+                // Get card count for digital games
+                $cardCountText = '';
+                if ($gameData['game_mode'] === 'digital') {
+                    $stmt = $pdo->prepare("SELECT SUM(quantity) as hand_count FROM player_cards WHERE game_id = ? AND player_id = ? AND card_type != 'serve'");
+                    $stmt->execute([$player['game_id'], $player['id']]);
+                    $handCount = $stmt->fetchColumn() ?: 0;
+                    
+                    if ($handCount > 0) {
+                        $cardCountText = " You have {$handCount} cards in your hand.";
+                    }
+                }
+
+                $message = "{$scoreStatus} {$daysLeft} days left in your game with {$player['opponent_name']}.{$cardCountText}";
                 
                 $result = sendPushNotification(
                     $player['fcm_token'],

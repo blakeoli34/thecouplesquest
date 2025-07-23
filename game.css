@@ -1462,6 +1462,19 @@ body.female .game-card {
     }
 }
 
+.serve-count-display {
+    width: 100%;
+    text-align: center;
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 15px;
+    order: -1; /* Ensure it appears first in flex layout */
+}
+
 /* Card action buttons */
 .card-actions {
     position: fixed;
@@ -1626,6 +1639,13 @@ body.digital .hybrid-menu-item {
 
 .draw-card-btn:active {
     transform: translateY(0);
+}
+
+.deck-count {
+    font-size: 10px;
+    color: #666;
+    margin-top: 4px;
+    display: block;
 }
 
 .card-draw-overlay {
@@ -1808,6 +1828,45 @@ body.female .drawn-card {
     gap: 5px;
     flex-wrap: wrap;
     margin-top: 10px;
+}
+
+.hand-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: #ff4444;
+    color: white;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+}
+
+.menu-item {
+    position: relative;
+}
+
+.opponent-hand-counts {
+    position: absolute;
+    top: 50px;
+    left: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.opponent-hand-badge {
+    background: rgba(255,255,255,0.2);
+    padding: 5px 10px;
+    border-radius: 15px;
+    font-size: 12px;
+    backdrop-filter: blur(10px);
+    color: white;
 }
 
 @media (prefers-color-scheme: dark) {

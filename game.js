@@ -46,6 +46,9 @@ function loadCardData() {
                 initializeCards();
                 return;
             }
+
+            updateHandBadge();
+            updateOpponentHandDisplay();
         }
     })
     .catch(error => {
@@ -75,9 +78,77 @@ function initializeCards() {
     });
 }
 
+function updateHandBadge() {
+    const handCount = (cardData.hand_cards.accepted_serve?.length || 0) +
+                     (cardData.hand_cards.snap?.length || 0) +
+                     (cardData.hand_cards.dare?.length || 0) +
+                     (cardData.hand_cards.spicy?.length || 0) +
+                     (cardData.hand_cards.chance?.length || 0);
+    
+    const handMenuItem = document.querySelector('.menu-item[onclick="openHandCards()"]');
+    if (handMenuItem) {
+        let badge = handMenuItem.querySelector('.hand-badge');
+        if (handCount > 0) {
+            if (!badge) {
+                badge = document.createElement('div');
+                badge.className = 'hand-badge';
+                handMenuItem.appendChild(badge);
+            }
+            badge.textContent = handCount;
+        } else if (badge) {
+            badge.remove();
+        }
+    }
+}
+
+function updateOpponentHandDisplay() {
+    if (!document.body.classList.contains('digital')) return;
+    
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'action=get_opponent_hand_counts'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const container = document.getElementById('opponent-hand-counts');
+            if (container) {
+                container.innerHTML = '';
+                
+                const iconMap = {
+                    'accepted_serve': 'fa-circle-arrow-up',
+                    'snap': 'fa-camera-retro', 
+                    'dare': 'fa-hand-point-right',
+                    'spicy': 'fa-pepper-hot',
+                    'chance': 'fa-circle-question'
+                };
+                
+                Object.entries(data.counts).forEach(([type, count]) => {
+                    if (count > 0 && iconMap[type]) {
+                        const badge = document.createElement('div');
+                        badge.className = 'opponent-hand-badge';
+                        badge.innerHTML = `<i class="fa-solid ${iconMap[type]}"></i> ${count}`;
+                        container.appendChild(badge);
+                    }
+                });
+            }
+        }
+    });
+}
+
 // Open serve cards overlay
 function openServeCards() {
+    const grid = document.getElementById('serveCardsGrid');
     populateCardGrid('serveCardsGrid', cardData.serve_cards || [], 'serve');
+    // Add count display at top of grid
+    let countDisplay = grid.querySelector('.serve-count-display');
+    if (!countDisplay) {
+        countDisplay = document.createElement('div');
+        countDisplay.className = 'serve-count-display';
+        grid.appendChild(countDisplay);
+    }
+    countDisplay.textContent = `${cardData.serve_count || 0} Cards`;
     document.getElementById('serveCardsOverlay').classList.add('active');
 }
 
@@ -383,18 +454,43 @@ function showCardDrawAnimation(cardData) {
     }, 4200);
 }
 
+function updateDrawPopoverCounts() {
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'action=get_deck_counts'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const buttons = document.querySelectorAll('.draw-card-btn');
+            buttons.forEach(button => {
+                const cardType = button.onclick.toString().match(/drawSingleCard\('(\w+)'\)/)?.[1];
+                if (cardType && data.counts[cardType]) {
+                    let countSpan = button.querySelector('.deck-count');
+                    if (!countSpan) {
+                        countSpan = document.createElement('div');
+                        countSpan.className = 'deck-count';
+                        button.appendChild(countSpan);
+                    }
+                    countSpan.textContent = `${data.counts[cardType]} Cards`;
+                }
+            });
+        }
+    });
+}
+
 function openDrawPopover() {
     const popover = document.getElementById('drawPopover');
     if (popover) {
-        // Check if popover is already active and close it
         if (popover.classList.contains('active')) {
             closeDrawPopover();
             return;
         }
         
         popover.classList.add('active');
+        updateDrawPopoverCounts(); // Add this line
         
-        // Add click outside to close
         setTimeout(() => {
             document.addEventListener('click', closeDrawPopoverOnClickOutside);
         }, 100);

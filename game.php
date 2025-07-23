@@ -226,11 +226,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $handCards[$card['card_type']][] = $card;
                 }
             }
+
+            // Get serve card count
+            $stmt = $pdo->prepare("SELECT SUM(quantity) as serve_count FROM player_cards WHERE game_id = ? AND player_id = ? AND card_type = 'serve'");
+            $stmt->execute([$player['game_id'], $player['id']]);
+            $serveCount = $stmt->fetchColumn() ?: 0;
             
             echo json_encode([
                 'success' => true,
                 'serve_cards' => $serveCards,
-                'hand_cards' => $handCards
+                'hand_cards' => $handCards,
+                'serve_count' => $serveCount
             ]);
             exit;
 
@@ -315,6 +321,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             
             $result = initializeDigitalGame($player['game_id']);
             echo json_encode($result);
+            exit;
+
+        case 'get_deck_counts':
+            if ($gameMode !== 'digital') {
+                echo json_encode(['success' => false]);
+                exit;
+            }
+            
+            $playerGender = $player['gender'];
+            $genderCondition = ($playerGender === 'male') ? 'for_him = 1' : 'for_her = 1';
+            
+            $stmt = $pdo->prepare("
+                SELECT c.card_type, SUM(gd.remaining_quantity) as remaining_count
+                FROM game_decks gd
+                JOIN cards c ON gd.card_id = c.id  
+                WHERE gd.game_id = ? 
+                AND c.card_type IN ('chance', 'snap', 'dare', 'spicy')
+                AND (
+                    (c.card_type IN ('snap', 'dare')) OR
+                    (c.card_type IN ('chance', 'spicy') AND c.{$genderCondition})
+                )
+                GROUP BY c.card_type
+            ");
+            $stmt->execute([$player['game_id']]);
+            $counts = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+            
+            echo json_encode(['success' => true, 'counts' => $counts]);
+            exit;
+
+        case 'get_opponent_hand_counts':
+            if ($gameMode !== 'digital') {
+                echo json_encode(['success' => false]);
+                exit;
+            }
+            
+            $opponentId = null;
+            foreach ($players as $p) {
+                if ($p['device_id'] !== $deviceId) {
+                    $opponentId = $p['id'];
+                    break;
+                }
+            }
+            
+            if ($opponentId) {
+                $stmt = $pdo->prepare("
+                    SELECT pc.card_type, SUM(pc.quantity) as total_count
+                    FROM player_cards pc 
+                    WHERE pc.game_id = ? AND pc.player_id = ? AND pc.card_type != 'serve'
+                    GROUP BY pc.card_type
+                ");
+                $stmt->execute([$player['game_id'], $opponentId]);
+                $counts = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+                echo json_encode(['success' => true, 'counts' => $counts]);
+            } else {
+                echo json_encode(['success' => false]);
+            }
             exit;
 
         case 'end_game':
@@ -567,6 +629,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 <!-- Opponent Score (Top) -->
                 <div class="player-score opponent <?= $opponentPlayer['gender'] ?>">
                     <div class="player-score-animation"></div>
+                    <div class="opponent-hand-counts" id="opponent-hand-counts"></div>
                     <div class="player-timers" id="opponent-timers"></div>
                     <div class="player-name<?= strlen($opponentPlayer['first_name']) > 5 ? ' long' : '' ?>"><?= htmlspecialchars($opponentPlayer['first_name']) ?></div>
                     <div class="player-score-value"><?= $opponentPlayer['score'] ?></div>
