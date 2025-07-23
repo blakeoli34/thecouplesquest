@@ -448,7 +448,7 @@ body {
 }
 
 .bottom-menu {
-    background: rgba(250,250,250, 0.9);
+    background: rgba(250,250,250, 0.7);
     border: solid 2px #fff;
     padding: 12px 32px;
     display: flex;
@@ -464,7 +464,7 @@ body {
 }
 
 .bottom-right-menu {
-    background: rgba(250,250,250, 0.9);
+    background: rgba(250,250,250, 0.7);
     border: solid 2px #fff;
     padding: 12px;
     display: flex;
@@ -491,7 +491,8 @@ body {
     position: absolute;
     bottom: 84px;
     right: 0;
-    background: rgba(250,250,250,0.9);
+    background: rgba(250,250,250,0.7);
+    border: solid 2px #fff;
     border-radius: 30px;
     padding: 24px 36px;
     backdrop-filter: blur(0);
@@ -1575,6 +1576,58 @@ body.digital .hybrid-menu-item {
     flex: 1;
 }
 
+.draw-popover {
+    position: fixed;
+    bottom: 120px;
+    width: 90vw;
+    max-width: 400px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(250,250,250, 0.7);
+    backdrop-filter: blur(8px);
+    border: solid 2px #fff;
+    border-radius: 50px;
+    padding: 20px;
+    display: flex;
+    gap: 15px;
+    box-shadow: 0 -2px 20px rgba(0,0,0,0.1);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-50%) translateY(60px) scale(0.5);
+    transition: all 0.3s ease;
+    z-index: 1000;
+}
+
+.draw-popover.active {
+    opacity: 1;
+    pointer-events: all;
+    transform: translateX(-50%) translateY(0) scale(1);
+}
+
+.draw-card-btn {
+    width: calc(33.333% - 10px);
+    height: 60px;
+    border: none;
+    border-radius: 35px;
+    background: #f8f9fa;
+    color: #333;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: block;
+    text-align: center;
+}
+
+.draw-card-btn:hover {
+    background: #e9ecef;
+    transform: translateY(-2px);
+}
+
+.draw-card-btn:active {
+    transform: translateY(0);
+}
+
 @media (prefers-color-scheme: dark) {
     .player-score.female {
         background: var(--color-pink-dark);
@@ -1601,14 +1654,12 @@ body.digital .hybrid-menu-item {
     }
 
     .bottom-menu,
-    .bottom-right-menu {
-        background: rgba(25,25,25,0.8);
+    .bottom-right-menu,
+    .bottom-right-menu-flyout {
+        background: rgba(25,25,25,0.7);
         border-color: #111;
     }
 
-    .bottom-right-menu-flyout {
-        background: rgba(25,25,25,0.8);
-    }
 
     .bump-send-display,
     .iAN {
@@ -1721,6 +1772,20 @@ body.digital .hybrid-menu-item {
     
     .serve-response-content h3 {
         color: #e6e6e6;
+    }
+
+    .draw-popover {
+        background: rgba(25,25,25,0.95);
+        border-color: #333;
+    }
+    
+    .draw-card-btn {
+        background: #2a2a2a;
+        color: #e6e6e6;
+    }
+    
+    .draw-card-btn:hover {
+        background: #3a3a3a;
     }
 }
 

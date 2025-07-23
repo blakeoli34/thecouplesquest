@@ -619,7 +619,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     <div class="menu-item-icon"><i class="fa-solid fa-hand-paper"></i></div>
                     <div class="menu-item-text">Hand</div>
                 </div>
-                <div class="menu-item digital-menu-item" onclick="openManualDrawModal()">
+                <div class="menu-item digital-menu-item" onclick="event.stopPropagation(); openDrawPopover()">
                     <div class="menu-item-icon"><i class="fa-solid fa-cards-blank"></i></div>
                     <div class="menu-item-text">Draw</div>
                 </div>
@@ -670,6 +670,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     </div>
                 </div>
             </div>
+
+            <div class="draw-popover" id="drawPopover">
+                <button class="draw-card-btn" onclick="event.stopPropagation(); drawSingleCard('chance')" title="Draw Chance Card">
+                    <i class="fa-solid fa-circle-question"></i> Chance
+                </button>
+                <?php if ($currentPlayer['gender'] === 'female'): ?>
+                <button class="draw-card-btn" onclick="event.stopPropagation(); drawSingleCard('snap')" title="Draw Snap Card">
+                    <i class="fa-solid fa-camera-retro"></i> Snap
+                </button>
+                <?php else: ?>
+                <button class="draw-card-btn" onclick="event.stopPropagation(); drawSingleCard('dare')" title="Draw Dare Card">
+                    <i class="fa-solid fa-hand-point-right"></i> Dare
+                </button>
+                <?php endif; ?>
+                <button class="draw-card-btn" onclick="event.stopPropagation(); drawSingleCard('spicy')" title="Draw Spicy Card">
+                    <i class="fa-solid fa-pepper-hot"></i> Spicy
+                </button>
+            </div>
             
             <!-- Pass game data to JavaScript -->
             <script>
@@ -719,33 +737,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         <div class="card-selection-actions" id="cardSelectionActions">
             <button class="btn btn-complete" onclick="completeSelectedCard()">Complete</button>
             <button class="btn btn-veto" onclick="vetoSelectedCard()">Veto</button>
-        </div>
-    </div>
-
-    <!-- Manual Draw Modal -->
-    <div class="modal" id="manualDrawModal">
-        <div class="modal-content">
-            <div class="modal-title">Draw Cards Manually</div>
-            
-            <div class="form-group">
-                <label>Card Type</label>
-                <select id="drawCardType">
-                    <option value="chance">Chance Cards</option>
-                    <option value="spicy">Spicy Cards</option>
-                </select>
-            </div>
-            
-            <div class="form-group">
-                <label>Quantity</label>
-                <select id="drawQuantity">
-                    <option value="1">1 Card</option>
-                    <option value="2">2 Cards</option>
-                    <option value="3">3 Cards</option>
-                </select>
-            </div>
-            
-            <button class="btn" onclick="performManualDraw()">Draw Cards</button>
-            <button class="btn btn-secondary" onclick="closeModal('manualDrawModal')">Cancel</button>
         </div>
     </div>
 

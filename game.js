@@ -328,61 +328,42 @@ function manualDrawCard(cardType) {
     });
 }
 
-// Open manual draw modal
-function openManualDrawModal() {
-    const modal = document.getElementById('manualDrawModal');
-    const select = document.getElementById('drawCardType');
-    
-    // Add gender-specific option
-    const existingGenderOption = select.querySelector('[data-gender]');
-    if (existingGenderOption) {
-        existingGenderOption.remove();
+function openDrawPopover() {
+    const popover = document.getElementById('drawPopover');
+    if (popover) {
+        // Check if popover is already active and close it
+        if (popover.classList.contains('active')) {
+            closeDrawPopover();
+            return;
+        }
+        
+        popover.classList.add('active');
+        
+        // Add click outside to close
+        setTimeout(() => {
+            document.addEventListener('click', closeDrawPopoverOnClickOutside);
+        }, 100);
     }
-    
-    const genderOption = document.createElement('option');
-    genderOption.dataset.gender = 'true';
-    
-    if (gameData.currentPlayerGender === 'female') {
-        genderOption.value = 'snap';
-        genderOption.textContent = 'Snap Cards';
-        select.insertBefore(genderOption, select.children[1]);
-    } else {
-        genderOption.value = 'dare';
-        genderOption.textContent = 'Dare Cards';
-        select.insertBefore(genderOption, select.children[1]);
-    }
-    
-    modal.classList.add('active');
 }
 
-// Perform manual draw
-function performManualDraw() {
-    const cardType = document.getElementById('drawCardType').value;
-    const quantity = document.getElementById('drawQuantity').value;
-    
-    fetch('game.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `action=manual_draw&card_type=${cardType}&quantity=${quantity}`
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            closeModal('manualDrawModal');
-            loadCardData();
-            if (data.drawn_cards.length > 0) {
-                showInAppNotification('Cards Drawn!', `Drew: ${data.drawn_cards.join(', ')}`);
-            } else {
-                showInAppNotification('No Cards', `No ${cardType} cards available`);
-            }
-        } else {
-            alert('Failed to draw cards: ' + (data.message || 'Unknown error'));
-        }
-    })
-    .catch(error => {
-        console.error('Error drawing cards:', error);
-        alert('Failed to draw cards');
-    });
+function closeDrawPopover() {
+    const popover = document.getElementById('drawPopover');
+    if (popover) {
+        popover.classList.remove('active');
+        document.removeEventListener('click', closeDrawPopoverOnClickOutside);
+    }
+}
+
+function closeDrawPopoverOnClickOutside(event) {
+    const popover = document.getElementById('drawPopover');
+    if (popover && !popover.contains(event.target)) {
+        closeDrawPopover();
+    }
+}
+
+function drawSingleCard(cardType) {
+    closeDrawPopover();
+    manualDrawCard(cardType);
 }
 
 // Select hand card
@@ -2015,8 +1996,9 @@ window.showServeSelectionActions = showServeSelectionActions;
 window.hideServeSelectionActions = hideServeSelectionActions;
 window.openHandCards = openHandCards;
 window.manualDrawCard = manualDrawCard;
-window.openManualDrawModal = openManualDrawModal;
-window.performManualDraw = performManualDraw;
+window.openDrawPopover = openDrawPopover;
+window.closeDrawPopover = closeDrawPopover;
+window.drawSingleCard = drawSingleCard;
 window.selectHandCard = selectHandCard;
 window.completeSelectedCard = completeSelectedCard;
 window.vetoSelectedCard = vetoSelectedCard;
