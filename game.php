@@ -485,26 +485,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 exit;
             }
             
-            $drawnCards = drawCards($player['game_id'], $player['id'], $cardType, $quantity);
-            
-            // Get card details for animation
-            $cardDetails = null;
-            if (!empty($drawnCards)) {
-                try {
-                    $pdo = Config::getDatabaseConnection();
-                    // Get the actual card that was drawn from the player's hand
-                    $stmt = $pdo->prepare("
-                        SELECT c.* FROM player_cards pc 
-                        JOIN cards c ON pc.card_id = c.id 
-                        WHERE pc.game_id = ? AND pc.player_id = ? AND c.card_name = ? AND c.card_type = ? 
-                        ORDER BY pc.id DESC LIMIT 1
-                    ");
-                    $stmt->execute([$player['game_id'], $player['id'], $drawnCards[0], $cardType]);
-                    $cardDetails = $stmt->fetch();
-                } catch (Exception $e) {
-                    error_log("Error getting card details: " . $e->getMessage());
-                }
-            }
+            $drawResult = drawCards($player['game_id'], $player['id'], $cardType, $quantity);
+            $drawnCards = $drawResult['card_names'];
+            $cardDetails = !empty($drawResult['card_details']) ? $drawResult['card_details'][0] : null;
             
             echo json_encode([
                 'success' => true, 
