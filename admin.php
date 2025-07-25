@@ -1381,6 +1381,13 @@ function showLoginForm($error = null) {
                             <label for="timer">Timer (minutes)</label>
                             <input type="number" id="timer" min="0">
                         </div>
+                        <div class="form-group">
+                            <label for="timerCompletionType">Timer Completion</label>
+                            <select id="timerCompletionType">
+                                <option value="timer_expires">Timer Expires</option>
+                                <option value="first_trigger">First Trigger</option>
+                            </select>
+                        </div>
                     </div>
                     
                     <div class="form-group">
@@ -1739,6 +1746,7 @@ function showLoginForm($error = null) {
                 formData.append('draw_spicy', document.getElementById('drawSpicyChance').checked ? '1' : '0');
                 formData.append('score_modify', document.getElementById('scoreModify').value);
                 formData.append('timer', document.getElementById('timer').value || '');
+                formData.append('timer_completion_type', document.getElementById('timerCompletionType').value);
                 formData.append('veto_modify', document.getElementById('vetoModify').value);
                 formData.append('snap_modify', document.getElementById('snapModify').checked ? '1' : '0');
                 formData.append('dare_modify', document.getElementById('dareModify').checked ? '1' : '0');

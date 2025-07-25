@@ -1523,11 +1523,7 @@ function updateScore(playerId, points) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            // Find the score element
-            const players = gameData.players || [];
-            let targetGender = '';
-            
-            // Get updated data to find which player was modified
+            // Get fresh data immediately after score update
             fetch('game.php', {
                 method: 'POST',
                 headers: {
@@ -1542,6 +1538,9 @@ function updateScore(playerId, points) {
                     if (updatedPlayer) {
                         animateScoreChange(updatedPlayer.gender, updatedPlayer.score, points);
                     }
+                    
+                    // Update gameData to prevent duplicate animations
+                    gameData.players = gameDataUpdate.players;
                     
                     // Update all scores
                     gameDataUpdate.players.forEach(player => {
