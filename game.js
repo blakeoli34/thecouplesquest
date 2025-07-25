@@ -296,6 +296,10 @@ function getCardDisplayInfo(card, context = 'serve') {
     if (card.card_type === 'snap' || card.card_type === 'dare') {
         badges.push(`<span class="card-badge penalty">-3</span>`);
     }
+
+    if (card.extra_spicy == 1) {
+        badges.push(`<span class="card-badge points">Spicy+</span>`);
+    }
     
     // Timer
     if (card.timer) {
@@ -773,14 +777,31 @@ function completeSelectedCard() {
                 hideCardSelectionActions();
                 closeCardOverlay('handCardsOverlay');
                 loadCardData();
-                refreshGameData();
                 
+               // Animate score changes if points awarded
                 if (data.points_awarded) {
-                    showInAppNotification('Card Completed!', `Gained ${data.points_awarded} points from "${cardName}"`);
+                    // Get updated game data first, then animate
+                    fetch('game.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: 'action=get_game_data'
+                    })
+                    .then(response => response.json())
+                    .then(gameUpdate => {
+                        const currentPlayer = gameUpdate.players.find(p => p.id == gameData.currentPlayerId);
+                        if (currentPlayer) {
+                            animateScoreChange(gameData.currentPlayerGender, currentPlayer.score, data.points_awarded);
+                        }
+                        setTimeout(() => {
+                            showInAppNotification('Card Completed!', `Gained ${data.points_awarded} points from "${cardName}"`);
+                            refreshGameData();
+                        }, 2000);
+                    });
                 } else {
                     showInAppNotification('Card Completed!', `Completed "${cardName}"`);
+                    refreshGameData();
                 }
-            }, 1000);
+            }, 2000);
         } else {
             clearCardSelection();
             alert('Failed to complete card: ' + (data.message || 'Unknown error'));
@@ -819,14 +840,48 @@ function vetoSelectedCard() {
                 hideCardSelectionActions();
                 closeCardOverlay('handCardsOverlay');
                 loadCardData();
-                refreshGameData();
                 
-                if (data.penalties && data.penalties.length > 0) {
-                    showInAppNotification('Card Vetoed!', data.penalties.join(', '));
-                } else {
-                    showInAppNotification('Card Vetoed!', `Vetoed "${cardName}"`);
+                // Animate score changes and card draws (backend already processed them)
+                let animationDelay = 0;
+
+                if (data.score_changes && data.score_changes.length > 0) {
+                    fetch('game.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: 'action=get_game_data'
+                    })
+                    .then(response => response.json())
+                    .then(gameUpdate => {
+                        data.score_changes.forEach(change => {
+                            const player = gameUpdate.players.find(p => p.id == change.player_id);
+                            const playerGender = player.id == gameData.currentPlayerId ? gameData.currentPlayerGender : gameData.opponentPlayerGender;
+                            
+                            setTimeout(() => {
+                                animateScoreChange(playerGender, player.score, change.points);
+                            }, animationDelay);
+                            animationDelay += 2500;
+                        });
+                    });
                 }
-            }, 1000);
+
+                if (data.drawn_cards && data.drawn_cards.length > 0) {
+                    data.drawn_cards.forEach(drawnCard => {
+                        setTimeout(() => {
+                            showCardDrawAnimation(drawnCard);
+                        }, animationDelay);
+                        animationDelay += 7500;
+                    });
+                }
+                
+                setTimeout(() => {
+                    if (data.penalties && data.penalties.length > 0) {
+                        showInAppNotification('Card Vetoed!', data.penalties.join(', '));
+                    } else {
+                        showInAppNotification('Card Vetoed!', `Vetoed "${cardName}"`);
+                    }
+                    refreshGameData();
+                }, animationDelay || 500);
+            }, 2000);
         } else {
             clearCardSelection();
             alert('Failed to veto card: ' + (data.message || 'Unknown error'));
@@ -1247,9 +1302,12 @@ function showInAppNotification(title, body) {
     // Remove after 10 seconds
     setTimeout(() => {
         $notification.removeClass('show');
+    }, 5000);
+
+    setTimeout(() => {
         $title.empty();
         $body.empty();
-    }, 10000);
+    }, 5500);
 }
 
 // ===========================================
@@ -2155,6 +2213,27 @@ function initializeDigitalCards() {
     }
 }
 
+function resetDecks() {
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'action=reset_decks'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showInAppNotification('Decks Reset', data.message);
+            loadCardData();
+        } else {
+            alert('Failed to reset decks: ' + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error resetting decks:', error);
+        alert('Failed to reset decks');
+    });
+}
+
 // Initialize everything when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Game page loaded');
@@ -2378,3 +2457,4 @@ window.setDiceCount = setDiceCount;
 window.rollDice = rollDice;
 window.completeChanceCard = completeChanceCard;
 window.displayActiveEffects = displayActiveEffects;
+window.resetDecks = resetDecks;

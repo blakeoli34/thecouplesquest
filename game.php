@@ -72,6 +72,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $gameMode = $stmt->fetchColumn();
     
     switch ($_POST['action']) {
+        case 'reset_decks':
+            if ($gameMode !== 'digital') {
+                echo json_encode(['success' => false, 'message' => 'Not a digital game']);
+                exit;
+            }
+            
+            try {
+                $pdo = Config::getDatabaseConnection();
+                $pdo->beginTransaction();
+                
+                $gameId = $player['game_id'];
+                
+                // Delete all related records
+                $stmt = $pdo->prepare("DELETE FROM game_decks WHERE game_id = ?");
+                $stmt->execute([$gameId]);
+                
+                $stmt = $pdo->prepare("DELETE FROM player_cards WHERE game_id = ?");
+                $stmt->execute([$gameId]);
+                
+                $stmt = $pdo->prepare("DELETE FROM timers WHERE game_id = ?");
+                $stmt->execute([$gameId]);
+                
+                $stmt = $pdo->prepare("DELETE FROM active_chance_effects WHERE game_id = ?");
+                $stmt->execute([$gameId]);
+                
+                $pdo->commit();
+                echo json_encode(['success' => true, 'message' => 'Decks reset successfully']);
+                
+            } catch (Exception $e) {
+                $pdo->rollBack();
+                error_log("Error resetting decks: " . $e->getMessage());
+                echo json_encode(['success' => false, 'message' => 'Failed to reset decks']);
+            }
+            exit;
+
         case 'set_duration':
             $duration = intval($_POST['duration']);
             $result = setGameDuration($player['game_id'], $duration);
@@ -457,8 +492,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             if (!empty($drawnCards)) {
                 try {
                     $pdo = Config::getDatabaseConnection();
-                    $stmt = $pdo->prepare("SELECT * FROM cards WHERE card_name = ? AND card_type = ? LIMIT 1");
-                    $stmt->execute([$drawnCards[0], $cardType]);
+                    // Get the actual card that was drawn from the player's hand
+                    $stmt = $pdo->prepare("
+                        SELECT c.* FROM player_cards pc 
+                        JOIN cards c ON pc.card_id = c.id 
+                        WHERE pc.game_id = ? AND pc.player_id = ? AND c.card_name = ? AND c.card_type = ? 
+                        ORDER BY pc.id DESC LIMIT 1
+                    ");
+                    $stmt->execute([$player['game_id'], $player['id'], $drawnCards[0], $cardType]);
                     $cardDetails = $stmt->fetch();
                 } catch (Exception $e) {
                     error_log("Error getting card details: " . $e->getMessage());
@@ -888,6 +929,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     <div class="flyout-menu-item" onclick="hardRefresh()">
                         <div class="flyout-menu-item-icon"><i class="fa-solid fa-arrows-rotate"></i></div>
                         <div class="flyout-menu-item-text">Refresh Game...</div>
+                    </div>
+                    <div class="flyout-menu-item" onclick="resetDecks()">
+                        <div class="flyout-menu-item-icon"><i class="fa-solid fa-arrows-rotate"></i></div>
+                        <div class="flyout-menu-item-text">Reset Decks...</div>
                     </div>
                     <div class="flyout-menu-item hybrid-menu-item" onclick="openDiceOverlay()">
                         <div class="flyout-menu-item-icon"><i class="fa-solid fa-dice"></i></div>

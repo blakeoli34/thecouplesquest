@@ -993,6 +993,7 @@ function drawCards($gameId, $playerId, $cardType, $quantity = 1) {
         $availableCards = $stmt->fetchAll();
         
         $drawnCards = [];
+        $drawnCardDetails = [];
         foreach ($availableCards as $card) {
             $drawQuantity = min(1, $card['remaining_quantity']);
             
@@ -1009,6 +1010,7 @@ function drawCards($gameId, $playerId, $cardType, $quantity = 1) {
             
             if ($success) {
                 $drawnCards[] = $card['card_name'];
+                $drawnCardDetails[] = $card; // Store full card details
                 
                 // Process chance cards immediately
                 if ($cardType === 'chance') {
@@ -1019,7 +1021,7 @@ function drawCards($gameId, $playerId, $cardType, $quantity = 1) {
             if (count($drawnCards) >= $quantity) break;
         }
         
-        return $drawnCards;
+        return ['card_names' => $drawnCards, 'card_details' => $drawnCardDetails];
     } catch (Exception $e) {
         error_log("Error drawing cards: " . $e->getMessage());
         return [];
@@ -1231,7 +1233,16 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
         }
         
         $pdo->commit();
-        return ['success' => true, 'points_awarded' => $pointsAwarded];
+        $response = ['success' => true, 'points_awarded' => $pointsAwarded];
+
+        // Add score change data for animation
+        if ($pointsAwarded > 0) {
+            $response['score_changes'] = [
+                ['player_id' => $playerId, 'points' => $pointsAwarded]
+            ];
+        }
+
+        return $response;
         
     } catch (Exception $e) {
         $pdo->rollBack();
@@ -1260,6 +1271,7 @@ function vetoHandCard($gameId, $playerId, $cardId, $playerCardId) {
         }
         
         $penalties = [];
+        $drawnCards = [];
         
         // Apply veto modifiers
         $vetoEffects = getActiveChanceEffects($gameId, 'veto_modify');
@@ -1315,22 +1327,25 @@ function vetoHandCard($gameId, $playerId, $cardId, $playerCardId) {
             
             if ($playerCard['veto_draw_chance']) {
                 $drawCount = $playerCard['veto_draw_chance'] * $vetoMultiplier;
-                drawCards($gameId, $playerId, 'chance', $drawCount);
-                $penalties[] = "Drew {$drawCount} chance card(s)";
+                $drawResult = drawCards($gameId, $playerId, 'chance', $drawCount);
+                $drawnCards = array_merge($drawnCards, $drawResult['card_details']);
+                $penalties[] = "Drew {$drawCount} chance card(s): " . implode(', ', $drawResult['card_names']);
             }
             
             if ($playerCard['veto_draw_snap_dare']) {
                 $drawCount = $playerCard['veto_draw_snap_dare'] * $vetoMultiplier;
                 $player = getPlayerById($playerId);
                 $drawType = ($player['gender'] === 'female') ? 'snap' : 'dare';
-                drawCards($gameId, $playerId, $drawType, $drawCount);
-                $penalties[] = "Drew {$drawCount} {$drawType} card(s)";
+                $drawResult = drawCards($gameId, $playerId, $drawType, $drawCount);
+                $drawnCards = array_merge($drawnCards, $drawResult['card_details']);
+                $penalties[] = "Drew {$drawCount} {$drawType} card(s): " . implode(', ', $drawResult['card_names']);
             }
             
             if ($playerCard['veto_draw_spicy']) {
                 $drawCount = $playerCard['veto_draw_spicy'] * $vetoMultiplier;
-                drawCards($gameId, $playerId, 'spicy', $drawCount);
-                $penalties[] = "Drew {$drawCount} spicy card(s)";
+                $drawResult = drawCards($gameId, $playerId, 'spicy', $drawCount);
+                $drawnCards = array_merge($drawnCards, $drawResult['card_details']);
+                $penalties[] = "Drew {$drawCount} spicy card(s): " . implode(', ', $drawResult['card_names']);
             }
         } else {
             $penalties[] = "Veto penalty skipped";
@@ -1384,7 +1399,54 @@ function vetoHandCard($gameId, $playerId, $cardId, $playerCardId) {
                                     $nextModifier['veto_modify'], $targetId);
             }
         }
-        return ['success' => true, 'penalties' => $penalties];
+        $response = ['success' => true, 'penalties' => $penalties];
+
+        // Track score changes and card draws for frontend animation
+        $scoreChanges = [];
+        $drawnCards = [];
+
+        // Parse penalties to extract score changes and card draws
+        foreach ($penalties as $penalty) {
+            if (strpos($penalty, 'Lost') !== false && strpos($penalty, 'points') !== false) {
+                preg_match('/Lost (\d+) points/', $penalty, $matches);
+                if ($matches) {
+                    $scoreChanges[] = ['player_id' => $playerId, 'points' => -intval($matches[1])];
+                }
+            }
+            
+            if (strpos($penalty, 'Drew') !== false && strpos($penalty, 'card') !== false) {
+                // Parse the actual number of cards drawn from the penalty text
+                preg_match('/Drew (\d+) (\w+) card/', $penalty, $matches);
+                if ($matches) {
+                    $cardCount = intval($matches[1]);
+                    $cardType = $matches[2];
+                    
+                    // Get the specific cards that were drawn
+                    $stmt = $pdo->prepare("
+                        SELECT c.* FROM player_cards pc 
+                        JOIN cards c ON pc.card_id = c.id 
+                        WHERE pc.game_id = ? AND pc.player_id = ? AND c.card_type = ?
+                        ORDER BY pc.id DESC LIMIT ?
+                    ");
+                    $stmt->execute([$gameId, $playerId, $cardType, $cardCount]);
+                    $recentCards = $stmt->fetchAll();
+                    
+                    foreach ($recentCards as $card) {
+                        $drawnCards[] = $card;
+                    }
+                }
+            }
+        }
+
+        if (!empty($scoreChanges)) {
+            $response['score_changes'] = $scoreChanges;
+        }
+
+        if (!empty($drawnCards)) {
+            $response['drawn_cards'] = $drawnCards;
+        }
+
+        return $response;
         
     } catch (Exception $e) {
         $pdo->rollBack();

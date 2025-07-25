@@ -1752,23 +1752,34 @@ body.digital .hybrid-menu-item {
     background: white;
     border: 2px solid #ddd;
     border-radius: 15px;
-    border-left: solid 15px #ccc;
     transform-origin: center;
     transform: scale(0);
     z-index: 10;
     display: flex;
     flex-direction: column;
-    padding: 20px 20px 20px 5px;
+    padding: 20px;
     color: #333;
     box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    overflow: hidden;
 }
 
-body.male .drawn-card {
-    border-left-color: var(--color-blue);
+.drawn-card:after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 15px;
+    background: #ccc;
+    z-index: 11;
 }
 
-body.female .drawn-card {
-    border-left-color: var(--color-pink);
+body.male .drawn-card:after {
+    background: var(--color-blue);
+}
+
+body.female .drawn-card:after {
+    background: var(--color-pink);
 }
 
 .drawn-card.flip-in {
