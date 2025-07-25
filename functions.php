@@ -771,10 +771,8 @@ function initializeDigitalGame($gameId) {
         foreach ($players as $player) {
             foreach ($cards as $card) {
                 if ($card['quantity'] > 0) {
-                    // Check if player should get this card
-                    // Check if player should get this card
                     $shouldInclude = false;
-
+                    
                     if ($card['card_type'] === 'serve') {
                         // Males get serve_to_her cards, females get serve_to_him cards
                         if (($player['gender'] === 'male' && $card['serve_to_her'] == 1) ||
@@ -789,12 +787,12 @@ function initializeDigitalGame($gameId) {
                             $shouldInclude = true;
                         }
                     } else {
-                        // Chance and Spicy cards - only include if specifically for this gender OR universal
+                        // Chance and Spicy cards - include for appropriate gender
                         $forHer = $card['for_her'] == 1;
                         $forHim = $card['for_him'] == 1;
                         
                         if ($forHer && $forHim) {
-                            // Universal card - give to both players but only once per player
+                            // Universal card - give to both players
                             $shouldInclude = true;
                         } elseif ($player['gender'] === 'female' && $forHer && !$forHim) {
                             // Female-only card
@@ -806,17 +804,22 @@ function initializeDigitalGame($gameId) {
                     }
                     
                     if ($shouldInclude) {
-                        $stmt = $pdo->prepare("
-                            INSERT INTO game_decks (game_id, player_id, card_id, remaining_quantity) 
-                            VALUES (?, ?, ?, ?)
-                        ");
-                        $stmt->execute([$gameId, $player['id'], $card['id'], $card['quantity']]);
+                        // Check if deck entry already exists to prevent duplicates
+                        $stmt = $pdo->prepare("SELECT id FROM game_decks WHERE game_id = ? AND player_id = ? AND card_id = ?");
+                        $stmt->execute([$gameId, $player['id'], $card['id']]);
+                        if (!$stmt->fetch()) {
+                            $stmt = $pdo->prepare("
+                                INSERT INTO game_decks (game_id, player_id, card_id, remaining_quantity) 
+                                VALUES (?, ?, ?, ?)
+                            ");
+                            $stmt->execute([$gameId, $player['id'], $card['id'], $card['quantity']]);
+                        }
                     }
                 }
             }
         }
         
-        // Give initial serve cards
+        // Give initial serve cards to player hands (not decks)
         foreach ($players as $player) {
             giveInitialServeCards($gameId, $player['id'], $player['gender']);
         }
@@ -832,16 +835,16 @@ function giveInitialServeCards($gameId, $playerId, $playerGender) {
     try {
         $pdo = Config::getDatabaseConnection();
         
-        // Get serve cards for this player's gender
+        // Get serve cards for this player's gender from their deck
         $genderField = ($playerGender === 'male') ? 'serve_to_her' : 'serve_to_him';
         
         $stmt = $pdo->prepare("
-            SELECT c.id, c.quantity 
-            FROM cards c
-            JOIN game_decks gd ON c.id = gd.card_id
-            WHERE gd.game_id = ? AND c.card_type = 'serve' AND c.$genderField = 1
+            SELECT gd.card_id, gd.remaining_quantity, c.quantity as original_quantity
+            FROM game_decks gd
+            JOIN cards c ON gd.card_id = c.id
+            WHERE gd.game_id = ? AND gd.player_id = ? AND c.card_type = 'serve' AND c.$genderField = 1
         ");
-        $stmt->execute([$gameId]);
+        $stmt->execute([$gameId, $playerId]);
         $serveCards = $stmt->fetchAll();
         
         foreach ($serveCards as $card) {
@@ -850,7 +853,7 @@ function giveInitialServeCards($gameId, $playerId, $playerGender) {
                 INSERT INTO player_cards (game_id, player_id, card_id, card_type, quantity)
                 VALUES (?, ?, ?, 'serve', ?)
             ");
-            $stmt->execute([$gameId, $playerId, $card['id'], $card['quantity']]);
+            $stmt->execute([$gameId, $playerId, $card['card_id'], $card['remaining_quantity']]);
         }
         
         return true;
