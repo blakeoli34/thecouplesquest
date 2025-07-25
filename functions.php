@@ -1141,7 +1141,7 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
             foreach ($challengeEffects as $effect) {
                 // Check if this effect applies to this player
                 $appliesToThisPlayer = ($effect['target_player_id'] == $playerId) || 
-                                      ($effect['target_player_id'] == null && $effect['player_id'] == $playerId);
+                                    ($effect['target_player_id'] == null && $effect['player_id'] == $playerId);
                 
                 if ($appliesToThisPlayer) {
                     switch ($effect['effect_value']) {
@@ -1161,7 +1161,8 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
                             break;
                         case 'challenge_reward_opponent':
                             $opponentId = getOpponentPlayerId($gameId, $playerId);
-                            updateScore($gameId, $opponentId, $finalPoints, $playerId);
+                            // Store opponent score change for frontend
+                            $response['score_changes'][] = ['player_id' => $opponentId, 'points' => $finalPoints];
                             $finalPoints = 0;
                             break;
                     }
@@ -1171,7 +1172,6 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
                 }
             }
 
-            updateScore($gameId, $playerId, $finalPoints, $playerId);
             $pointsAwarded = $finalPoints;
         }
         
@@ -1310,17 +1310,17 @@ function vetoHandCard($gameId, $playerId, $cardId, $playerCardId) {
         if (!$vetoSkipped) {
             if ($playerCard['veto_subtract']) {
                 $penaltyPoints = $playerCard['veto_subtract'] * $vetoMultiplier;
-                updateScore($gameId, $playerId, -$penaltyPoints, $playerId);
+                $response['score_changes'][] = ['player_id' => $playerId, 'points' => -$penaltyPoints];
                 $penalties[] = "Lost {$penaltyPoints} points";
             }
-            
+
             if ($playerCard['veto_steal']) {
                 $penaltyPoints = $playerCard['veto_steal'] * $vetoMultiplier;
                 $opponentId = getOpponentPlayerId($gameId, $playerId);
                 
                 if ($opponentId) {
-                    updateScore($gameId, $playerId, -$penaltyPoints, $playerId);
-                    updateScore($gameId, $opponentId, $penaltyPoints, $playerId);
+                    $response['score_changes'][] = ['player_id' => $playerId, 'points' => -$penaltyPoints];
+                    $response['score_changes'][] = ['player_id' => $opponentId, 'points' => $penaltyPoints];
                     $penalties[] = "Lost {$penaltyPoints} points to opponent";
                 }
             }
@@ -1356,7 +1356,7 @@ function vetoHandCard($gameId, $playerId, $cardId, $playerCardId) {
             case 'snap':
             case 'dare':
                 if (!$vetoSkipped) {
-                    updateScore($gameId, $playerId, -3, $playerId);
+                    $response['score_changes'][] = ['player_id' => $playerId, 'points' => -3];
                     $penalties[] = "Lost 3 points";
                 }
                 returnCardToDeck($gameId, $playerCard['card_id'], 1);
@@ -1401,18 +1401,11 @@ function vetoHandCard($gameId, $playerId, $cardId, $playerCardId) {
         }
         $response = ['success' => true, 'penalties' => $penalties];
 
-        // Track score changes and card draws for frontend animation
-        $scoreChanges = [];
+        // Track card draws for frontend animation
         $drawnCards = [];
 
-        // Parse penalties to extract score changes and card draws
+        // Parse penalties to extract card draws
         foreach ($penalties as $penalty) {
-            if (strpos($penalty, 'Lost') !== false && strpos($penalty, 'points') !== false) {
-                preg_match('/Lost (\d+) points/', $penalty, $matches);
-                if ($matches) {
-                    $scoreChanges[] = ['player_id' => $playerId, 'points' => -intval($matches[1])];
-                }
-            }
             
             if (strpos($penalty, 'Drew') !== false && strpos($penalty, 'card') !== false) {
                 // Parse the actual number of cards drawn from the penalty text
@@ -1438,9 +1431,6 @@ function vetoHandCard($gameId, $playerId, $cardId, $playerCardId) {
             }
         }
 
-        if (!empty($scoreChanges)) {
-            $response['score_changes'] = $scoreChanges;
-        }
 
         if (!empty($drawnCards)) {
             $response['drawn_cards'] = $drawnCards;

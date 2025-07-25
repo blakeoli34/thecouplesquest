@@ -778,28 +778,21 @@ function completeSelectedCard() {
                 closeCardOverlay('handCardsOverlay');
                 loadCardData();
                 
-               // Animate score changes if points awarded
-                if (data.points_awarded) {
-                    // Get updated game data first, then animate
-                    fetch('game.php', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                        body: 'action=get_game_data'
-                    })
-                    .then(response => response.json())
-                    .then(gameUpdate => {
-                        const currentPlayer = gameUpdate.players.find(p => p.id == gameData.currentPlayerId);
-                        if (currentPlayer) {
-                            animateScoreChange(gameData.currentPlayerGender, currentPlayer.score, data.points_awarded);
-                        }
-                        setTimeout(() => {
-                            showInAppNotification('Card Completed!', `Gained ${data.points_awarded} points from "${cardName}"`);
-                            refreshGameData();
-                        }, 2000);
+               // Handle score changes if any
+                if (data.score_changes && data.score_changes.length > 0) {
+                    data.score_changes.forEach(change => {
+                        updateScore(change.player_id, change.points);
                     });
+                    setTimeout(() => {
+                        showInAppNotification('Card Completed!', `Gained ${data.points_awarded} points from "${cardName}"`);
+                    }, 2500);
+                } else if (data.points_awarded) {
+                    updateScore(gameData.currentPlayerId, data.points_awarded);
+                    setTimeout(() => {
+                        showInAppNotification('Card Completed!', `Gained ${data.points_awarded} points from "${cardName}"`);
+                    }, 2500);
                 } else {
                     showInAppNotification('Card Completed!', `Completed "${cardName}"`);
-                    refreshGameData();
                 }
             }, 2000);
         } else {
@@ -841,26 +834,15 @@ function vetoSelectedCard() {
                 closeCardOverlay('handCardsOverlay');
                 loadCardData();
                 
-                // Animate score changes and card draws (backend already processed them)
+                // Handle score changes and card draws
                 let animationDelay = 0;
 
                 if (data.score_changes && data.score_changes.length > 0) {
-                    fetch('game.php', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                        body: 'action=get_game_data'
-                    })
-                    .then(response => response.json())
-                    .then(gameUpdate => {
-                        data.score_changes.forEach(change => {
-                            const player = gameUpdate.players.find(p => p.id == change.player_id);
-                            const playerGender = player.id == gameData.currentPlayerId ? gameData.currentPlayerGender : gameData.opponentPlayerGender;
-                            
-                            setTimeout(() => {
-                                animateScoreChange(playerGender, player.score, change.points);
-                            }, animationDelay);
-                            animationDelay += 2500;
-                        });
+                    data.score_changes.forEach(change => {
+                        setTimeout(() => {
+                            updateScore(change.player_id, change.points);
+                        }, animationDelay);
+                        animationDelay += 2500;
                     });
                 }
 
@@ -1853,6 +1835,7 @@ function loadHistory() {
 
 // Refresh game data function (modified to not interfere with animations)
 function refreshGameData() {
+    const oldPlayers = gameData.players ? [...gameData.players] : null; // Store old data
     fetch('game.php', {
         method: 'POST',
         headers: {
@@ -1879,15 +1862,24 @@ function refreshGameData() {
             });
             return; // Don't process other updates
         }
-        // Only update scores if they're not currently animating
-        if (data.players) {
+        
+        // Check for score changes and animate them
+        if (data.players && oldPlayers) {
             data.players.forEach(player => {
+                const oldPlayer = oldPlayers.find(p => p.id === player.id);
                 const scoreElement = document.querySelector(`.player-score.${player.gender} .player-score-value`);
-                if (scoreElement && !scoreElement.classList.contains('counting')) {
+                
+                if (oldPlayer && player.score !== oldPlayer.score && scoreElement && !scoreElement.classList.contains('counting')) {
+                    const pointsChanged = player.score - oldPlayer.score;
+                    animateScoreChange(player.gender, player.score, pointsChanged);
+                } else if (scoreElement && !scoreElement.classList.contains('counting')) {
                     scoreElement.textContent = player.score;
                 }
             });
         }
+
+        // Update stored game data
+        gameData.players = data.players;
 
         if(data.gametime === 'Game Ended') {
             location.reload();
@@ -2209,7 +2201,7 @@ function initializeDigitalCards() {
         // Refresh card data periodically
         setInterval(() => {
             loadCardData();
-        }, 15000); // Every 15 seconds
+        }, 10000); // Every 15 seconds
     }
 }
 
@@ -2371,7 +2363,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Start periodic refresh for active games
     if (gameData.gameStatus === 'active') {
         refreshGameData();
-        setInterval(refreshGameData, 10000); // Refresh every 10 seconds
+        setInterval(refreshGameData, 5000); // Refresh every 10 seconds
     }
 });
 
