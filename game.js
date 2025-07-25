@@ -402,7 +402,6 @@ function serveSelectedCard() {
                 hideServeSelectionActions();
                 closeCardOverlay('serveCardsOverlay');
                 loadCardData();
-                showInAppNotification('Card Served!', `Served "${cardName}" to opponent`);
             }, 1000);
         } else {
             clearServeSelection();
@@ -439,7 +438,6 @@ function completeChanceCard(playerCardId) {
                 closeCardOverlay('handCardsOverlay');
                 loadCardData();
                 refreshGameData();
-                showInAppNotification('Chance Card Completed!', data.message || `Completed "${cardName}"`);
             }, 1000);
         } else {
             clearCardSelection();
@@ -777,24 +775,18 @@ function completeSelectedCard() {
                 hideCardSelectionActions();
                 closeCardOverlay('handCardsOverlay');
                 loadCardData();
-                
-               // Handle score changes if any
-                if (data.score_changes && data.score_changes.length > 0) {
-                    data.score_changes.forEach(change => {
-                        updateScore(change.player_id, change.points);
-                    });
-                    setTimeout(() => {
-                        showInAppNotification('Card Completed!', `Gained ${data.points_awarded} points from "${cardName}"`);
-                    }, 2500);
-                } else if (data.points_awarded) {
-                    updateScore(gameData.currentPlayerId, data.points_awarded);
-                    setTimeout(() => {
-                        showInAppNotification('Card Completed!', `Gained ${data.points_awarded} points from "${cardName}"`);
-                    }, 2500);
-                } else {
-                    showInAppNotification('Card Completed!', `Completed "${cardName}"`);
-                }
-            }, 2000);
+
+                setTimeout(() => {
+                    // Handle score changes if any
+                    if (data.score_changes && data.score_changes.length > 0) {
+                        data.score_changes.forEach(change => {
+                            updateScore(change.player_id, change.points);
+                        });
+                    } else if (data.points_awarded) {
+                        updateScore(gameData.currentPlayerId, data.points_awarded);
+                    }
+                }, 400);
+            }, 1100);
         } else {
             clearCardSelection();
             alert('Failed to complete card: ' + (data.message || 'Unknown error'));
@@ -833,37 +825,33 @@ function vetoSelectedCard() {
                 hideCardSelectionActions();
                 closeCardOverlay('handCardsOverlay');
                 loadCardData();
-                
-                // Handle score changes and card draws
-                let animationDelay = 0;
-
-                if (data.score_changes && data.score_changes.length > 0) {
-                    data.score_changes.forEach(change => {
-                        setTimeout(() => {
-                            updateScore(change.player_id, change.points);
-                        }, animationDelay);
-                        animationDelay += 2500;
-                    });
-                }
-
-                if (data.drawn_cards && data.drawn_cards.length > 0) {
-                    data.drawn_cards.forEach(drawnCard => {
-                        setTimeout(() => {
-                            showCardDrawAnimation(drawnCard);
-                        }, animationDelay);
-                        animationDelay += 7500;
-                    });
-                }
-                
                 setTimeout(() => {
-                    if (data.penalties && data.penalties.length > 0) {
-                        showInAppNotification('Card Vetoed!', data.penalties.join(', '));
-                    } else {
-                        showInAppNotification('Card Vetoed!', `Vetoed "${cardName}"`);
+                    // Handle score changes and card draws
+                    let animationDelay = 0;
+
+                    if (data.score_changes && data.score_changes.length > 0) {
+                        data.score_changes.forEach(change => {
+                            setTimeout(() => {
+                                updateScore(change.player_id, change.points);
+                            }, animationDelay);
+                            animationDelay += 2500;
+                        });
                     }
-                    refreshGameData();
-                }, animationDelay || 500);
-            }, 2000);
+
+                    if (data.drawn_cards && data.drawn_cards.length > 0) {
+                        data.drawn_cards.forEach(drawnCard => {
+                            setTimeout(() => {
+                                showCardDrawAnimation(drawnCard);
+                            }, animationDelay);
+                            animationDelay += 7500;
+                        });
+                    }
+                    
+                    setTimeout(() => {
+                        refreshGameData();
+                    }, animationDelay || 500);
+                }, 400);
+            }, 1100);
         } else {
             clearCardSelection();
             alert('Failed to veto card: ' + (data.message || 'Unknown error'));

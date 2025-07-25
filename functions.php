@@ -1401,11 +1401,18 @@ function vetoHandCard($gameId, $playerId, $cardId, $playerCardId) {
         }
         $response = ['success' => true, 'penalties' => $penalties];
 
-        // Track card draws for frontend animation
+        // Track score changes and card draws for frontend animation
+        $scoreChanges = [];
         $drawnCards = [];
 
-        // Parse penalties to extract card draws
+        // Parse penalties to extract score changes and card draws
         foreach ($penalties as $penalty) {
+            if (strpos($penalty, 'Lost') !== false && strpos($penalty, 'points') !== false) {
+                preg_match('/Lost (\d+) points/', $penalty, $matches);
+                if ($matches) {
+                    $scoreChanges[] = ['player_id' => $playerId, 'points' => -intval($matches[1])];
+                }
+            }
             
             if (strpos($penalty, 'Drew') !== false && strpos($penalty, 'card') !== false) {
                 // Parse the actual number of cards drawn from the penalty text
@@ -1431,6 +1438,9 @@ function vetoHandCard($gameId, $playerId, $cardId, $playerCardId) {
             }
         }
 
+        if (!empty($scoreChanges)) {
+            $response['score_changes'] = $scoreChanges;
+        }
 
         if (!empty($drawnCards)) {
             $response['drawn_cards'] = $drawnCards;
