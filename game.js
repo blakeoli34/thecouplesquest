@@ -47,8 +47,11 @@ function loadCardData() {
                 return;
             }
 
+            console.log('Active modifiers:', data.active_modifiers);
+
             updateHandBadge();
             updateOpponentHandDisplay();
+            updateBlockingStatus(data);
         }
     })
     .catch(error => {
@@ -243,6 +246,27 @@ function getCardDisplayInfo(card, context = 'serve') {
     if (card.card_points) {
         badges.push(`<span class="card-badge points">+${card.card_points}</span>`);
     }
+
+    // Check for active chance effects on this card type
+    if (selectedHandCard && selectedHandCard.id === card.id) {
+        // Check for active modifiers
+        fetch('game.php', {
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `action=get_card_modifiers&card_type=${card.card_type}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.modifiers) {
+                data.modifiers.forEach(mod => {
+                    const modifierBadge = document.createElement('span');
+                    modifierBadge.className = 'card-badge modifier';
+                    modifierBadge.textContent = mod;
+                    // Add to card display
+                });
+            }
+        });
+    }
     
     // Veto penalties (for serve cards)
     if (card.veto_subtract || card.veto_steal || card.veto_draw_chance || card.veto_draw_snap_dare || card.veto_draw_spicy) {
@@ -267,10 +291,25 @@ function getCardDisplayInfo(card, context = 'serve') {
             badges.push(`<span class="card-badge penalty">${penalties.join('&nbsp;&nbsp;|&nbsp;&nbsp;')}</span>`);
         }
     }
+
+    // Add veto penalty badges for snap/dare cards
+    if (card.card_type === 'snap' || card.card_type === 'dare') {
+        badges.push(`<span class="card-badge penalty">-3</span>`);
+    }
     
     // Timer
     if (card.timer) {
         badges.push(`<span class="card-badge timer">${card.timer}min</span>`);
+    }
+
+    // Modifier badges (only for hand cards)
+    if (context === 'hand' && cardData.active_modifiers) {
+        if (cardData.active_modifiers[card.card_type]) {
+            badges.push(`<span class="card-badge modifier">${cardData.active_modifiers[card.card_type]}</span>`);
+        }
+        if (cardData.active_modifiers[card.card_type + '_veto']) {
+            badges.push(`<span class="card-badge modifier">${cardData.active_modifiers[card.card_type + '_veto']}</span>`);
+        }
     }
     
     return badges.join('');
@@ -373,6 +412,43 @@ function serveSelectedCard() {
     });
 }
 
+function completeChanceCard(playerCardId) {
+    if (!selectedHandCard) return;
+    
+    const cardName = selectedHandCard.card_name;
+    const selectedCardElement = document.querySelector('.game-card.selected');
+    
+    if (selectedCardElement) {
+        selectedCardElement.classList.add('discarding');
+    }
+    
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `action=complete_chance_card&player_card_id=${playerCardId}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            setTimeout(() => {
+                hideCardSelectionActions();
+                closeCardOverlay('handCardsOverlay');
+                loadCardData();
+                refreshGameData();
+                showInAppNotification('Chance Card Completed!', data.message || `Completed "${cardName}"`);
+            }, 1000);
+        } else {
+            clearCardSelection();
+            alert('Failed to complete chance card: ' + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        clearCardSelection();
+        console.error('Error completing chance card:', error);
+        alert('Failed to complete chance card');
+    });
+}
+
 // Manual card draw function
 function manualDrawCard(cardType) {
     fetch('game.php', {
@@ -445,13 +521,36 @@ function showCardDrawAnimation(cardData) {
     // Step 4: Slide card out (show card longer)
     setTimeout(() => {
         drawnCard.classList.add('slide-out');
-    }, 3400);
+    }, 6400);
+
+    // For chance cards with immediate effects, trigger after animation
+    if (cardData.card_type === 'chance') {
+        setTimeout(() => {
+            if (cardData.score_add) {
+                updateScore(gameData.currentPlayerId, cardData.score_add);
+            }
+            if (cardData.score_subtract) {
+                updateScore(gameData.currentPlayerId, -cardData.score_subtract);
+            }
+            if (cardData.score_steal) {
+                updateScore(gameData.opponentPlayerId, cardData.score_steal);
+                updateScore(gameData.currentPlayerId, -cardData.score_steal);
+            }
+            if (cardData.draw_snap_dare) {
+                const drawType = gameData.currentPlayerGender === 'female' ? 'snap' : 'dare';
+                manualDrawCard(drawType);
+            }
+            if (cardData.draw_spicy) {
+                manualDrawCard('spicy');
+            }
+        }, 7200);
+    }
     
     // Step 5: Hide overlay
     setTimeout(() => {
         overlay.classList.remove('active');
         drawnCard.classList.remove('flip-in', 'slide-out');
-    }, 4200);
+    }, 7200);
 }
 
 function updateDrawPopoverCounts() {
@@ -478,6 +577,26 @@ function updateDrawPopoverCounts() {
             });
         }
     });
+}
+
+function updateBlockingStatus(cardData) {
+    if (cardData.has_blocking) {
+        // Show blocking indicator
+        let indicator = document.getElementById('blocking-indicator');
+        if (!indicator) {
+            indicator = document.createElement('div');
+            indicator.id = 'blocking-indicator';
+            indicator.className = 'blocking-indicator';
+            indicator.innerHTML = '<i class="fa-solid fa-exclamation-triangle"></i> Complete chance cards first';
+            document.body.appendChild(indicator);
+        }
+        indicator.style.display = 'block';
+    } else {
+        const indicator = document.getElementById('blocking-indicator');
+        if (indicator) {
+            indicator.style.display = 'none';
+        }
+    }
 }
 
 function openDrawPopover() {
@@ -519,14 +638,34 @@ function drawSingleCard(cardType) {
 
 // Select hand card
 function selectHandCard(card) {
-    if (isCardSelected) return; // Prevent multiple selections
+    if (isCardSelected) return;
     
     selectedHandCard = card;
     isCardSelected = true;
     
-    // Find the clicked card element
     const clickedCard = event.target.closest('.game-card');
     if (!clickedCard) return;
+    
+    // Check for active modifiers and add badge
+    if (['snap', 'dare', 'spicy'].includes(card.card_type)) {
+        fetch('game.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `action=get_active_effects`
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const modifierEffect = data.effects.find(e => e.effect_type === card.card_type + '_modify');
+                if (modifierEffect) {
+                    const badge = document.createElement('div');
+                    badge.className = 'modifier-badge';
+                    badge.textContent = modifierEffect.effect_value === 'double' ? 'Do Twice' : 'Modified';
+                    clickedCard.appendChild(badge);
+                }
+            }
+        });
+    }
     
     // Add selection state to grid and card
     const grid = document.getElementById('handCardsGrid');
@@ -547,6 +686,37 @@ function selectHandCard(card) {
 function showCardSelectionActions() {
     const actions = document.getElementById('cardSelectionActions');
     if (actions) {
+        actions.innerHTML = '';
+        
+        if (selectedHandCard.card_type === 'chance') {
+            // Check if chance card can be auto-completed
+            const hasModifiers = selectedHandCard.challenge_modify == 1 || selectedHandCard.snap_modify == 1 || 
+                   selectedHandCard.dare_modify == 1 || selectedHandCard.spicy_modify == 1 || 
+                   selectedHandCard.before_next_challenge == 1 || selectedHandCard.timer ||
+                   (selectedHandCard.veto_modify && selectedHandCard.veto_modify !== 'none');
+            
+            if (hasModifiers) {
+                actions.innerHTML = `<button class="btn btn-complete" disabled title="Auto-completes when conditions are met">Complete (Auto)</button>`;
+            } else {
+                actions.innerHTML = `<button class="btn btn-complete" onclick="completeChanceCard(${selectedHandCard.id})">Complete</button>`;
+            }
+        } else {
+            // Check if card has veto penalties
+            const hasVetoPenalty = selectedHandCard.veto_subtract || selectedHandCard.veto_steal || 
+                                 selectedHandCard.veto_draw_chance || selectedHandCard.veto_draw_snap_dare || 
+                                 selectedHandCard.veto_draw_spicy || 
+                                 ['snap', 'dare', 'spicy'].includes(selectedHandCard.card_type);
+            
+            const vetoButton = hasVetoPenalty ? 
+                `<button class="btn btn-veto" onclick="vetoSelectedCard()">Veto</button>` :
+                `<button class="btn btn-veto" disabled>No Veto</button>`;
+            
+            actions.innerHTML = `
+                <button class="btn btn-complete" onclick="completeSelectedCard()">Complete</button>
+                ${vetoButton}
+            `;
+        }
+        
         actions.classList.add('show');
     }
 }
@@ -692,6 +862,36 @@ function handleOverlayClick(event, overlayId) {
         }
     }
 }
+
+function displayActiveEffects() {
+    if (!document.body.classList.contains('digital')) return;
+    
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'action=get_active_effects'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.effects.length > 0) {
+            let effectsHtml = '<div class="active-effects"><h4>Active Effects:</h4>';
+            data.effects.forEach(effect => {
+                effectsHtml += `<div class="effect-item">${effect.description}</div>`;
+            });
+            effectsHtml += '</div>';
+            
+            // Add to hand cards grid
+            const handGrid = document.getElementById('handCardsGrid');
+            if (handGrid) {
+                let effectsDiv = handGrid.querySelector('.active-effects');
+                if (!effectsDiv) {
+                    handGrid.insertAdjacentHTML('afterbegin', effectsHtml);
+                }
+            }
+        }
+    });
+}
+
 $('.bottom-right-menu').on('click', function() {
     $(this).toggleClass('open');
 });
@@ -1946,7 +2146,7 @@ function setupModeButtons() {
 
 function initializeDigitalCards() {
     if (document.body.classList.contains('digital')) {
-        loadCardData();
+        setTimeout(() => loadCardData(), 500);
         
         // Refresh card data periodically
         setInterval(() => {
@@ -2176,3 +2376,5 @@ window.openDiceOverlay = openDiceOverlay;
 window.closeDiceOverlay = closeDiceOverlay;
 window.setDiceCount = setDiceCount;
 window.rollDice = rollDice;
+window.completeChanceCard = completeChanceCard;
+window.displayActiveEffects = displayActiveEffects;

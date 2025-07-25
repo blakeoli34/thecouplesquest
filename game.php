@@ -157,6 +157,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             exit;
             
         case 'get_game_data':
+
+            processExpiredTimers($player['game_id']);
+            clearExpiredChanceEffects($player['game_id']);
+            
+            $updatedPlayers = getGamePlayers($player['game_id']);
+            $timers = getActiveTimers($player['game_id']);
+            $history = getScoreHistory($player['game_id']);
             $updatedPlayers = getGamePlayers($player['game_id']);
             $timers = getActiveTimers($player['game_id']);
             $history = getScoreHistory($player['game_id']);
@@ -231,12 +238,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $stmt = $pdo->prepare("SELECT SUM(quantity) as serve_count FROM player_cards WHERE game_id = ? AND player_id = ? AND card_type = 'serve'");
             $stmt->execute([$player['game_id'], $player['id']]);
             $serveCount = $stmt->fetchColumn() ?: 0;
+
+            $hasBlocking = hasBlockingChanceCard($player['game_id'], $player['id']);
+            $blockingCards = $hasBlocking ? getBlockingChanceCardNames($player['game_id'], $player['id']) : [];
+
+            $activeModifiers = [];
+            $effects = getActiveChanceEffects($player['game_id'], null, $player['id']);
+            foreach ($effects as $effect) {
+                $stmt = $pdo->prepare("SELECT card_name FROM cards WHERE id = ?");
+                $stmt->execute([$effect['chance_card_id']]);
+                $cardName = $stmt->fetchColumn();
+                
+                switch ($effect['effect_type']) {
+                    case 'challenge_modify':
+                        // Only show if this player is the target
+                        if (!$effect['target_player_id'] || $effect['target_player_id'] == $player['id']) {
+                            $activeModifiers['accepted_serve'] = $cardName;
+                        }
+                        break;
+                    case 'snap_modify':
+                    case 'dare_modify':  
+                    case 'spicy_modify':
+                        // These only affect the player who drew the card
+                        if ($effect['player_id'] == $player['id']) {
+                            $cardType = str_replace('_modify', '', $effect['effect_type']);
+                            $activeModifiers[$cardType] = $cardName;
+                        }
+                        break;
+                    case 'veto_modify':
+                        if (strpos($effect['effect_value'], 'opponent') !== false) {
+                            // Show on opponent's cards only
+                            if ($effect['target_player_id'] == $player['id']) {
+                                $activeModifiers['accepted_serve_veto'] = $cardName;
+                                $activeModifiers['snap_veto'] = $cardName;
+                                $activeModifiers['dare_veto'] = $cardName;
+                            }
+                        } else {
+                            // Show on current player's cards
+                            if ($effect['player_id'] == $player['id']) {
+                                $activeModifiers['accepted_serve_veto'] = $cardName;
+                                $activeModifiers['snap_veto'] = $cardName;
+                                $activeModifiers['dare_veto'] = $cardName;
+                            }
+                        }
+                        break;
+                }
+            }
             
             echo json_encode([
                 'success' => true,
                 'serve_cards' => $serveCards,
                 'hand_cards' => $handCards,
-                'serve_count' => $serveCount
+                'serve_count' => $serveCount,
+                'has_blocking' => $hasBlocking,
+                'blocking_cards' => $blockingCards,
+                'active_modifiers' => $activeModifiers
             ]);
             exit;
 
@@ -277,6 +333,109 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             echo json_encode($result);
             exit;
 
+        case 'complete_chance_card':
+            if ($gameMode !== 'digital') {
+                echo json_encode(['success' => false, 'message' => 'Not a digital game']);
+                exit;
+            }
+            
+            $playerCardId = intval($_POST['player_card_id']);
+            
+            try {
+                $pdo = Config::getDatabaseConnection();
+                $pdo->beginTransaction();
+                
+                // Get the chance card details
+                $stmt = $pdo->prepare("
+                    SELECT pc.*, c.card_name 
+                    FROM player_cards pc 
+                    JOIN cards c ON pc.card_id = c.id 
+                    WHERE pc.id = ? AND pc.player_id = ? AND pc.game_id = ?
+                ");
+                $stmt->execute([$playerCardId, $player['id'], $player['game_id']]);
+                $chanceCard = $stmt->fetch();
+                
+                if (!$chanceCard) {
+                    throw new Exception("Chance card not found");
+                }
+                
+                // Remove any active effects for this card
+                $stmt = $pdo->prepare("DELETE FROM active_chance_effects WHERE game_id = ? AND player_id = ? AND chance_card_id = ?");
+                $stmt->execute([$player['game_id'], $player['id'], $chanceCard['card_id']]);
+                
+                // Remove card from hand
+                if ($chanceCard['quantity'] > 1) {
+                    $stmt = $pdo->prepare("UPDATE player_cards SET quantity = quantity - 1 WHERE id = ?");
+                    $stmt->execute([$playerCardId]);
+                } else {
+                    $stmt = $pdo->prepare("DELETE FROM player_cards WHERE id = ?");
+                    $stmt->execute([$playerCardId]);
+                }
+                
+                $pdo->commit();
+                echo json_encode(['success' => true, 'message' => "Completed {$chanceCard['card_name']}"]);
+                
+            } catch (Exception $e) {
+                $pdo->rollBack();
+                error_log("Error completing chance card: " . $e->getMessage());
+                echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+            }
+            exit;
+
+        case 'get_active_effects':
+            if ($gameMode !== 'digital') {
+                echo json_encode(['success' => false]);
+                exit;
+            }
+            
+            $effects = getActiveChanceEffects($player['game_id'], null, $player['id']);
+            $descriptions = [];
+            
+            foreach ($effects as $effect) {
+                $desc = '';
+                switch ($effect['effect_type']) {
+                    case 'before_next_challenge':
+                        $desc = 'Must complete before next challenge';
+                        break;
+                    case 'challenge_modify':
+                        $desc = "Next challenge: {$effect['effect_value']}";
+                        break;
+                    case 'veto_modify':
+                        $desc = "Next veto: {$effect['effect_value']}";
+                        break;
+                    case 'timer_effect':
+                        $desc = 'Timer-based effect active';
+                        break;
+                    case 'recurring_timer':
+                        $desc = 'Losing 1 point every 5 minutes';
+                        break;
+                }
+                
+                if ($desc) {
+                    $descriptions[] = ['description' => $desc];
+                }
+            }
+            
+            echo json_encode(['success' => true, 'effects' => $descriptions]);
+            exit;
+
+        case 'get_card_modifiers':
+            $cardType = $_POST['card_type'];
+            $modifiers = [];
+            
+            $effects = getActiveChanceEffects($player['game_id'], null, $player['id']);
+            foreach ($effects as $effect) {
+                if (($cardType === 'accepted_serve' && $effect['effect_type'] === 'challenge_modify') ||
+                    ($cardType === 'snap' && $effect['snap_modify']) ||
+                    ($cardType === 'dare' && $effect['dare_modify']) ||
+                    ($cardType === 'spicy' && $effect['spicy_modify'])) {
+                    $modifiers[] = $effect['effect_value'] ?: 'Modified';
+                }
+            }
+            
+            echo json_encode(['modifiers' => $modifiers]);
+            exit;
+
         case 'manual_draw':
             if ($gameMode !== 'digital') {
                 echo json_encode(['success' => false, 'message' => 'Not a digital game']);
@@ -309,7 +468,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             echo json_encode([
                 'success' => true, 
                 'drawn_cards' => $drawnCards,
-                'card_details' => $cardDetails
+                'card_details' => $cardDetails,
+                'immediate_effects' => $cardDetails['card_type'] === 'chance' ? $cardDetails : null
             ]);
             exit;
 
@@ -336,7 +496,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 SELECT c.card_type, SUM(gd.remaining_quantity) as remaining_count
                 FROM game_decks gd
                 JOIN cards c ON gd.card_id = c.id  
-                WHERE gd.game_id = ? 
+                WHERE gd.game_id = ? AND gd.player_id = ?
                 AND c.card_type IN ('chance', 'snap', 'dare', 'spicy')
                 AND (
                     (c.card_type IN ('snap', 'dare')) OR
@@ -344,7 +504,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 )
                 GROUP BY c.card_type
             ");
-            $stmt->execute([$player['game_id']]);
+            $stmt->execute([$player['game_id'], $player['id']]);
             $counts = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
             
             echo json_encode(['success' => true, 'counts' => $counts]);

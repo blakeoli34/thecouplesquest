@@ -198,7 +198,6 @@ function createTimer($gameId, $playerId, $description, $durationMinutes) {
     try {
         $pdo = Config::getDatabaseConnection();
         
-        // Create times in UTC
         $startTime = new DateTime('now', new DateTimeZone('UTC'));
         $endTime = clone $startTime;
         $endTime->add(new DateInterval('PT' . $durationMinutes . 'M'));
@@ -216,7 +215,7 @@ function createTimer($gameId, $playerId, $description, $durationMinutes) {
             $endTime->format('Y-m-d H:i:s')
         ]);
         
-        return ['success' => true];
+        return ['success' => true, 'timer_id' => $pdo->lastInsertId()];
         
     } catch (Exception $e) {
         error_log("Error creating timer: " . $e->getMessage());
@@ -251,6 +250,57 @@ function deleteTimer($timerId, $gameId) {
     } catch (Exception $e) {
         error_log("Error deleting timer: " . $e->getMessage());
         return ['success' => false, 'message' => 'Failed to delete timer.'];
+    }
+}
+
+function processExpiredTimers($gameId) {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        
+        // Get expired timers with associated chance effects
+        $stmt = $pdo->prepare("
+            SELECT t.id as timer_id, ace.id as effect_id, ace.effect_type, ace.player_id, ace.chance_card_id
+            FROM timers t
+            JOIN active_chance_effects ace ON t.id = ace.timer_id
+            WHERE t.game_id = ? AND t.end_time <= UTC_TIMESTAMP() AND t.is_active = TRUE
+        ");
+        $stmt->execute([$gameId]);
+        $expiredEffects = $stmt->fetchAll();
+        
+        foreach ($expiredEffects as $effect) {
+            if ($effect['effect_type'] === 'recurring_timer') {
+                // Use the stored score value from the effect
+                $pointsToSubtract = $effect['effect_value'] ?: 1;
+                updateScore($gameId, $effect['player_id'], -$pointsToSubtract, $effect['player_id']);
+                
+                // Get the repeat interval from the original card
+                $stmt = $pdo->prepare("SELECT repeat_count FROM cards WHERE id = ?");
+                $stmt->execute([$effect['chance_card_id']]);
+                $interval = $stmt->fetchColumn();
+                
+                $newTimer = createTimer($gameId, $effect['player_id'], 'Clock Siphon', $interval);
+                if ($newTimer['success']) {
+                    $stmt = $pdo->prepare("UPDATE active_chance_effects SET timer_id = ? WHERE id = ?");
+                    $stmt->execute([$newTimer['timer_id'], $effect['effect_id']]);
+                }
+            } else {
+                // Regular timer effect - auto-complete the chance card
+                removeActiveChanceEffect($effect['effect_id']);
+                
+                // Remove the chance card from player's hand
+                $stmt = $pdo->prepare("DELETE FROM player_cards WHERE game_id = ? AND player_id = ? AND card_id = ?");
+                $stmt->execute([$gameId, $effect['player_id'], $effect['chance_card_id']]);
+            }
+            
+            // Mark timer as inactive
+            $stmt = $pdo->prepare("UPDATE timers SET is_active = FALSE WHERE id = ?");
+            $stmt->execute([$effect['timer_id']]);
+        }
+        
+        return true;
+    } catch (Exception $e) {
+        error_log("Error processing expired timers: " . $e->getMessage());
+        return false;
     }
 }
 
@@ -711,25 +761,62 @@ function getNewGameReadyStatus($gameId) {
 function initializeDigitalGame($gameId) {
     try {
         $pdo = Config::getDatabaseConnection();
+        $players = getGamePlayers($gameId);
         
-        // Get all cards and populate game decks
+        // Get all cards
         $stmt = $pdo->prepare("SELECT * FROM cards ORDER BY card_type, card_name");
         $stmt->execute();
         $cards = $stmt->fetchAll();
         
-        foreach ($cards as $card) {
-            // Only add cards with quantity > 0
-            if ($card['quantity'] > 0) {
-                $stmt = $pdo->prepare("
-                    INSERT INTO game_decks (game_id, card_id, remaining_quantity) 
-                    VALUES (?, ?, ?)
-                ");
-                $stmt->execute([$gameId, $card['id'], $card['quantity']]);
+        foreach ($players as $player) {
+            foreach ($cards as $card) {
+                if ($card['quantity'] > 0) {
+                    // Check if player should get this card
+                    // Check if player should get this card
+                    $shouldInclude = false;
+
+                    if ($card['card_type'] === 'serve') {
+                        // Males get serve_to_her cards, females get serve_to_him cards
+                        if (($player['gender'] === 'male' && $card['serve_to_her'] == 1) ||
+                            ($player['gender'] === 'female' && $card['serve_to_him'] == 1)) {
+                            $shouldInclude = true;
+                        }
+                    } elseif (in_array($card['card_type'], ['snap', 'dare'])) {
+                        // Snap cards are for females only, Dare cards are for males only
+                        if ($card['card_type'] === 'snap' && $player['gender'] === 'female') {
+                            $shouldInclude = true;
+                        } elseif ($card['card_type'] === 'dare' && $player['gender'] === 'male') {
+                            $shouldInclude = true;
+                        }
+                    } else {
+                        // Chance and Spicy cards - only include if specifically for this gender OR universal
+                        $forHer = $card['for_her'] == 1;
+                        $forHim = $card['for_him'] == 1;
+                        
+                        if ($forHer && $forHim) {
+                            // Universal card - give to both players but only once per player
+                            $shouldInclude = true;
+                        } elseif ($player['gender'] === 'female' && $forHer && !$forHim) {
+                            // Female-only card
+                            $shouldInclude = true;
+                        } elseif ($player['gender'] === 'male' && $forHim && !$forHer) {
+                            // Male-only card
+                            $shouldInclude = true;
+                        }
+                    }
+                    
+                    if ($shouldInclude) {
+                        $stmt = $pdo->prepare("
+                            INSERT INTO game_decks (game_id, player_id, card_id, remaining_quantity) 
+                            VALUES (?, ?, ?, ?)
+                        ");
+                        $stmt->execute([$gameId, $player['id'], $card['id'], $card['quantity']]);
+                    }
+                }
             }
         }
         
-        // Give players their serve cards
-        $players = getGamePlayers($gameId);
+        // Give initial serve cards
         foreach ($players as $player) {
             giveInitialServeCards($gameId, $player['id'], $player['gender']);
         }
@@ -782,7 +869,8 @@ function getPlayerCards($gameId, $playerId, $cardType = null) {
                    c.serve_to_her, c.serve_to_him, c.for_her, c.for_him,
                    c.extra_spicy, c.veto_subtract, c.veto_steal,
                    c.veto_draw_chance, c.veto_draw_snap_dare, c.veto_draw_spicy,
-                   c.timer
+                   c.timer, c.challenge_modify, c.snap_modify, c.dare_modify, c.spicy_modify,
+                   c.before_next_challenge, c.veto_modify, c.score_modify
             FROM player_cards pc
             JOIN cards c ON pc.card_id = c.id
             WHERE pc.game_id = ? AND pc.player_id = ?
@@ -884,26 +972,21 @@ function drawCards($gameId, $playerId, $cardType, $quantity = 1) {
         $player = getPlayerById($playerId);
         
         // Build gender restriction
-        $genderWhere = "";
-        if ($cardType === 'snap') {
-            $genderWhere = ""; // Remove gender restriction since snap cards are inherently for females
-        } elseif ($cardType === 'dare') {
-            $genderWhere = ""; // Remove gender restriction since dare cards are inherently for males
-        } elseif ($cardType === 'spicy' || $cardType === 'chance') {
+        if ($cardType === 'spicy' || $cardType === 'chance') {
             $genderField = ($player['gender'] === 'male') ? 'for_him' : 'for_her';
-            $genderWhere = "AND c.$genderField = 1";
+            $genderWhere = "AND (c.$genderField = 1 OR (c.for_her = 1 AND c.for_him = 1))";
         }
         
         // Get available cards from deck
         $stmt = $pdo->prepare("
-            SELECT gd.card_id, gd.remaining_quantity, c.card_name
+            SELECT gd.card_id, gd.remaining_quantity, c.card_name, c.*
             FROM game_decks gd
             JOIN cards c ON gd.card_id = c.id
-            WHERE gd.game_id = ? AND c.card_type = ? AND gd.remaining_quantity > 0 $genderWhere
+            WHERE gd.game_id = ? AND gd.player_id = ? AND c.card_type = ? AND gd.remaining_quantity > 0
             ORDER BY RAND()
             LIMIT ?
         ");
-        $stmt->execute([$gameId, $cardType, $quantity]);
+        $stmt->execute([$gameId, $playerId, $cardType, $quantity]);
         $availableCards = $stmt->fetchAll();
         
         $drawnCards = [];
@@ -914,15 +997,20 @@ function drawCards($gameId, $playerId, $cardType, $quantity = 1) {
             $stmt = $pdo->prepare("
                 UPDATE game_decks 
                 SET remaining_quantity = remaining_quantity - ? 
-                WHERE game_id = ? AND card_id = ?
+                WHERE game_id = ? AND player_id = ? AND card_id = ?
             ");
-            $stmt->execute([$drawQuantity, $gameId, $card['card_id']]);
+            $stmt->execute([$drawQuantity, $gameId, $playerId, $card['card_id']]);
             
-            // Add to player hand - force add even if at limit for veto penalties
+            // Add to player hand
             $success = addCardToHand($gameId, $playerId, $card['card_id'], $cardType, $drawQuantity, true);
             
             if ($success) {
                 $drawnCards[] = $card['card_name'];
+                
+                // Process chance cards immediately
+                if ($cardType === 'chance') {
+                    $effects = processChanceCard($gameId, $playerId, $card);
+                }
             }
             
             if (count($drawnCards) >= $quantity) break;
@@ -1011,11 +1099,75 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
         
         $pointsAwarded = 0;
         
-        // Handle completion based on card type
+        // Handle chance cards
+        if ($playerCard['card_type'] === 'chance') {
+            $effects = processChanceCard($gameId, $playerId, $playerCard);
+            $result = ['success' => true, 'effects' => $effects, 'message' => implode(', ', $effects)];
+
+            // Get timer IDs directly
+            $stmt = $pdo->prepare("SELECT id FROM timers WHERE game_id = ? AND player_id = ? AND description = ?");
+            $stmt->execute([$gameId, $playerId, $playerCard['card_name']]);
+            $timerIds = $stmt->fetchAll(PDO::FETCH_COLUMN);
+            
+            // Delete timers
+            foreach ($timerIds as $timerId) {
+                deleteTimer($timerId, $gameId);
+            }
+            
+            // Remove active effects
+            $stmt = $pdo->prepare("DELETE FROM active_chance_effects WHERE game_id = ? AND player_id = ? AND chance_card_id = ?");
+            $stmt->execute([$gameId, $playerId, $playerCard['card_id']]);
+        }
+        
+        // Handle serve cards with points
         if (($playerCard['card_type'] === 'serve' || $playerCard['card_type'] === 'accepted_serve') 
             && $playerCard['card_points']) {
-            updateScore($gameId, $playerId, $playerCard['card_points'], $playerId);
-            $pointsAwarded = $playerCard['card_points'];
+            
+            // Check for blocking effects
+            if (hasBlockingChanceCard($gameId, $playerId)) {
+                $blockingCards = getBlockingChanceCardNames($gameId, $playerId);
+                throw new Exception("Complete your chance card first: " . implode(', ', $blockingCards));
+            }
+            
+            // Apply challenge modifiers
+            $finalPoints = $playerCard['card_points'];
+            $challengeEffects = getActiveChanceEffects($gameId, 'challenge_modify');
+
+            foreach ($challengeEffects as $effect) {
+                // Check if this effect applies to this player
+                $appliesToThisPlayer = ($effect['target_player_id'] == $playerId) || 
+                                      ($effect['target_player_id'] == null && $effect['player_id'] == $playerId);
+                
+                if ($appliesToThisPlayer) {
+                    switch ($effect['effect_value']) {
+                        case 'half':
+                            if ($finalPoints > 1) {
+                                $finalPoints = floor($finalPoints / 2);
+                            }
+                            break;
+                        case 'zero':
+                            $finalPoints = 0;
+                            break;
+                        case 'opponent_double':
+                            $finalPoints *= 2;
+                            break;
+                        case 'opponent_extra_point':
+                            $finalPoints += 1;
+                            break;
+                        case 'challenge_reward_opponent':
+                            $opponentId = getOpponentPlayerId($gameId, $playerId);
+                            updateScore($gameId, $opponentId, $finalPoints, $playerId);
+                            $finalPoints = 0;
+                            break;
+                    }
+                    // Remove the effect after applying it
+                    removeActiveChanceEffect($effect['id']);
+                    break; // Only apply first matching effect
+                }
+            }
+
+            updateScore($gameId, $playerId, $finalPoints, $playerId);
+            $pointsAwarded = $finalPoints;
         }
         
         // Remove card from player's hand
@@ -1025,6 +1177,54 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
         } else {
             $stmt = $pdo->prepare("DELETE FROM player_cards WHERE id = ?");
             $stmt->execute([$playerCardId]);
+        }
+
+        // After completing serve/snap/dare/spicy cards, check for and activate next modifier
+        if (in_array($playerCard['card_type'], ['accepted_serve', 'snap', 'dare', 'spicy'])) {
+            $effectType = $playerCard['card_type'] === 'accepted_serve' ? 'challenge_modify' : $playerCard['card_type'] . '_modify';
+            $modifyEffects = getActiveChanceEffects($gameId, $effectType, $playerId);
+            
+            foreach ($modifyEffects as $effect) {
+                // Remove the chance card from hand and active effect
+                $stmt = $pdo->prepare("DELETE FROM player_cards WHERE game_id = ? AND player_id = ? AND card_id = ?");
+                $stmt->execute([$gameId, $playerId, $effect['chance_card_id']]);
+                removeActiveChanceEffect($effect['id']);
+            }
+            
+            // Check for next modifier card in hand and activate it
+            $fieldName = $playerCard['card_type'] === 'accepted_serve' ? 'challenge_modify' : $effectType;
+            $stmt = $pdo->prepare("
+                SELECT pc.*, c.* FROM player_cards pc
+                JOIN cards c ON pc.card_id = c.id
+                WHERE pc.game_id = ? AND pc.player_id = ? AND c.card_type = 'chance' AND c.{$fieldName} = 1
+                ORDER BY pc.id ASC LIMIT 1
+            ");
+            $stmt->execute([$gameId, $playerId]);
+            $nextModifier = $stmt->fetch();
+            
+            // Only activate next modifier if no timer-based challenge effects are active
+            $timerEffects = getActiveChanceEffects($gameId, 'timer_effect', $playerId);
+            $hasActiveTimerEffect = false;
+            foreach ($timerEffects as $timerEffect) {
+                // Check if any timer effect modifies challenges
+                $stmt2 = $pdo->prepare("SELECT challenge_modify, score_modify FROM cards WHERE id = ?");
+                $stmt2->execute([$timerEffect['chance_card_id']]);
+                $timerCard = $stmt2->fetch();
+                if ($timerCard['challenge_modify'] && $timerCard['score_modify'] === 'challenge_reward_opponent') {
+                    $hasActiveTimerEffect = true;
+                    break;
+                }
+            }
+
+            if (!$hasActiveTimerEffect && $nextModifier) {
+                $modifyValue = $nextModifier['double_it'] ? 'double' : 'modify';
+                if ($playerCard['card_type'] === 'accepted_serve') {
+                    $modifyValue = $nextModifier['score_modify'] !== 'none' ? $nextModifier['score_modify'] : 'modify';
+                }
+                addActiveChanceEffect($gameId, $playerId, $nextModifier['card_id'], $effectType, $modifyValue);
+            }
+            
+            checkRecurringEffectCompletion($gameId, $playerId, $playerCard['card_type']);
         }
         
         $pdo->commit();
@@ -1058,57 +1258,94 @@ function vetoHandCard($gameId, $playerId, $cardId, $playerCardId) {
         
         $penalties = [];
         
-        // Handle veto based on card type
-        switch ($playerCard['card_type']) {
-            case 'serve':
-            case 'accepted_serve':
-                // Apply original serve card veto penalties
-                if ($playerCard['veto_subtract']) {
-                    updateScore($gameId, $playerId, -$playerCard['veto_subtract'], $playerId);
-                    $penalties[] = "Lost {$playerCard['veto_subtract']} points";
-                }
-                
-                if ($playerCard['veto_steal']) {
-                    $stmt = $pdo->prepare("SELECT id FROM players WHERE game_id = ? AND id != ?");
-                    $stmt->execute([$gameId, $playerId]);
-                    $opponentId = $stmt->fetchColumn();
-                    
-                    if ($opponentId) {
-                        updateScore($gameId, $playerId, -$playerCard['veto_steal'], $playerId);
-                        updateScore($gameId, $opponentId, $playerCard['veto_steal'], $playerId);
-                        $penalties[] = "Lost {$playerCard['veto_steal']} points to opponent";
-                    }
-                }
-                
-                if ($playerCard['veto_draw_chance']) {
-                    drawCards($gameId, $playerId, 'chance', $playerCard['veto_draw_chance']);
-                    $penalties[] = "Drew {$playerCard['veto_draw_chance']} chance card(s)";
-                }
-                
-                if ($playerCard['veto_draw_snap_dare']) {
-                    $player = getPlayerById($playerId);
-                    $drawType = ($player['gender'] === 'female') ? 'snap' : 'dare';
-                    drawCards($gameId, $playerId, $drawType, $playerCard['veto_draw_snap_dare']);
-                    $penalties[] = "Drew {$playerCard['veto_draw_snap_dare']} {$drawType} card(s)";
-                }
-                
-                if ($playerCard['veto_draw_spicy']) {
-                    drawCards($gameId, $playerId, 'spicy', $playerCard['veto_draw_spicy']);
-                    $penalties[] = "Drew {$playerCard['veto_draw_spicy']} spicy card(s)";
+        // Apply veto modifiers
+        $vetoEffects = getActiveChanceEffects($gameId, 'veto_modify');
+        $vetoMultiplier = 1;
+        $vetoSkipped = false;
+
+        foreach ($vetoEffects as $effect) {
+            $appliesToThisPlayer = ($effect['target_player_id'] == $playerId) || 
+                                    ($effect['target_player_id'] == null && $effect['player_id'] == $playerId);
+            
+            if ($appliesToThisPlayer) {
+                switch ($effect['effect_value']) {
+                    case 'double':
+                    case 'opponent_double':
+                        $vetoMultiplier = 2;
+                        removeActiveChanceEffect($effect['id']);
+                        break;
+                    case 'skip':
+                        $vetoSkipped = true;
+                        removeActiveChanceEffect($effect['id']);
+                        break;
+                    case 'opponent_reward':
+                        if ($playerCard['card_points']) {
+                            $opponentId = getOpponentPlayerId($gameId, $playerId);
+                            updateScore($gameId, $opponentId, $playerCard['card_points'], $playerId);
+                            $penalties[] = "Opponent gained {$playerCard['card_points']} points";
+                        }
+                        removeActiveChanceEffect($effect['id']);
+                        break;
                 }
                 break;
+            }
+        }
+        
+        // Apply veto penalties
+        if (!$vetoSkipped) {
+            if ($playerCard['veto_subtract']) {
+                $penaltyPoints = $playerCard['veto_subtract'] * $vetoMultiplier;
+                updateScore($gameId, $playerId, -$penaltyPoints, $playerId);
+                $penalties[] = "Lost {$penaltyPoints} points";
+            }
+            
+            if ($playerCard['veto_steal']) {
+                $penaltyPoints = $playerCard['veto_steal'] * $vetoMultiplier;
+                $opponentId = getOpponentPlayerId($gameId, $playerId);
                 
+                if ($opponentId) {
+                    updateScore($gameId, $playerId, -$penaltyPoints, $playerId);
+                    updateScore($gameId, $opponentId, $penaltyPoints, $playerId);
+                    $penalties[] = "Lost {$penaltyPoints} points to opponent";
+                }
+            }
+            
+            if ($playerCard['veto_draw_chance']) {
+                $drawCount = $playerCard['veto_draw_chance'] * $vetoMultiplier;
+                drawCards($gameId, $playerId, 'chance', $drawCount);
+                $penalties[] = "Drew {$drawCount} chance card(s)";
+            }
+            
+            if ($playerCard['veto_draw_snap_dare']) {
+                $drawCount = $playerCard['veto_draw_snap_dare'] * $vetoMultiplier;
+                $player = getPlayerById($playerId);
+                $drawType = ($player['gender'] === 'female') ? 'snap' : 'dare';
+                drawCards($gameId, $playerId, $drawType, $drawCount);
+                $penalties[] = "Drew {$drawCount} {$drawType} card(s)";
+            }
+            
+            if ($playerCard['veto_draw_spicy']) {
+                $drawCount = $playerCard['veto_draw_spicy'] * $vetoMultiplier;
+                drawCards($gameId, $playerId, 'spicy', $drawCount);
+                $penalties[] = "Drew {$drawCount} spicy card(s)";
+            }
+        } else {
+            $penalties[] = "Veto penalty skipped";
+        }
+        
+        // Handle non-veto card types
+        switch ($playerCard['card_type']) {
             case 'snap':
             case 'dare':
-                // Lose 3 points, return to deck
-                updateScore($gameId, $playerId, -3, $playerId);
-                $penalties[] = "Lost 3 points";
+                if (!$vetoSkipped) {
+                    updateScore($gameId, $playerId, -3, $playerId);
+                    $penalties[] = "Lost 3 points";
+                }
                 returnCardToDeck($gameId, $playerCard['card_id'], 1);
                 break;
                 
             case 'spicy':
             case 'chance':
-                // Just return to deck
                 returnCardToDeck($gameId, $playerCard['card_id'], 1);
                 $penalties[] = "Card returned to deck";
                 break;
@@ -1123,7 +1360,27 @@ function vetoHandCard($gameId, $playerId, $cardId, $playerCardId) {
             $stmt->execute([$playerCardId]);
         }
         
+        
         $pdo->commit();
+
+        if ($vetoMultiplier > 1 || $vetoSkipped) {
+            // Check for next veto modifier card in hand and activate it
+            $stmt = $pdo->prepare("
+                SELECT pc.*, c.* FROM player_cards pc
+                JOIN cards c ON pc.card_id = c.id
+                WHERE pc.game_id = ? AND pc.player_id = ? AND c.card_type = 'chance' AND c.veto_modify != 'none'
+                ORDER BY pc.id ASC LIMIT 1
+            ");
+            $stmt->execute([$gameId, $playerId]);
+            $nextModifier = $stmt->fetch();
+            
+            if ($nextModifier) {
+                $targetId = (strpos($nextModifier['veto_modify'], 'opponent') !== false) ? 
+                        getOpponentPlayerId($gameId, $playerId) : $playerId;
+                addActiveChanceEffect($gameId, $playerId, $nextModifier['card_id'], 'veto_modify', 
+                                    $nextModifier['veto_modify'], $targetId);
+            }
+        }
         return ['success' => true, 'penalties' => $penalties];
         
     } catch (Exception $e) {
@@ -1180,6 +1437,303 @@ function getPlayerById($playerId) {
     } catch (Exception $e) {
         error_log("Error getting player by ID: " . $e->getMessage());
         return null;
+    }
+}
+
+// Chance Card Effects
+function addActiveChanceEffect($gameId, $playerId, $chanceCardId, $effectType, $effectValue = null, $targetPlayerId = null, $timerId = null, $expiresAt = null) {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        $stmt = $pdo->prepare("
+            INSERT INTO active_chance_effects (game_id, player_id, chance_card_id, effect_type, effect_value, target_player_id, timer_id, expires_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ");
+        $stmt->execute([$gameId, $playerId, $chanceCardId, $effectType, $effectValue, $targetPlayerId, $timerId, $expiresAt]);
+        return $pdo->lastInsertId();
+    } catch (Exception $e) {
+        error_log("Error adding active chance effect: " . $e->getMessage());
+        return false;
+    }
+}
+
+function getActiveChanceEffects($gameId, $effectType = null, $playerId = null) {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        $sql = "SELECT * FROM active_chance_effects WHERE game_id = ?";
+        $params = [$gameId];
+        
+        if ($effectType) {
+            $sql .= " AND effect_type = ?";
+            $params[] = $effectType;
+        }
+        
+        if ($playerId) {
+            $sql .= " AND (player_id = ? OR target_player_id = ?)";
+            $params[] = $playerId;
+            $params[] = $playerId;
+        }
+        
+        $sql .= " ORDER BY created_at ASC";
+        
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    } catch (Exception $e) {
+        error_log("Error getting active chance effects: " . $e->getMessage());
+        return [];
+    }
+}
+
+function removeActiveChanceEffect($effectId) {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        $stmt = $pdo->prepare("DELETE FROM active_chance_effects WHERE id = ?");
+        $stmt->execute([$effectId]);
+        return true;
+    } catch (Exception $e) {
+        error_log("Error removing active chance effect: " . $e->getMessage());
+        return false;
+    }
+}
+
+function clearExpiredChanceEffects($gameId) {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        $stmt = $pdo->prepare("DELETE FROM active_chance_effects WHERE game_id = ? AND expires_at IS NOT NULL AND expires_at <= NOW()");
+        $stmt->execute([$gameId]);
+        return true;
+    } catch (Exception $e) {
+        error_log("Error clearing expired chance effects: " . $e->getMessage());
+        return false;
+    }
+}
+
+function processChanceCard($gameId, $playerId, $cardData) {
+    error_log("Processing chance card: " . $cardData['card_name'] . " - challenge_modify: " . $cardData['challenge_modify'] . " - score_modify: " . $cardData['score_modify']);
+
+    if (isset($cardData['card_id'])) {
+        $pdo = Config::getDatabaseConnection();
+        $stmt = $pdo->prepare("SELECT * FROM cards WHERE id = ?");
+        $stmt->execute([$cardData['card_id']]);
+        $cardData = $stmt->fetch();
+    }
+
+    $effects = [];
+    
+    // Immediate effects
+    if ($cardData['score_add']) {
+        $effects[] = "Gained {$cardData['score_add']} points";
+    }
+    
+    if ($cardData['score_subtract']) {
+        $effects[] = "Lost {$cardData['score_subtract']} points";
+    }
+    
+    if ($cardData['score_steal']) {
+        $effects[] = "Stole {$cardData['score_steal']} points from opponent";
+    }
+    
+    if ($cardData['draw_snap_dare']) {
+        $player = getPlayerById($playerId);
+        $drawType = ($player['gender'] === 'female') ? 'snap' : 'dare';
+        $drawnCards = drawCards($gameId, $playerId, $drawType, $cardData['draw_snap_dare']);
+        if (!empty($drawnCards)) {
+            $effects[] = "Drew {$cardData['draw_snap_dare']} {$drawType} card(s): " . implode(', ', $drawnCards);
+        }
+    }
+    
+    if ($cardData['draw_spicy']) {
+        $drawnCards = drawCards($gameId, $playerId, 'spicy', $cardData['draw_spicy']);
+        if (!empty($drawnCards)) {
+            $effects[] = "Drew {$cardData['draw_spicy']} spicy card(s): " . implode(', ', $drawnCards);
+        }
+    }
+    
+    // Store pending effects
+    if ($cardData['before_next_challenge']) {
+    $existingEffect = getActiveChanceEffects($gameId, 'before_next_challenge', $playerId);
+    if (empty($existingEffect)) {
+        addActiveChanceEffect($gameId, $playerId, $cardData['id'], 'before_next_challenge');
+        $effects[] = "Must complete before next challenge";
+    } else {
+        $effects[] = "Challenge blocker already active - complete current one first";
+    }
+    }
+
+    if ($cardData['challenge_modify']) {
+    $existingEffect = getActiveChanceEffects($gameId, 'challenge_modify', $playerId);
+    if (empty($existingEffect)) {
+        $modifyValue = $cardData['score_modify'] !== 'none' ? $cardData['score_modify'] : 'modify';
+        addActiveChanceEffect($gameId, $playerId, $cardData['id'], 'challenge_modify', $modifyValue);
+        $effects[] = "Next challenge modified";
+    } else {
+        $effects[] = "Challenge modifier already active - complete current one first";
+    }
+    }
+
+    if ($cardData['opponent_challenge_modify']) {
+    $existingEffect = getActiveChanceEffects($gameId, 'challenge_modify');
+    $opponentEffect = false;
+    foreach ($existingEffect as $effect) {
+        if ($effect['target_player_id'] == getOpponentPlayerId($gameId, $playerId)) {
+            $opponentEffect = true;
+            break;
+        }
+    }
+    
+    if (!$opponentEffect) {
+        $modifyValue = $cardData['score_modify'] !== 'none' ? $cardData['score_modify'] : 'modify';
+        $opponentId = getOpponentPlayerId($gameId, $playerId);
+        addActiveChanceEffect($gameId, $playerId, $cardData['id'], 'challenge_modify', $modifyValue, $opponentId);
+        $effects[] = "Opponent's next challenge modified";
+    } else {
+        $effects[] = "Opponent challenge modifier already active";
+    }
+    }
+
+    if ($cardData['veto_modify'] !== 'none') {
+    $existingEffect = getActiveChanceEffects($gameId, 'veto_modify', $playerId);
+    if (empty($existingEffect)) {
+        $targetId = (strpos($cardData['veto_modify'], 'opponent') !== false) ? getOpponentPlayerId($gameId, $playerId) : $playerId;
+        addActiveChanceEffect($gameId, $playerId, $cardData['id'], 'veto_modify', $cardData['veto_modify'], $targetId);
+        $effects[] = "Next veto modified: {$cardData['veto_modify']}";
+    } else {
+        $effects[] = "Veto modifier already active - complete current one first";
+    }
+    }
+
+    if ($cardData['snap_modify']) {
+        // Check if there's already an active effect
+        $existingEffect = getActiveChanceEffects($gameId, 'snap_modify', $playerId);
+        if (empty($existingEffect)) {
+            addActiveChanceEffect($gameId, $playerId, $cardData['id'], 'snap_modify', $cardData['double_it'] ? 'double' : 'modify');
+            $effects[] = "Next snap card modified";
+        } else {
+            $effects[] = "Snap modifier already active - complete current one first";
+        }
+    }
+
+    if ($cardData['dare_modify']) {
+        // Check if there's already an active effect
+        $existingEffect = getActiveChanceEffects($gameId, 'dare_modify', $playerId);
+        if (empty($existingEffect)) {
+            addActiveChanceEffect($gameId, $playerId, $cardData['id'], 'dare_modify', $cardData['double_it'] ? 'double' : 'modify');
+            $effects[] = "Next dare card modified";
+        } else {
+            $effects[] = "Dare modifier already active - complete current one first";
+        }
+    }
+
+    if ($cardData['spicy_modify']) {
+        // Check if there's already an active effect
+        $existingEffect = getActiveChanceEffects($gameId, 'spicy_modify', $playerId);
+        if (empty($existingEffect)) {
+            addActiveChanceEffect($gameId, $playerId, $cardData['id'], 'spicy_modify', $cardData['double_it'] ? 'double' : 'modify');
+            $effects[] = "Next spicy card modified";
+        } else {
+            $effects[] = "Spicy modifier already active - complete current one first";
+        }
+    }
+
+    // Handle recurring effects (Clock Siphon)
+    if ($cardData['repeat_count']) {
+        $timerResult = createTimer($gameId, $playerId, $cardData['card_name'], $cardData['repeat_count']);
+        
+        if ($timerResult['success']) {
+            $scoreValue = $cardData['score_subtract'] ?: 1; // Use card's subtract value or default to 1
+            addActiveChanceEffect($gameId, $playerId, $cardData['id'], 'recurring_timer', $scoreValue, null, $timerResult['timer_id']);
+        }
+    }
+    
+    // Handle timer-based effects
+    if ($cardData['timer']) {
+        $timerResult = createTimer($gameId, $playerId, $cardData['card_name'], $cardData['timer']);
+        
+        if ($timerResult['success']) {
+            if ($cardData['repeat_count']) {
+                // Recurring timer (Clock Siphon)
+                addActiveChanceEffect($gameId, $playerId, $cardData['id'], 'recurring_timer', $cardData['repeat_count'], null, $timerResult['timer_id']);
+            } else {
+                // Regular timer-based effect
+                addActiveChanceEffect($gameId, $playerId, $cardData['id'], 'timer_effect', null, null, $timerResult['timer_id']);
+            }
+        }
+    }
+
+    // Auto-complete cards with only immediate effects
+    $hasOnlyImmediateEffects = ($cardData['score_add'] || $cardData['score_subtract'] || $cardData['score_steal'] || $cardData['draw_snap_dare'] || $cardData['draw_spicy']) &&
+        !$cardData['before_next_challenge'] &&
+        !$cardData['challenge_modify'] &&
+        !$cardData['opponent_challenge_modify'] &&
+        $cardData['veto_modify'] === 'none' &&
+        !$cardData['snap_modify'] &&
+        !$cardData['dare_modify'] &&
+        !$cardData['spicy_modify'] &&
+        !$cardData['timer'] &&
+        !$cardData['repeat_count'];
+
+    if ($hasOnlyImmediateEffects) {
+        // Remove from player's hand
+        $stmt = $pdo->prepare("DELETE FROM player_cards WHERE game_id = ? AND player_id = ? AND card_id = ?");
+        $stmt->execute([$gameId, $playerId, $cardData['id']]);
+        $effects[] = "Card auto-completed";
+    }
+    
+    return $effects;
+}
+
+function getOpponentPlayerId($gameId, $playerId) {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        $stmt = $pdo->prepare("SELECT id FROM players WHERE game_id = ? AND id != ?");
+        $stmt->execute([$gameId, $playerId]);
+        return $stmt->fetchColumn();
+    } catch (Exception $e) {
+        error_log("Error getting opponent ID: " . $e->getMessage());
+        return null;
+    }
+}
+
+function checkRecurringEffectCompletion($gameId, $playerId, $cardType) {
+   if (!in_array($cardType, ['snap', 'dare', 'spicy'])) {
+       return;
+   }
+   
+   $pdo = Config::getDatabaseConnection();
+   
+   // Find and remove any recurring timer effects (Clock Siphon)
+   $recurringEffects = getActiveChanceEffects($gameId, 'recurring_timer', $playerId);
+   foreach ($recurringEffects as $effect) {
+       // Get the player_card_id and call completeHandCard
+       $stmt = $pdo->prepare("SELECT id FROM player_cards WHERE game_id = ? AND player_id = ? AND card_id = ?");
+       $stmt->execute([$gameId, $playerId, $effect['chance_card_id']]);
+       $playerCardId = $stmt->fetchColumn();
+
+       if ($playerCardId) {
+           completeHandCard($gameId, $playerId, $effect['chance_card_id'], $playerCardId);
+       }
+   }
+}
+
+function hasBlockingChanceCard($gameId, $playerId) {
+    $blockingEffects = getActiveChanceEffects($gameId, 'before_next_challenge', $playerId);
+    return !empty($blockingEffects);
+}
+
+function getBlockingChanceCardNames($gameId, $playerId) {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        $stmt = $pdo->prepare("
+            SELECT c.card_name 
+            FROM active_chance_effects ace
+            JOIN cards c ON ace.chance_card_id = c.id
+            WHERE ace.game_id = ? AND ace.player_id = ? AND ace.effect_type = 'before_next_challenge'
+        ");
+        $stmt->execute([$gameId, $playerId]);
+        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+    } catch (Exception $e) {
+        error_log("Error getting blocking card names: " . $e->getMessage());
+        return [];
     }
 }
 ?>

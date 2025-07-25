@@ -691,6 +691,11 @@ body {
     margin-bottom: 10px;
 }
 
+.btn:disabled {
+    opacity: 0.25;
+    pointer-events: none;
+}
+
 .btn.red {
     background: #E71D36;
 }
@@ -877,8 +882,9 @@ body {
 }
 
 .iAN {
-    max-width: 95vw;
-    min-width: 150px;
+    display: inline-block;
+    width: 85vw;
+    max-width: 400px;
     padding: 12px 18px;
     position: fixed;
     top: -65px;
@@ -898,10 +904,6 @@ body {
 
 .iAN-title {
     font-weight: 700;
-}
-
-.iAN-body {
-    white-space: nowrap;
 }
 
 .dice-overlay {
@@ -1315,6 +1317,11 @@ body.female .game-card {
 .card-badge.penalty {
     background: #ffebee;
     color: #c62828;
+}
+
+.card-badge.modifier {
+    background: #ff9800;
+    color: white;
 }
 
 /* Close button */
@@ -1778,18 +1785,18 @@ body.female .drawn-card {
         opacity: 0;
     }
     50% { 
-        transform: scale(1.1) rotateY(90deg);
+        transform: scale(1.6) rotateY(90deg);
         opacity: 1;
     }
     100% { 
-        transform: scale(1) rotateY(0deg);
+        transform: scale(1.5) rotateY(0deg);
         opacity: 1;
     }
 }
 
 @keyframes slideOut {
     0% { 
-        transform: scale(1) translateY(0);
+        transform: scale(1.5) translateY(0);
         opacity: 1;
     }
     100% { 
@@ -1867,6 +1874,44 @@ body.female .drawn-card {
     font-size: 12px;
     backdrop-filter: blur(10px);
     color: white;
+}
+
+.blocking-indicator {
+    position: fixed;
+    top: 50px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #ff6b6b;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 25px;
+    font-weight: 600;
+    z-index: 1001;
+    display: none;
+    animation: pulse 2s infinite;
+}
+
+.active-effects {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 15px;
+    padding: 15px;
+    margin-bottom: 20px;
+    order: -2;
+}
+
+.active-effects h4 {
+    margin-bottom: 10px;
+    color: #333;
+}
+
+.effect-item {
+    background: #e3f2fd;
+    color: #1565c0;
+    padding: 8px 12px;
+    border-radius: 8px;
+    margin-bottom: 5px;
+    font-size: 14px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -2046,6 +2091,14 @@ body.female .drawn-card {
     
     .drawn-card .card-description {
         color: #ccc;
+    }
+
+    .active-effects {
+        background: rgba(42, 42, 42, 0.9);
+    }
+    
+    .active-effects h4 {
+        color: #e6e6e6;
     }
 }
 
