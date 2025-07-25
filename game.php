@@ -382,7 +382,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 
                 // Get the chance card details
                 $stmt = $pdo->prepare("
-                    SELECT pc.*, c.card_name 
+                    SELECT pc.*, c.* 
                     FROM player_cards pc 
                     JOIN cards c ON pc.card_id = c.id 
                     WHERE pc.id = ? AND pc.player_id = ? AND pc.game_id = ?
@@ -392,6 +392,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 
                 if (!$chanceCard) {
                     throw new Exception("Chance card not found");
+                }
+                
+                // Delete any active timers for this card
+                if ($chanceCard['timer']) {
+                    $stmt = $pdo->prepare("DELETE FROM timers WHERE game_id = ? AND player_id = ? AND description = ?");
+                    $stmt->execute([$player['game_id'], $player['id'], $chanceCard['card_name']]);
                 }
                 
                 // Remove any active effects for this card

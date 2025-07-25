@@ -45,9 +45,9 @@ function sendDailyNotifications() {
     try {
         $pdo = Config::getDatabaseConnection();
         
-        // Get all active games with players - Fixed query
+        // Get all active games with players, including game mode
         $stmt = $pdo->query("
-            SELECT g.id as game_id, g.end_date,
+            SELECT g.id as game_id, g.end_date, g.game_mode,
                    p.id, p.first_name, p.gender, p.score, p.fcm_token,
                    opponent.first_name as opponent_name, opponent.score as opponent_score
             FROM games g
@@ -58,11 +58,6 @@ function sendDailyNotifications() {
         
         $players = $stmt->fetchAll();
         error_log("Found " . count($players) . " players with FCM tokens for daily notifications");
-
-        // Get game mode
-        $stmt = $pdo->prepare("SELECT game_mode FROM games WHERE id = ?");
-        $stmt->execute([$player['game_id']]);
-        $gameData = ['game_mode' => $stmt->fetchColumn()];
         
         $notificationsSent = 0;
         
@@ -85,7 +80,7 @@ function sendDailyNotifications() {
                 
                 // Get card count for digital games
                 $cardCountText = '';
-                if ($gameData['game_mode'] === 'digital') {
+                if ($player['game_mode'] === 'digital') {
                     $stmt = $pdo->prepare("SELECT SUM(quantity) as hand_count FROM player_cards WHERE game_id = ? AND player_id = ? AND card_type != 'serve'");
                     $stmt->execute([$player['game_id'], $player['id']]);
                     $handCount = $stmt->fetchColumn() ?: 0;

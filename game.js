@@ -589,7 +589,7 @@ function updateBlockingStatus(cardData) {
             indicator = document.createElement('div');
             indicator.id = 'blocking-indicator';
             indicator.className = 'blocking-indicator';
-            indicator.innerHTML = '<i class="fa-solid fa-exclamation-triangle"></i> Complete chance cards first';
+            indicator.innerHTML = '<i class="fa-solid fa-exclamation-triangle"></i> A card is blocking Serve card completion';
             document.body.appendChild(indicator);
         }
         indicator.style.display = 'block';
@@ -691,13 +691,20 @@ function showCardSelectionActions() {
         actions.innerHTML = '';
         
         if (selectedHandCard.card_type === 'chance') {
+            
             // Check if chance card can be auto-completed
             const hasModifiers = selectedHandCard.challenge_modify == 1 || selectedHandCard.snap_modify == 1 || 
-                   selectedHandCard.dare_modify == 1 || selectedHandCard.spicy_modify == 1 || 
-                   selectedHandCard.before_next_challenge == 1 || selectedHandCard.timer ||
-                   (selectedHandCard.veto_modify && selectedHandCard.veto_modify !== 'none');
+                selectedHandCard.dare_modify == 1 || selectedHandCard.spicy_modify == 1 || 
+                selectedHandCard.before_next_challenge == 1 || 
+                (selectedHandCard.veto_modify && selectedHandCard.veto_modify !== 'none');
             
-            if (hasModifiers) {
+            // Special case: dice + timer cards can be manually completed
+            const isDiceTimerCard = selectedHandCard.roll_dice == 1 && selectedHandCard.timer;
+            
+            // Cards with timer but no dice roll are auto-only
+            const isTimerOnlyCard = selectedHandCard.timer && !selectedHandCard.roll_dice;
+            
+            if ((hasModifiers || isTimerOnlyCard) && !isDiceTimerCard) {
                 actions.innerHTML = `<button class="btn btn-complete" disabled title="Auto-completes when conditions are met">Complete (Auto)</button>`;
             } else {
                 actions.innerHTML = `<button class="btn btn-complete" onclick="completeChanceCard(${selectedHandCard.id})">Complete</button>`;
@@ -919,6 +926,7 @@ function displayActiveEffects() {
 
 $('.bottom-right-menu').on('click', function() {
     $(this).toggleClass('open');
+    $('.blocking-indicator').toggleClass('move');
 });
 
 // Check for device ID in localStorage as fallback

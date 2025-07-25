@@ -869,11 +869,14 @@ function getPlayerCards($gameId, $playerId, $cardType = null) {
         
         $sql = "
             SELECT pc.*, c.card_name, c.card_description, c.card_points,
-                   c.serve_to_her, c.serve_to_him, c.for_her, c.for_him,
-                   c.extra_spicy, c.veto_subtract, c.veto_steal,
-                   c.veto_draw_chance, c.veto_draw_snap_dare, c.veto_draw_spicy,
-                   c.timer, c.challenge_modify, c.snap_modify, c.dare_modify, c.spicy_modify,
-                   c.before_next_challenge, c.veto_modify, c.score_modify
+                c.serve_to_her, c.serve_to_him, c.for_her, c.for_him,
+                c.extra_spicy, c.veto_subtract, c.veto_steal,
+                c.veto_draw_chance, c.veto_draw_snap_dare, c.veto_draw_spicy,
+                c.timer, c.challenge_modify, c.snap_modify, c.dare_modify, c.spicy_modify,
+                c.before_next_challenge, c.veto_modify, c.score_modify,
+                c.roll_dice, c.dice_condition, c.dice_threshold, c.double_it,
+                c.opponent_challenge_modify, c.draw_snap_dare, c.draw_spicy,
+                c.score_add, c.score_subtract, c.score_steal, c.repeat_count
             FROM player_cards pc
             JOIN cards c ON pc.card_id = c.id
             WHERE pc.game_id = ? AND pc.player_id = ?
@@ -1088,6 +1091,9 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
         $pdo = Config::getDatabaseConnection();
         $pdo->beginTransaction();
         
+        // Initialize response array early
+        $response = ['success' => true, 'points_awarded' => 0, 'score_changes' => []];
+        
         // Get card details
         $stmt = $pdo->prepare("
             SELECT pc.*, c.*
@@ -1107,7 +1113,8 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
         // Handle chance cards
         if ($playerCard['card_type'] === 'chance') {
             $effects = processChanceCard($gameId, $playerId, $playerCard);
-            $result = ['success' => true, 'effects' => $effects, 'message' => implode(', ', $effects)];
+            $response['effects'] = $effects;
+            $response['message'] = implode(', ', $effects);
 
             // Get timer IDs directly
             $stmt = $pdo->prepare("SELECT id FROM timers WHERE game_id = ? AND player_id = ? AND description = ?");
@@ -1166,8 +1173,16 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
                             $finalPoints = 0;
                             break;
                     }
-                    // Remove the effect after applying it
-                    removeActiveChanceEffect($effect['id']);
+                    
+                    // Only remove the effect if it's NOT timer-based
+                    $stmt = $pdo->prepare("SELECT timer_id FROM active_chance_effects WHERE id = ?");
+                    $stmt->execute([$effect['id']]);
+                    $timerId = $stmt->fetchColumn();
+                    
+                    if (!$timerId) {
+                        removeActiveChanceEffect($effect['id']);
+                    }
+                    
                     break; // Only apply first matching effect
                 }
             }
@@ -1233,13 +1248,13 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
         }
         
         $pdo->commit();
-        $response = ['success' => true, 'points_awarded' => $pointsAwarded];
+        
+        // Update points_awarded in response
+        $response['points_awarded'] = $pointsAwarded;
 
-        // Add score change data for animation
+        // Add current player score change if they got points
         if ($pointsAwarded > 0) {
-            $response['score_changes'] = [
-                ['player_id' => $playerId, 'points' => $pointsAwarded]
-            ];
+            $response['score_changes'][] = ['player_id' => $playerId, 'points' => $pointsAwarded];
         }
 
         return $response;
@@ -1725,11 +1740,10 @@ function processChanceCard($gameId, $playerId, $cardData) {
         }
     }
 
-    // Auto-complete cards with only immediate effects
-    $hasOnlyImmediateEffects = ($cardData['score_add'] || $cardData['score_subtract'] || $cardData['score_steal'] || $cardData['draw_snap_dare'] || $cardData['draw_spicy']) &&
+    // Auto-complete cards with only immediate effects OR dice cards with timers
+    $hasOnlyImmediateEffects = ($cardData['score_add'] || $cardData['score_subtract'] || $cardData['score_steal'] || $cardData['draw_snap_dare'] || $cardData['draw_spicy'] || $cardData['opponent_challenge_modify']) &&
         !$cardData['before_next_challenge'] &&
         !$cardData['challenge_modify'] &&
-        !$cardData['opponent_challenge_modify'] &&
         $cardData['veto_modify'] === 'none' &&
         !$cardData['snap_modify'] &&
         !$cardData['dare_modify'] &&
@@ -1737,11 +1751,19 @@ function processChanceCard($gameId, $playerId, $cardData) {
         !$cardData['timer'] &&
         !$cardData['repeat_count'];
 
-    if ($hasOnlyImmediateEffects) {
-        // Remove from player's hand
-        $stmt = $pdo->prepare("DELETE FROM player_cards WHERE game_id = ? AND player_id = ? AND card_id = ?");
-        $stmt->execute([$gameId, $playerId, $cardData['id']]);
-        $effects[] = "Card auto-completed";
+    // Special case: dice cards with timers can be auto-completed but also remain available for manual completion
+    $isDiceTimerCard = $cardData['roll_dice'] && $cardData['timer'];
+
+    if ($hasOnlyImmediateEffects || $isDiceTimerCard) {
+        // For dice timer cards, don't remove from hand - just add effects and keep card available
+        if (!$isDiceTimerCard) {
+            // Remove from player's hand (normal auto-completion)
+            $stmt = $pdo->prepare("DELETE FROM player_cards WHERE game_id = ? AND player_id = ? AND card_id = ?");
+            $stmt->execute([$gameId, $playerId, $cardData['id']]);
+            $effects[] = "Card auto-completed";
+        } else {
+            $effects[] = "Timer effects activated - card remains available for dice roll";
+        }
     }
     
     return $effects;
