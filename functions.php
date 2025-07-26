@@ -1275,13 +1275,12 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
         }
         
         // Remove card from player's hand
-        if ($playerCard['quantity'] > 1) {
-            $stmt = $pdo->prepare("UPDATE player_cards SET quantity = quantity - 1 WHERE id = ?");
-            $stmt->execute([$playerCardId]);
-        } else {
-            $stmt = $pdo->prepare("DELETE FROM player_cards WHERE id = ?");
-            $stmt->execute([$playerCardId]);
-        }
+        $stmt = $pdo->prepare("UPDATE player_cards SET quantity = quantity - 1 WHERE id = ?");
+        $stmt->execute([$playerCardId]);
+
+        // Delete the row if quantity is now 0 or less
+        $stmt = $pdo->prepare("DELETE FROM player_cards WHERE id = ? AND quantity <= 0");
+        $stmt->execute([$playerCardId]);
 
         // After completing serve/snap/dare/spicy cards, handle modifier effects
         if (in_array($playerCard['card_type'], ['accepted_serve', 'snap', 'dare', 'spicy'])) {
@@ -1565,13 +1564,12 @@ function vetoHandCard($gameId, $playerId, $cardId, $playerCardId) {
         }
         
         // Remove from hand
-        if ($playerCard['quantity'] > 1) {
-            $stmt = $pdo->prepare("UPDATE player_cards SET quantity = quantity - 1 WHERE id = ?");
-            $stmt->execute([$playerCardId]);
-        } else {
-            $stmt = $pdo->prepare("DELETE FROM player_cards WHERE id = ?");
-            $stmt->execute([$playerCardId]);
-        }
+        $stmt = $pdo->prepare("UPDATE player_cards SET quantity = quantity - 1 WHERE id = ?");
+        $stmt->execute([$playerCardId]);
+
+        // Delete the row if quantity is now 0 or less
+        $stmt = $pdo->prepare("DELETE FROM player_cards WHERE id = ? AND quantity <= 0");
+        $stmt->execute([$playerCardId]);
         
         
         $pdo->commit();
