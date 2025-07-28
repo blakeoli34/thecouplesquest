@@ -208,8 +208,9 @@ function saveCard($data) {
                     !empty($data['veto_draw_spicy']) ? intval($data['veto_draw_spicy']) : null
                 ]);
             } elseif ($cardType === 'chance') {
-                $sql .= ", for_her = ?, for_him = ?, before_next_challenge = ?, challenge_modify = ?, opponent_challenge_modify = ?, draw_snap_dare = ?, draw_spicy = ?, score_modify = ?, timer = ?, timer_completion_type = ?, veto_modify = ?, snap_modify = ?, dare_modify = ?, spicy_modify = ?, score_add = ?, score_subtract = ?, score_steal = ?, repeat_count = ?, roll_dice = ?, dice_condition = ?, dice_threshold = ?, double_it = ?";
+                $sql .= ", notification_text = ?, for_her = ?, for_him = ?, before_next_challenge = ?, challenge_modify = ?, opponent_challenge_modify = ?, draw_snap_dare = ?, draw_spicy = ?, score_modify = ?, timer = ?, timer_completion_type = ?, veto_modify = ?, snap_modify = ?, dare_modify = ?, spicy_modify = ?, score_add = ?, score_subtract = ?, score_steal = ?, repeat_count = ?, roll_dice = ?, dice_condition = ?, dice_threshold = ?, double_it = ?";
                 $params = array_merge($params, [
+                    $data['notification_text'] ?: null,
                     intval($data['for_her']),
                     intval($data['for_him']),
                     intval($data['before_next_challenge']),
@@ -261,9 +262,9 @@ function saveCard($data) {
                     !empty($data['veto_draw_spicy']) ? intval($data['veto_draw_spicy']) : null
                 ];
             } elseif ($cardType === 'chance') {
-                $sql = "INSERT INTO cards (card_type, card_name, card_description, quantity, for_her, for_him, before_next_challenge, challenge_modify, opponent_challenge_modify, draw_snap_dare, draw_spicy, score_modify, timer, timer_completion_type, veto_modify, snap_modify, dare_modify, spicy_modify, score_add, score_subtract, score_steal, repeat_count, roll_dice, dice_condition, dice_threshold, double_it) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                $sql = "INSERT INTO cards (card_type, card_name, card_description, notification_text, quantity, for_her, for_him, before_next_challenge, challenge_modify, opponent_challenge_modify, draw_snap_dare, draw_spicy, score_modify, timer, timer_completion_type, veto_modify, snap_modify, dare_modify, spicy_modify, score_add, score_subtract, score_steal, repeat_count, roll_dice, dice_condition, dice_threshold, double_it) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                 $params = [
-                    $cardType, $cardName, $cardDescription, intval($data['quantity']) ?: 1,
+                    $cardType, $cardName, $cardDescription, $data['notification_text'] ?: null, intval($data['quantity']) ?: 1,
                     intval($data['for_her']),
                     intval($data['for_him']),
                     intval($data['before_next_challenge']),
@@ -1330,6 +1331,10 @@ function showLoginForm($error = null) {
                 
                 <!-- Chance Card Fields -->
                 <div id="chanceFields" style="display: none;">
+                    <div class="form-group">
+                        <label for="notification_text">Notification Text (sent to opponent when drawn):</label>
+                        <textarea name="notification_text" id="notification_text" class="form-control" rows="2" placeholder="Optional: Custom message sent to opponent when this card is drawn"></textarea>
+                    </div>
                     <div class="checkbox-group">
                         <div class="checkbox-item">
                             <input type="checkbox" id="forHer">
@@ -1684,6 +1689,7 @@ function showLoginForm($error = null) {
                 if (card.veto_draw_snap_dare) document.getElementById('vetoDrawSnapDare').value = card.veto_draw_snap_dare;
                 if (card.veto_draw_spicy) document.getElementById('vetoDrawSpicy').value = card.veto_draw_spicy;
             } else if (card.card_type === 'chance') {
+                document.getElementById('notification_text').value = card.notification_text;
                 document.getElementById('forHer').checked = card.for_her;
                 document.getElementById('forHim').checked = card.for_him;
                 document.getElementById('beforeNextChallenge').checked = card.before_next_challenge;
@@ -1740,6 +1746,7 @@ function showLoginForm($error = null) {
                 formData.append('veto_draw_snap_dare', document.getElementById('vetoDrawSnapDare').value || '');
                 formData.append('veto_draw_spicy', document.getElementById('vetoDrawSpicy').value || '');
             } else if (cardType === 'chance') {
+                formData.append('notification_text', document.getElementById('notification_text').value);
                 formData.append('for_her', document.getElementById('forHer').checked ? '1' : '0');
                 formData.append('for_him', document.getElementById('forHim').checked ? '1' : '0');
                 formData.append('before_next_challenge', document.getElementById('beforeNextChallenge').checked ? '1' : '0');

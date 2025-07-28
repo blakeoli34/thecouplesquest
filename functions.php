@@ -1311,6 +1311,28 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
 
             $pointsAwarded = $finalPoints;
         }
+
+        // Send notification to opponent if this was a served card
+        if ($playerCard['card_type'] === 'serve' || $playerCard['card_type'] === 'accepted_serve') {
+            $opponentId = getOpponentPlayerId($gameId, $playerId);
+            if ($opponentId) {
+                $stmt = $pdo->prepare("SELECT first_name FROM players WHERE id = ?");
+                $stmt->execute([$playerId]);
+                $playerName = $stmt->fetchColumn();
+                
+                $stmt = $pdo->prepare("SELECT fcm_token FROM players WHERE id = ?");
+                $stmt->execute([$opponentId]);
+                $opponentToken = $stmt->fetchColumn();
+                
+                if ($opponentToken) {
+                    sendPushNotification(
+                        $opponentToken,
+                        "Card Completed!",
+                        "$playerName completed the {$playerCard['card_name']} card you served them!"
+                    );
+                }
+            }
+        }
         
         // Remove card from player's hand
         $stmt = $pdo->prepare("UPDATE player_cards SET quantity = quantity - 1 WHERE id = ?");
@@ -1587,6 +1609,28 @@ function vetoHandCard($gameId, $playerId, $cardId, $playerCardId) {
         ");
         $stmt->execute([$gameId, $playerId]);
         $vetoModifierCard = $stmt->fetch();
+
+        // Send notification to opponent if this was a served card
+        if ($playerCard['card_type'] === 'accepted_serve') {
+            $opponentId = getOpponentPlayerId($gameId, $playerId);
+            if ($opponentId) {
+                $stmt = $pdo->prepare("SELECT first_name FROM players WHERE id = ?");
+                $stmt->execute([$playerId]);
+                $playerName = $stmt->fetchColumn();
+                
+                $stmt = $pdo->prepare("SELECT fcm_token FROM players WHERE id = ?");
+                $stmt->execute([$opponentId]);
+                $opponentToken = $stmt->fetchColumn();
+                
+                if ($opponentToken) {
+                    sendPushNotification(
+                        $opponentToken,
+                        "Card Vetoed!",
+                        "$playerName vetoed the {$playerCard['card_name']} card you served them!"
+                    );
+                }
+            }
+        }
         
         // Remove from hand
         $stmt = $pdo->prepare("UPDATE player_cards SET quantity = quantity - 1 WHERE id = ?");
@@ -1958,6 +2002,29 @@ function processChanceCard($gameId, $playerId, $cardData) {
             } else {
                 // Regular timer-based effect
                 addActiveChanceEffect($gameId, $playerId, $cardData['id'], 'timer_effect', null, null, $timerResult['timer_id']);
+            }
+        }
+    }
+
+    // Send custom notification if specified
+    if ($cardData['notification_text']) {
+        $opponentId = getOpponentPlayerId($gameId, $playerId);
+        if ($opponentId) {
+            $stmt = $pdo->prepare("SELECT first_name FROM players WHERE id = ?");
+            $stmt->execute([$playerId]);
+            $playerName = $stmt->fetchColumn();
+            
+            $stmt = $pdo->prepare("SELECT fcm_token FROM players WHERE id = ?");
+            $stmt->execute([$opponentId]);
+            $opponentToken = $stmt->fetchColumn();
+            
+            if ($opponentToken) {
+                $customMessage = str_replace('playerName', $playerName, $cardData['notification_text']);
+                sendPushNotification(
+                    $opponentToken,
+                    "Game Modified!",
+                    $customMessage
+                );
             }
         }
     }
