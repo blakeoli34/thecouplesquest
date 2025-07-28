@@ -116,8 +116,50 @@ if(isset($_GET['deletegame'])) {
     }
 }
 
+// Handle save rules
+if ($_POST && isset($_POST['save_rules'])) {
+    try {
+        $content = $_POST['rules_content'] ?? '';
+        
+        // Check if rules exist
+        $pdo = Config::getDatabaseConnection();
+        $stmt = $pdo->query("SELECT COUNT(*) FROM game_rules");
+        $count = $stmt->fetchColumn();
+        
+        if ($count > 0) {
+            $stmt = $pdo->prepare("UPDATE game_rules SET content = ? WHERE id = (SELECT * FROM (SELECT MIN(id) FROM game_rules) AS tmp)");
+        } else {
+            $stmt = $pdo->prepare("INSERT INTO game_rules (content) VALUES (?)");
+        }
+        
+        $stmt->execute([$content]);
+        $message = 'Rules saved successfully';
+        
+    } catch (Exception $e) {
+        error_log("Error saving rules: " . $e->getMessage());
+        $message = 'Failed to save rules';
+    }
+    
+    header('Location: admin.php?rules_saved=1');
+    exit;
+}
+
+if (isset($_GET['rules_saved'])) {
+    $message = 'Rules saved successfully';
+}
+
 // Get statistics
 $stats = getGameStatistics();
+
+$rulesContent = '';
+try {
+    $pdo = Config::getDatabaseConnection();
+    $stmt = $pdo->query("SELECT content FROM game_rules ORDER BY id LIMIT 1");
+    $rules = $stmt->fetch();
+    $rulesContent = $rules ? $rules['content'] : '';
+} catch (Exception $e) {
+    error_log("Error loading rules: " . $e->getMessage());
+}
 
 function getCardsByType($type) {
     try {
@@ -1256,6 +1298,18 @@ function showLoginForm($error = null) {
                     <!-- Cards will be loaded here -->
                 </div>
             </div>
+        </div>
+
+        <!-- Game Rules Management -->
+        <div class="section">
+            <h2>Game Rules</h2>            
+            <form method="POST" action="admin.php">
+                <div class="form-group">
+                    <label for="rulesContent">Rules Content (HTML)</label>
+                    <textarea id="rulesContent" name="rules_content" rows="15" style="width: 100%; font-family: monospace;"><?= htmlspecialchars($rulesContent) ?></textarea>
+                </div>
+                <button type="submit" name="save_rules" class="btn">Save Rules</button>
+            </form>
         </div>
     </div>
 

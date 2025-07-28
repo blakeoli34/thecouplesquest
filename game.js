@@ -2371,6 +2371,37 @@ function setCustomDuration() {
     });
 }
 
+function openRulesOverlay() {
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'action=get_rules'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('rulesContent').innerHTML = data.content;
+            document.getElementById('rulesOverlay').classList.add('active');
+        } else {
+            alert('Failed to load rules');
+        }
+    })
+    .catch(error => {
+        console.error('Error loading rules:', error);
+        alert('Failed to load rules');
+    });
+}
+
+function closeRulesOverlay() {
+    document.getElementById('rulesOverlay').classList.remove('active');
+}
+
+function handleRulesOverlayClick(event) {
+    if (event.target.classList.contains('card-overlay')) {
+        closeRulesOverlay();
+    }
+}
+
 // Initialize everything when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Game page loaded');
@@ -2598,3 +2629,6 @@ window.resetDecks = resetDecks;
 window.showCustomDatePicker = showCustomDatePicker;
 window.hideCustomDatePicker = hideCustomDatePicker;
 window.setCustomDuration = setCustomDuration;
+window.openRulesOverlay = openRulesOverlay;
+window.closeRulesOverlay = closeRulesOverlay;
+window.handleRulesOverlayClick = handleRulesOverlayClick;

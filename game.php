@@ -614,6 +614,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
             exit;
 
+        case 'get_rules':
+            try {
+                $stmt = $pdo->query("SELECT content FROM game_rules ORDER BY id LIMIT 1");
+                $rules = $stmt->fetch();
+                echo json_encode([
+                    'success' => true,
+                    'content' => $rules ? $rules['content'] : '<p>No rules available yet.</p>'
+                ]);
+            } catch (Exception $e) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Failed to load rules'
+                ]);
+            }
+            exit;
+
         case 'end_game':
             try {
                 $pdo = Config::getDatabaseConnection();
@@ -724,7 +740,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             --color-pink: <?= Config::COLOR_PINK ?>;
             --color-blue-dark: <?= Config::COLOR_BLUE_DARK ?>;
             --color-pink-dark: <?= Config::COLOR_PINK_DARK ?>;
-            --animation-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            --animation-spring: cubic-bezier(0.2, 0.8, 0.3, 1.1);
         }
     </style>
     <link rel="stylesheet" href="/game.css">
@@ -995,6 +1011,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     <div class="flyout-menu-item" onclick="resetDecks()" style="display: none;">
                         <div class="flyout-menu-item-icon"><i class="fa-solid fa-arrows-rotate"></i></div>
                         <div class="flyout-menu-item-text">Reset Decks...</div>
+                    </div>
+                    <div class="flyout-menu-item" onclick="openRulesOverlay()">
+                        <div class="flyout-menu-item-icon"><i class="fa-solid fa-book"></i></div>
+                        <div class="flyout-menu-item-text">Game Rules</div>
                     </div>
                     <div class="flyout-menu-item hybrid-menu-item" onclick="openDicePopover()">
                         <div class="flyout-menu-item-icon"><i class="fa-solid fa-dice"></i></div>
@@ -1284,6 +1304,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             <div class="card-meta" id="drawCardMeta">
                 <!-- Points badge will be added here if applicable -->
             </div>
+        </div>
+    </div>
+
+    <!-- Rules Overlay -->
+    <div class="card-overlay" id="rulesOverlay" onclick="handleRulesOverlayClick(event)">
+        <button class="card-overlay-close" onclick="closeRulesOverlay()">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
+        <div class="rules-content" id="rulesContent">
+            <!-- Rules will be loaded here -->
         </div>
     </div>
     
