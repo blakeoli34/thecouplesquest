@@ -896,7 +896,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     <div class="menu-item-icon"><i class="fa-solid fa-cards-blank"></i></div>
                     <div class="menu-item-text">Draw</div>
                 </div>
-                <div class="menu-item digital-menu-item" onclick="openDiceOverlay()">
+                <div class="menu-item digital-menu-item" onclick="openDicePopover()">
                     <div class="menu-item-icon"><i class="fa-solid fa-dice"></i></div>
                     <div class="menu-item-text">Roll</div>
                 </div>
@@ -925,7 +925,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         <div class="flyout-menu-item-icon"><i class="fa-solid fa-arrows-rotate"></i></div>
                         <div class="flyout-menu-item-text">Reset Decks...</div>
                     </div>
-                    <div class="flyout-menu-item hybrid-menu-item" onclick="openDiceOverlay()">
+                    <div class="flyout-menu-item hybrid-menu-item" onclick="openDicePopover()">
                         <div class="flyout-menu-item-icon"><i class="fa-solid fa-dice"></i></div>
                         <div class="flyout-menu-item-text">Roll Dice</div>
                     </div>
@@ -1111,10 +1111,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     </div>
 
     <!-- Dice Overlay -->
-    <div class="dice-overlay" id="diceOverlay">
-        <button class="close-dice" onclick="closeDiceOverlay()"><i class="fa-solid fa-xmark"></i></button>
+    <div class="dice-popover" id="dicePopover">
+        <div id="dicePopoverContainer"></div>
+    </div>
+
+    <!-- Hidden template for dice HTML -->
+    <div id="diceTemplate" style="display: none;">
         <div class="dice-container" id="diceContainer">
-            <div class="die male" id="die1">
+                <div class="die male" id="die1">
                 <div class="die-face front face-1">
                     <div class="die-dot"></div>
                 </div>
@@ -1184,17 +1188,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     <div class="die-dot"></div>
                 </div>
             </div>
-        </div>
-
-        <div class="dice-controls">
-            <div class="dice-count-selector">
-                <button class="dice-count-btn active" onclick="setDiceCount(1)">1 Die</button>
-                <button class="dice-count-btn" onclick="setDiceCount(2)">2 Dice</button>
-            </div>
-            
-            <button class="roll-button" id="rollButton" onclick="rollDice()">
-                Roll Dice
-            </button>
         </div>
     </div>
 

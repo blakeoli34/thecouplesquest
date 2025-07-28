@@ -906,34 +906,69 @@ body {
     font-weight: 700;
 }
 
-.dice-overlay {
+.dice-popover {
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0,0,0,0.8);
+    bottom: 120px;
+    width: 90vw;
+    max-width: 400px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(250,250,250,0.7);
     backdrop-filter: blur(8px);
-    z-index: 2000;
+    border-radius: 50px;
+    border: 2px solid #fff;
+    padding: 20px;
     display: flex;
-    align-items: center;
     justify-content: center;
-    flex-direction: column;
+    align-items: center;
+    gap: 20px;
     opacity: 0;
     pointer-events: none;
+    transform: translateX(-50%) translateY(60px) scale(0.5);
     transition: all 0.3s ease;
+    z-index: 1000;
 }
 
-.dice-overlay.active {
+.dice-popover.active {
     opacity: 1;
     pointer-events: all;
+    transform: translateX(-50%) translateY(0) scale(1);
+}
+
+.dice-choice-buttons {
+    display: flex;
+    gap: 20px;
+    width: 100%;
+}
+
+#dicePopoverContainer {
+    width: 100%;
+}
+
+.dice-choice-btn {
+    padding: 15px 25px;
+    border: none;
+    background: #f8f9fa;
+    color: #333;
+    border-radius: 35px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 700;
+    transition: all 0.3s ease;
+    height: 80px;
+    width: 50%;
+}
+
+.dice-choice-btn:hover {
+    background: white;
+    color: #111;
 }
 
 .dice-container {
     perspective: 1000px;
     display: flex;
     gap: 40px;
-    margin-bottom: 40px;
+    justify-content: center;
 }
 
 .die {
@@ -2078,12 +2113,14 @@ body.digital .hybrid-menu-item {
         color: #e6e6e6;
     }
 
-    .draw-popover {
-        background: rgba(25,25,25,0.95);
-        border-color: #333;
+    .draw-popover,
+    .dice-popover {
+        background: rgba(25,25,25,0.7);
+        border-color: #111;
     }
     
-    .draw-card-btn {
+    .draw-card-btn,
+    .dice-choice-btn {
         background: #2a2a2a;
         color: #e6e6e6;
     }

@@ -602,6 +602,7 @@ function updateBlockingStatus(cardData) {
 }
 
 function openDrawPopover() {
+    closeDicePopover();
     const popover = document.getElementById('drawPopover');
     if (popover) {
         if (popover.classList.contains('active')) {
@@ -2031,18 +2032,20 @@ function startNewGamePolling() {
     }, 5000);
 }
 
-function openDiceOverlay() {
-    const overlay = document.getElementById('diceOverlay');
-    if (overlay) {
-        overlay.classList.add('active');
-        
-        // Set dice color based on current player's gender
-        if (typeof gameData !== 'undefined' && gameData.currentPlayerGender) {
-            setDiceColor(gameData.currentPlayerGender);
+function openDicePopover() {
+    const popover = document.getElementById('dicePopover');
+    if (popover) {
+        if (popover.classList.contains('active')) {
+            closeDicePopover();
+            return;
         }
         
-        // Initialize dice to face 1 position
-        initializeDicePosition();
+        showDiceChoiceButtons();
+        popover.classList.add('active');
+        
+        setTimeout(() => {
+            document.addEventListener('click', closeDicePopoverOnClickOutside);
+        }, 100);
     }
 }
 
@@ -2058,11 +2061,62 @@ function initializeDicePosition() {
     }
 }
 
-function closeDiceOverlay() {
-    const overlay = document.getElementById('diceOverlay');
-    if (overlay) {
-        overlay.classList.remove('active');
+function closeDicePopover() {
+    const popover = document.getElementById('dicePopover');
+    if (popover) {
+        popover.classList.remove('active');
+        document.removeEventListener('click', closeDicePopoverOnClickOutside);
     }
+}
+
+function closeDicePopoverOnClickOutside(event) {
+    const popover = document.getElementById('dicePopover');
+    if (popover && !popover.contains(event.target)) {
+        closeDicePopover();
+    }
+}
+
+function showDiceChoiceButtons() {
+    const container = document.getElementById('dicePopoverContainer');
+    container.innerHTML = `
+        <div class="dice-choice-buttons">
+            <button class="dice-choice-btn" onclick="event.stopPropagation(); rollDiceChoice(1)">1 Die</button>
+            <button class="dice-choice-btn" onclick="event.stopPropagation(); rollDiceChoice(2)">2 Dice</button>
+        </div>
+    `;
+}
+
+function rollDiceChoice(count) {
+    setDiceCount(count);
+    const container = document.getElementById('dicePopoverContainer');
+    
+    // Move the dice HTML from game.php into here
+    container.innerHTML = document.getElementById('diceTemplate').innerHTML;
+    
+    // Add click handlers for re-rolling
+    const die1 = container.querySelector('#die1');
+    const die2 = container.querySelector('#die2');
+    
+    if (die1) {
+        die1.onclick = (e) => {
+            e.stopPropagation();
+            rollDice();
+        };
+    }
+    
+    if (die2) {
+        die2.onclick = (e) => {
+            e.stopPropagation();
+            rollDice();
+        };
+    }
+    
+    // Update dice color and auto-roll
+    if (gameData.currentPlayerGender) {
+        setDiceColor(gameData.currentPlayerGender);
+    }
+    initializeDicePosition();
+    setTimeout(() => rollDice(), 100);
 }
 
 function setDiceCount(count) {
@@ -2437,8 +2491,8 @@ window.showTimerDeleteModal = showTimerDeleteModal;
 window.hideTimerDeleteModal = hideTimerDeleteModal;
 window.deleteSelectedTimer = deleteSelectedTimer;
 window.readyForNewGame = readyForNewGame;
-window.openDiceOverlay = openDiceOverlay;
-window.closeDiceOverlay = closeDiceOverlay;
+window.openDicePopover = openDicePopover;
+window.closeDicePopover = closeDicePopover;
 window.setDiceCount = setDiceCount;
 window.rollDice = rollDice;
 window.completeChanceCard = completeChanceCard;
