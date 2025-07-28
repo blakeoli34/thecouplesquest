@@ -695,7 +695,6 @@ function showCardSelectionActions() {
             // Check if chance card can be auto-completed
             const hasModifiers = selectedHandCard.challenge_modify == 1 || selectedHandCard.snap_modify == 1 || 
                 selectedHandCard.dare_modify == 1 || selectedHandCard.spicy_modify == 1 || 
-                selectedHandCard.before_next_challenge == 1 || 
                 (selectedHandCard.veto_modify && selectedHandCard.veto_modify !== 'none');
             
             // Special case: dice + timer cards can be manually completed

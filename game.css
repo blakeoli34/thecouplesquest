@@ -1208,17 +1208,16 @@ body {
 
 .game-card {
     width: calc(50% - 10px);
-    background: white;
+    background: linear-gradient(to bottom, #fff 50%, #ccc 100%);
     border-radius: 15px;
     padding: 20px;
-    padding-left: 5px;
     box-shadow: 0 8px 25px rgba(0,0,0,0.2);
     cursor: pointer;
     position: relative;
     min-height: 60vw;
     display: flex;
     flex-direction: column;
-    border-left: solid 15px #ccc;
+    border: solid 1px #ccc;
     transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     z-index: 1;
 }
@@ -1240,12 +1239,12 @@ body {
     pointer-events: none;
 }
 
-body.male .game-card {
-    border-color: var(--color-blue);
+.male .game-card {
+    background: linear-gradient(to bottom, #fff 50%, var(--color-blue) 100%);
 }
 
-body.female .game-card {
-    border-color: var(--color-pink);
+.female .game-card {
+    background: linear-gradient(to bottom, #fff 50%, var(--color-pink) 100%);
 }
 
 .card-header {
@@ -1676,14 +1675,34 @@ body.digital .hybrid-menu-item {
     position: absolute;
     width: 120px;
     height: 180px;
-    padding: 40px 6px;
+    padding: 28px 6px;
     background: #000;
     border: 2px solid #222;
     border-radius: 12px;
     color: white;
-    font-size: 16px;
+    font-size: 20px;
+    line-height: 18px;
     font-weight: 600;
     transform-origin: center bottom;
+    overflow: hidden;
+}
+
+.deck-card:after {
+    content: '';
+    width: 100%;
+    background: #ccc;
+    height: 10%;
+    position: absolute;
+    left: 0;
+    bottom: 0;
+}
+
+.female .deck-card:after {
+    background: var(--color-pink);
+}
+
+.male .deck-card:after {
+    background: var(--color-blue);
 }
 
 .deck-card:nth-child(1) { 
@@ -1730,8 +1749,8 @@ body.digital .hybrid-menu-item {
     position: absolute;
     width: 160px;
     height: 240px;
-    background: white;
-    border: 2px solid #ddd;
+    background: linear-gradient(to bottom, #fff 50%, #ccc 100%);
+    border: 1px solid #ddd;
     border-radius: 15px;
     transform-origin: center;
     transform: scale(0);
@@ -1744,23 +1763,12 @@ body.digital .hybrid-menu-item {
     overflow: hidden;
 }
 
-.drawn-card:after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    height: 100%;
-    width: 15px;
-    background: #ccc;
-    z-index: 11;
+.male .drawn-card {
+    background: linear-gradient(to bottom, #fff 50%, var(--color-blue) 100%);
 }
 
-body.male .drawn-card:after {
-    background: var(--color-blue);
-}
-
-body.female .drawn-card:after {
-    background: var(--color-pink);
+.female .drawn-card {
+    background: linear-gradient(to bottom, #fff 50%, var(--color-pink) 100%);
 }
 
 .drawn-card.flip-in {
@@ -2031,8 +2039,17 @@ body.female .drawn-card:after {
     }
 
     .game-card {
-        background: #2a2a2a;
         color: #e6e6e6;
+    }
+
+    .male .game-card,
+    .male .drawn-card {
+        background: linear-gradient(to bottom, #2a2a2a 50%, var(--color-blue) 100%);
+    }
+
+    .female .game-card,
+    .female .drawn-card {
+        background: linear-gradient(to bottom, #2a2a2a 50%, var(--color-pink) 100%);
     }
     
     .card-name {
@@ -2104,7 +2121,9 @@ body.female .drawn-card:after {
 }
 
 @media screen and (min-width: 801px) {
-    .container {
+    .container,
+    .modal,
+    div[class*="overlay"] {
         display: none;
     }
     .largeScreen {

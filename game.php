@@ -301,13 +301,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         }
                         break;
                     case 'veto_modify':
-                        if (strpos($effect['effect_value'], 'opponent') !== false) {
+                        if (strpos($effect['effect_value'], 'opponent_double') !== false) {
                             // Show on opponent's cards only
                             if ($effect['target_player_id'] == $player['id']) {
                                 $activeModifiers['accepted_serve_veto'] = $cardName;
                                 $activeModifiers['snap_veto'] = $cardName;
                                 $activeModifiers['dare_veto'] = $cardName;
                             }
+                        } elseif(strpos($effect['effect_value'], 'opponent_reward') !== false) {
+                            // Do not show opponent reward as veto modifier badge
                         } else {
                             // Show on current player's cards
                             if ($effect['player_id'] == $player['id']) {
