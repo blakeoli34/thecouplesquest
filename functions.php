@@ -735,7 +735,7 @@ function resetGameForNewRound($gameId) {
         $stmt->execute([$gameId]);
         
         // Reset game: status to waiting, clear dates and duration
-        $stmt = $pdo->prepare("UPDATE games SET status = 'waiting', duration_days = NULL, start_date = NULL, end_date = NULL WHERE id = ?");
+        $stmt = $pdo->prepare("UPDATE games SET status = 'waiting', duration_days = NULL, start_date = NULL, end_date = NULL, game_mode = NULL WHERE id = ?");
         $stmt->execute([$gameId]);
         
         // Clear timers

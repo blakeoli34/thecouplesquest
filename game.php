@@ -708,7 +708,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 </div>
             </div>
             
-       <?php elseif ($gameStatus === 'waiting' && count($players) === 2 && !$gameMode): ?>
+       <?php elseif ($gameStatus === 'waiting' && count($players) === 2 && (!$gameMode || $gameMode === '')): ?>
             <!-- Set game mode -->
             <div class="waiting-screen mode-selection">
                 <h2>Choose Game Mode</h2>
@@ -756,6 +756,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $winner = $players[0]['score'] > $players[1]['score'] ? $players[0] : $players[1];
             $loser = $players[0]['score'] > $players[1]['score'] ? $players[1] : $players[0];
             if ($players[0]['score'] === $players[1]['score']) $winner = null;
+            
+            // Add these missing variables:
+            $readyStatus = getNewGameReadyStatus($player['game_id']);
+            $currentPlayerReady = false;
+            $opponentPlayerReady = false;
+            
+            foreach ($readyStatus as $status) {
+                if ($status['first_name'] === $currentPlayer['first_name']) {
+                    $currentPlayerReady = $status['ready_for_new_game'];
+                } else {
+                    $opponentPlayerReady = $status['ready_for_new_game'];
+                }
+            }
             ?>
             <div class="game-ended">
                 <div class="confetti"></div>
@@ -921,7 +934,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         <div class="flyout-menu-item-icon"><i class="fa-solid fa-arrows-rotate"></i></div>
                         <div class="flyout-menu-item-text">Refresh Game...</div>
                     </div>
-                    <div class="flyout-menu-item" onclick="resetDecks()">
+                    <div class="flyout-menu-item" onclick="resetDecks()" style="display: none;">
                         <div class="flyout-menu-item-icon"><i class="fa-solid fa-arrows-rotate"></i></div>
                         <div class="flyout-menu-item-text">Reset Decks...</div>
                     </div>
@@ -1029,9 +1042,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             <div class="notification-info">
                 <h4>What you'll receive:</h4>
                 <ul>
-                    <li>Score updates</li>
-                    <li>Timer expiration alerts</li>
-                    <li>Bump notifications from your opponent</li>
+                    <li class="digital-only">Served Cards</li>
+                    <li class="digital-only">Opponent Veto & Completion Actions</li>
+                    <li class="digital-only">Game Modifications</li>
+                    <li>Score Updates</li>
+                    <li>Timer Expiration Alerts</li>
+                    <li>Bump Notifications from Your Opponent</li>
                 </ul>
             </div>
             

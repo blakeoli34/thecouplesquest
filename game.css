@@ -15,6 +15,10 @@ body {
     overflow: hidden;
 }
 
+body:not(.digital) .digital-only {
+    display: none;
+}
+
 .largeScreen {
     display: none;
     color: #e1e1e1;
