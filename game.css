@@ -806,6 +806,7 @@ body:not(.digital) .digital-only {
     grid-template-columns: repeat(2, 1fr);
     gap: 15px;
     margin-bottom: 20px;
+    width: 100%;
 }
 
 .duration-btn {
@@ -816,6 +817,10 @@ body:not(.digital) .digital-only {
     cursor: pointer;
     font-weight: 600;
     transition: all 0.2s;
+}
+
+.duration-btn.custom-date-btn {
+    grid-column: 1 / 3;
 }
 
 .duration-btn:hover {
@@ -1726,21 +1731,27 @@ body.digital .hybrid-menu-item {
     overflow: hidden;
 }
 
-.deck-card:after {
-    content: '';
+.deck-card span {
     width: 100%;
     background: #ccc;
-    height: 10%;
+    height: 15%;
     position: absolute;
     left: 0;
     bottom: 0;
+    padding: 0 5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 700;
+    font-size: 14px;
+    color: #000;
 }
 
-.female .deck-card:after {
+.female .deck-card span {
     background: var(--color-pink);
 }
 
-.male .deck-card:after {
+.male .deck-card span {
     background: var(--color-blue);
 }
 
@@ -1848,24 +1859,24 @@ body.digital .hybrid-menu-item {
 .drawn-card .card-type {
     font-size: 10px;
     font-weight: 700;
-    text-transform: uppercase;
-    color: #666;
-    margin-bottom: 8px;
+    color: #000;
+    margin-bottom: 12px;
 }
 
 .drawn-card .card-name {
     font-size: 14px;
-    font-weight: 800;
+    font-weight: 900;
     text-transform: uppercase;
     color: #333;
     margin-bottom: 10px;
     line-height: 1.2;
+    flex: none;
 }
 
 .drawn-card .card-description {
-    font-size: 11px;
+    font-size: 10px;
     color: #666;
-    line-height: 1.3;
+    line-height: 1.4;
     flex: 1;
 }
 
@@ -1960,6 +1971,24 @@ body.digital .hybrid-menu-item {
     border-radius: 8px;
     margin-bottom: 5px;
     font-size: 14px;
+}
+
+.custom-date-picker {
+    background: rgba(255,255,255,0.9);
+    border: 2px solid #ddd;
+    border-radius: 20px;
+    padding: 20px;
+    width: 100%;
+}
+
+.custom-date-picker input[type="date"] {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid #ddd;
+    border-radius: 10px;
+    font-size: 16px;
+    background: white;
+    color: #333;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -2157,6 +2186,17 @@ body.digital .hybrid-menu-item {
     }
     
     .active-effects h4 {
+        color: #e6e6e6;
+    }
+
+    .custom-date-picker {
+        background: rgba(25,25,25,0.9);
+        border-color: #555;
+    }
+    
+    .custom-date-picker input[type="date"] {
+        background: #2a2a2a;
+        border-color: #555;
         color: #e6e6e6;
     }
 }

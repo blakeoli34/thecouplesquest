@@ -108,8 +108,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             exit;
 
         case 'set_duration':
-            $duration = intval($_POST['duration']);
-            $result = setGameDuration($player['game_id'], $duration);
+            if (isset($_POST['custom_date'])) {
+                // Handle custom date
+                $customDate = $_POST['custom_date'];
+                $now = new DateTime();
+                $customDateTime = new DateTime($customDate . ' 23:59:59');
+                
+                // Validate date is at least 1 week from now and max 1 year
+                $minDate = clone $now;
+                $minDate->add(new DateInterval('P7D'));
+                $maxDate = clone $now;
+                $maxDate->add(new DateInterval('P1Y'));
+                
+                if ($customDateTime < $minDate || $customDateTime > $maxDate) {
+                    echo json_encode(['success' => false, 'message' => 'Date must be between 1 week and 1 year from now']);
+                    exit;
+                }
+                
+                // Calculate duration in days from now to selected date
+                $diffDays = $now->diff($customDateTime)->days + 1; // +1 to include the selected day
+                
+                // Manually set the game dates
+                try {
+                    $pdo = Config::getDatabaseConnection();
+                    $stmt = $pdo->prepare("
+                        UPDATE games 
+                        SET duration_days = ?, start_date = ?, end_date = ?, status = 'active', custom_end_date = ?
+                        WHERE id = ?
+                    ");
+                    $stmt->execute([
+                        $diffDays,
+                        $now->format('Y-m-d H:i:s'),
+                        $customDateTime->format('Y-m-d H:i:s'),
+                        $customDate,
+                        $player['game_id']
+                    ]);
+                    $result = ['success' => true];
+                } catch (Exception $e) {
+                    error_log("Error setting custom duration: " . $e->getMessage());
+                    $result = ['success' => false, 'message' => 'Failed to set custom duration'];
+                }
+            } else {
+                // Handle preset duration
+                $duration = intval($_POST['duration']);
+                $result = setGameDuration($player['game_id'], $duration);
+            }
             
             // Initialize digital cards if this is a digital game
             if ($result['success'] && $gameMode === 'digital') {
@@ -747,6 +790,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     <div class="duration-btn recommended" data-days="90">3 Months</div>
                     <div class="duration-btn" data-days="180">6 Months</div>
                     <div class="duration-btn" data-days="365">1 Year</div>
+                    <div class="duration-btn custom-date-btn" onclick="showCustomDatePicker()">
+                        <div style="font-size: 18px; margin-bottom: 5px;">📅</div>
+                        Custom Date
+                    </div>
+                </div>
+
+                <div class="custom-date-picker" id="customDatePicker" style="display: none;">
+                    <div class="form-group">
+                        <label for="customEndDate">Choose End Date:</label>
+                        <input type="date" id="customEndDate" min="" max="">
+                    </div>
+                    <div style="display: flex; gap: 15px;">
+                        <button class="btn btn-secondary" onclick="hideCustomDatePicker()" style="flex: 1;">Cancel</button>
+                        <button class="btn" onclick="setCustomDuration()" style="flex: 1;">Set Duration</button>
+                    </div>
                 </div>
             </div>
             
@@ -1210,11 +1268,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     <!-- Card Draw Animation Overlay -->
     <div class="card-draw-overlay" id="cardDrawOverlay">
         <div class="deck-container" id="deckContainer">
-            <div class="deck-card">The<br>Couple's<br>Quest</div>
-            <div class="deck-card">The<br>Couple's<br>Quest</div>
-            <div class="deck-card">The<br>Couple's<br>Quest</div>
-            <div class="deck-card">The<br>Couple's<br>Quest</div>
-            <div class="deck-card">The<br>Couple's<br>Quest</div>
+            <div class="deck-card">The<br>Couple's<br>Quest<span><i class="fa-solid fa-circle-arrow-up"></i>Serve</span></div>
+            <div class="deck-card">The<br>Couple's<br>Quest<span><i class="fa-solid fa-circle-arrow-up"></i>Serve</span></div>
+            <div class="deck-card">The<br>Couple's<br>Quest<span><i class="fa-solid fa-circle-arrow-up"></i>Serve</span></div>
+            <div class="deck-card">The<br>Couple's<br>Quest<span><i class="fa-solid fa-circle-arrow-up"></i>Serve</span></div>
+            <div class="deck-card">The<br>Couple's<br>Quest<span><i class="fa-solid fa-circle-arrow-up"></i>Serve</span></div>
         </div>
         
         <div class="drawn-card" id="drawnCard">

@@ -484,6 +484,36 @@ function showCardDrawAnimation(cardData) {
     const deckContainer = document.getElementById('deckContainer');
     const drawnCard = document.getElementById('drawnCard');
     
+    // Update deck card spans based on card type
+    const deckCards = deckContainer.querySelectorAll('.deck-card span');
+    let iconClass, cardTypeText;
+    
+    switch(cardData.card_type) {
+        case 'chance':
+            iconClass = 'fa-circle-question';
+            cardTypeText = 'Chance';
+            break;
+        case 'snap':
+            iconClass = 'fa-camera-retro';
+            cardTypeText = 'Snap';
+            break;
+        case 'dare':
+            iconClass = 'fa-hand-point-right';
+            cardTypeText = 'Dare';
+            break;
+        case 'spicy':
+            iconClass = 'fa-pepper-hot';
+            cardTypeText = 'Spicy';
+            break;
+        default:
+            iconClass = 'fa-circle-question';
+            cardTypeText = 'Chance';
+    }
+    
+    deckCards.forEach(span => {
+        span.innerHTML = `<i class="fa-solid ${iconClass}"></i>${cardTypeText}`;
+    });
+    
     // Set card content
     document.getElementById('drawCardType').innerHTML = getCardType(cardData.card_type);
     document.getElementById('drawCardName').textContent = cardData.card_name;
@@ -1444,7 +1474,7 @@ function executeScoreAction(action, targetPlayerId, points) {
 
 // Duration selection handler
 function setupDurationButtons() {
-    document.querySelectorAll('.duration-btn').forEach(btn => {
+    document.querySelectorAll('.duration-btn:not(.custom-date-btn)').forEach(btn => {
         btn.addEventListener('click', function() {
             const days = this.dataset.days;
             
@@ -2274,6 +2304,73 @@ function resetDecks() {
     });
 }
 
+function showCustomDatePicker() {
+    const picker = document.getElementById('customDatePicker');
+    const input = document.getElementById('customEndDate');
+    const notifyBubble = document.querySelector('.notify-bubble');
+    
+    // Hide notify bubble to save space
+    if (notifyBubble) {
+        notifyBubble.style.display = 'none';
+    }
+    
+    // Set min date to 1 week from now
+    const minDate = new Date();
+    minDate.setDate(minDate.getDate() + 7);
+    
+    // Set max date to 1 year from now
+    const maxDate = new Date();
+    maxDate.setFullYear(maxDate.getFullYear() + 1);
+    
+    input.min = minDate.toISOString().split('T')[0];
+    input.max = maxDate.toISOString().split('T')[0];
+    
+    picker.style.display = 'block';
+}
+
+function hideCustomDatePicker() {
+    const picker = document.getElementById('customDatePicker');
+    const notifyBubble = document.querySelector('.notify-bubble');
+    
+    // Show notify bubble again
+    if (notifyBubble) {
+        notifyBubble.style.display = 'block';
+    }
+    
+    picker.style.display = 'none';
+    document.getElementById('customEndDate').value = '';
+}
+
+function setCustomDuration() {
+    const dateInput = document.getElementById('customEndDate');
+    const selectedDate = dateInput.value;
+    
+    if (!selectedDate) {
+        alert('Please select a date');
+        return;
+    }
+    
+    fetch('game.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'action=set_duration&custom_date=' + selectedDate
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Failed to set custom duration: ' + (data.message || 'Please try again.'));
+        }
+    })
+    .catch(error => {
+        console.error('Error setting custom duration:', error);
+        alert('Failed to set custom duration. Please try again.');
+    });
+}
+
 // Initialize everything when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Game page loaded');
@@ -2498,3 +2595,6 @@ window.rollDice = rollDice;
 window.completeChanceCard = completeChanceCard;
 window.displayActiveEffects = displayActiveEffects;
 window.resetDecks = resetDecks;
+window.showCustomDatePicker = showCustomDatePicker;
+window.hideCustomDatePicker = hideCustomDatePicker;
+window.setCustomDuration = setCustomDuration;

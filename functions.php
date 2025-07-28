@@ -151,7 +151,7 @@ function setGameDuration($gameId, $durationDays) {
         $pdo = Config::getDatabaseConnection();
         $timezone = new DateTimeZone('America/New_York'); // Change to your timezone
         
-        $startDate = new DateTime('now');
+        $startDate = new DateTime('now', $timezone);
         $endDate = clone $startDate;
         $endDate->add(new DateInterval('P' . $durationDays . 'D'));
         
