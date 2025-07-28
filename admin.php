@@ -208,7 +208,7 @@ function saveCard($data) {
                     !empty($data['veto_draw_spicy']) ? intval($data['veto_draw_spicy']) : null
                 ]);
             } elseif ($cardType === 'chance') {
-                $sql .= ", for_her = ?, for_him = ?, before_next_challenge = ?, challenge_modify = ?, opponent_challenge_modify = ?, draw_snap_dare = ?, draw_spicy = ?, score_modify = ?, timer = ?, veto_modify = ?, snap_modify = ?, dare_modify = ?, spicy_modify = ?, score_add = ?, score_subtract = ?, score_steal = ?, repeat_count = ?, roll_dice = ?, dice_condition = ?, dice_threshold = ?, double_it = ?";
+                $sql .= ", for_her = ?, for_him = ?, before_next_challenge = ?, challenge_modify = ?, opponent_challenge_modify = ?, draw_snap_dare = ?, draw_spicy = ?, score_modify = ?, timer = ?, timer_completion_type = ?, veto_modify = ?, snap_modify = ?, dare_modify = ?, spicy_modify = ?, score_add = ?, score_subtract = ?, score_steal = ?, repeat_count = ?, roll_dice = ?, dice_condition = ?, dice_threshold = ?, double_it = ?";
                 $params = array_merge($params, [
                     intval($data['for_her']),
                     intval($data['for_him']),
@@ -219,6 +219,7 @@ function saveCard($data) {
                     intval($data['draw_spicy']),
                     $data['score_modify'] ?: 'none',
                     !empty($data['timer']) ? intval($data['timer']) : null,
+                    $data['timer_completion_type'] ?: 'timer_expires',
                     $data['veto_modify'] ?: 'none',
                     intval($data['snap_modify']),
                     intval($data['dare_modify']),
@@ -260,7 +261,7 @@ function saveCard($data) {
                     !empty($data['veto_draw_spicy']) ? intval($data['veto_draw_spicy']) : null
                 ];
             } elseif ($cardType === 'chance') {
-                $sql = "INSERT INTO cards (card_type, card_name, card_description, quantity, for_her, for_him, before_next_challenge, challenge_modify, opponent_challenge_modify, draw_snap_dare, draw_spicy, score_modify, timer, veto_modify, snap_modify, dare_modify, spicy_modify, score_add, score_subtract, score_steal, repeat_count, roll_dice, dice_condition, dice_threshold, double_it) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                $sql = "INSERT INTO cards (card_type, card_name, card_description, quantity, for_her, for_him, before_next_challenge, challenge_modify, opponent_challenge_modify, draw_snap_dare, draw_spicy, score_modify, timer, timer_completion_type, veto_modify, snap_modify, dare_modify, spicy_modify, score_add, score_subtract, score_steal, repeat_count, roll_dice, dice_condition, dice_threshold, double_it) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                 $params = [
                     $cardType, $cardName, $cardDescription, intval($data['quantity']) ?: 1,
                     intval($data['for_her']),
@@ -272,6 +273,7 @@ function saveCard($data) {
                     intval($data['draw_spicy']),
                     $data['score_modify'] ?: 'none',
                     !empty($data['timer']) ? intval($data['timer']) : null,
+                    $data['timer_completion_type'] ?: 'timer_expires',
                     $data['veto_modify'] ?: 'none',
                     intval($data['snap_modify']),
                     intval($data['dare_modify']),
@@ -1691,6 +1693,7 @@ function showLoginForm($error = null) {
                 document.getElementById('drawSpicyChance').checked = card.draw_spicy;
                 document.getElementById('scoreModify').value = card.score_modify;
                 if (card.timer) document.getElementById('timer').value = card.timer;
+                if (card.timer_completion_type) document.getElementById('timerCompletionType').value = card.timer_completion_type;
                 document.getElementById('vetoModify').value = card.veto_modify;
                 document.getElementById('snapModify').checked = card.snap_modify;
                 document.getElementById('dareModify').checked = card.dare_modify;
