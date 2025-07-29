@@ -411,13 +411,18 @@ function sendPushNotification($fcmToken, $title, $body, $data = []) {
 }
 
 function getAccessToken() {
-    // Check if we have a cached token that's still valid
-    $cacheFile = sys_get_temp_dir() . '/fcm_access_token.json';
     
-    if (file_exists($cacheFile)) {
-        $cached = json_decode(file_get_contents($cacheFile), true);
-        if ($cached && $cached['expires_at'] > time()) {
-            return $cached['access_token'];
+    $cacheFile = 'tokens/fcm_access_token.json';
+    
+    // Check if we have a cached token that's still valid
+    if ($cacheFile && file_exists($cacheFile)) {
+        try {
+            $cached = json_decode(file_get_contents($cacheFile), true);
+            if ($cached && isset($cached['expires_at']) && $cached['expires_at'] > time()) {
+                return $cached['access_token'];
+            }
+        } catch (Exception $e) {
+            error_log("Error reading cached token: " . $e->getMessage());
         }
     }
     
@@ -501,12 +506,24 @@ function getAccessToken() {
         return false;
     }
     
-    // Cache the token
-    $cacheData = [
-        'access_token' => $tokenData['access_token'],
-        'expires_at' => time() + $tokenData['expires_in'] - 300 // 5 minutes buffer
-    ];
-    file_put_contents($cacheFile, json_encode($cacheData));
+    // Try to cache the token if we have a writable location
+    if ($cacheFile) {
+        try {
+            $cacheData = [
+                'access_token' => $tokenData['access_token'],
+                'expires_at' => time() + $tokenData['expires_in'] - 300 // 5 minutes buffer
+            ];
+            
+            $result = file_put_contents($cacheFile, json_encode($cacheData));
+            if ($result === false) {
+                error_log("Failed to cache FCM token to: $cacheFile");
+            }
+        } catch (Exception $e) {
+            error_log("Error caching FCM token: " . $e->getMessage());
+        }
+    } else {
+        error_log("No writable directory found for FCM token cache");
+    }
     
     return $tokenData['access_token'];
 }

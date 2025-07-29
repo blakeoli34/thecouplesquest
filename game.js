@@ -412,8 +412,10 @@ function serveSelectedCard() {
     // Start serving animation
     if (selectedCardElement) {
         selectedCardElement.classList.add('serving');
-        actionSound.src = '/card-served.m4r';
-        actionSound.play();
+        setTimeout(()=> {
+            actionSound.src = '/card-served.m4r';
+            actionSound.play();
+        }, 500);
     }
     
     
@@ -856,7 +858,7 @@ function completeSelectedCard() {
                     } else if (data.points_awarded) {
                         updateScore(gameData.currentPlayerId, data.points_awarded);
                     }
-                }, 400);
+                }, 1500);
             }, 1100);
         } else {
             clearCardSelection();
@@ -923,7 +925,7 @@ function vetoSelectedCard() {
                     setTimeout(() => {
                         refreshGameData();
                     }, animationDelay || 500);
-                }, 400);
+                }, 1500);
             }, 1100);
         } else {
             clearCardSelection();
@@ -1017,6 +1019,8 @@ function storeDeviceId() {
 
 // Initialize Firebase (but don't request permission automatically)
 function initializeFirebase() {
+    console.log('Initializing Firebase...');
+    
     if (typeof firebase === 'undefined') {
         console.log('Firebase not loaded, skipping initialization');
         return;
@@ -1035,11 +1039,22 @@ function initializeFirebase() {
         firebase.initializeApp(firebaseConfig);
         firebaseMessaging = firebase.messaging();
 
-        // Handle foreground messages
+        // Enhanced foreground message handling
         firebaseMessaging.onMessage((payload) => {
-            console.log('Message received:', payload);
-            showNotification(payload);
+            console.log('Firebase message received in foreground:', payload);
+            
+            // Try multiple payload structures
+            let title = payload.notification?.title || payload.data?.title || 'The Couples Quest';
+            let body = payload.notification?.body || payload.data?.body || 'New notification';
+            
+            console.log('Parsed notification data:', { title, body });
+            
+            // Always show in-app notification for foreground messages
+            showInAppNotification(title, body);
         });
+
+        // onBackgroundMessage can only be used in service worker
+        // Background messages are handled in firebase-messaging-sw.js
 
         console.log('Firebase initialized successfully');
     } catch (error) {
@@ -2206,14 +2221,18 @@ function rollDiceChoice(count) {
     if (die1) {
         die1.onclick = (e) => {
             e.stopPropagation();
-            rollDice();
+            actionSound.src = '/dice-roll.m4r';
+            actionSound.play();
+            setTimeout(() => rollDice(), 500);
         };
     }
     
     if (die2) {
         die2.onclick = (e) => {
             e.stopPropagation();
-            rollDice();
+            actionSound.src = '/dice-roll.m4r';
+            actionSound.play();
+            setTimeout(() => rollDice(), 500);
         };
     }
     
@@ -2222,7 +2241,9 @@ function rollDiceChoice(count) {
         setDiceColor(gameData.currentPlayerGender);
     }
     initializeDicePosition();
-    setTimeout(() => rollDice(), 100);
+    actionSound.src = '/dice-roll.m4r';
+    actionSound.play();
+    setTimeout(() => rollDice(), 500);
 }
 
 function setDiceCount(count) {
@@ -2251,9 +2272,6 @@ function setDiceCount(count) {
 
 function rollDice() {
     if (isDiceRolling) return;
-
-    actionSound.src = '/dice-roll.m4r';
-    actionSound.play();
     
     isDiceRolling = true;
     const rollButton = document.getElementById('rollButton');
