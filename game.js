@@ -26,6 +26,22 @@ let selectedCard = null;
 let selectedHandCard = null;
 let isCardSelected = false;
 
+let actionSound = new Audio('data:audio/mpeg;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsuY29tIC8gTGFTb25vdGhlcXVlLm9yZwBURU5DAAAAHQAAA1N3aXRjaCBQbHVzIMKpIE5DSCBTb2Z0d2FyZQBUSVQyAAAABgAAAzIyMzUAVFNTRQAAAA8AAANMYXZmNTcuODMuMTAwAAAAAAAAAAAAAAD/80DEAAAAA0gAAAAATEFNRTMuMTAwVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQsRbAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQMSkAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV');
+
+$(document).ready(function() {
+    let hasClicked = false;
+    
+    $(document).on('click', function(event) {
+        if (!hasClicked) {
+            hasClicked = true;
+            actionSound.src = 'data:audio/mpeg;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsuY29tIC8gTGFTb25vdGhlcXVlLm9yZwBURU5DAAAAHQAAA1N3aXRjaCBQbHVzIMKpIE5DSCBTb2Z0d2FyZQBUSVQyAAAABgAAAzIyMzUAVFNTRQAAAA8AAANMYXZmNTcuODMuMTAwAAAAAAAAAAAAAAD/80DEAAAAA0gAAAAATEFNRTMuMTAwVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQsRbAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQMSkAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV';
+            actionSound.play();
+            console.log('sounds enabled');
+            $(document).off('click');
+        }
+    });
+});
+
 function setOverlayActive(yes) {
     if(yes) {
         $('body').addClass('overlay-active');
@@ -396,6 +412,8 @@ function serveSelectedCard() {
     // Start serving animation
     if (selectedCardElement) {
         selectedCardElement.classList.add('serving');
+        actionSound.src = '/card-served.m4r';
+        actionSound.play();
     }
     
     
@@ -559,6 +577,8 @@ function showCardDrawAnimation(cardData) {
     setTimeout(() => {
         deckContainer.classList.remove('show', 'shuffling');
         drawnCard.classList.add('flip-in');
+        actionSound.src = '/card-drawn.m4r';
+        actionSound.play();
     }, 1400);
     
     // Step 4: Slide card out (show card longer)
@@ -807,6 +827,8 @@ function completeSelectedCard() {
     // Start discard animation
     if (selectedCardElement) {
         selectedCardElement.classList.add('discarding');
+        actionSound.src = '/card-completed.m4r';
+        actionSound.play();
     }
     
     
@@ -858,6 +880,8 @@ function vetoSelectedCard() {
     // Start discard animation
     if (selectedCardElement) {
         selectedCardElement.classList.add('discarding');
+        actionSound.src = '/card-vetoed.m4r';
+        actionSound.play();
     }
     
     // Make API call
@@ -1308,19 +1332,40 @@ function showNotification(payload) {
 
 // Show in-app notification
 function showInAppNotification(title, body) {
-    // Create a simple in-app notification
-    let $notification = $('.iAN'),
-    $title = $notification.find('.iAN-title'),
-    $body = $notification.find('.iAN-body'),
-    alertSound = new Audio('/ian.m4r');
-
+    console.log('Showing notification:', title, body); // Debug log
+    
+    const $notification = $('.iAN');
+    const $title = $notification.find('.iAN-title');
+    const $body = $notification.find('.iAN-body');
+    
+    // Bail if elements don't exist
+    if ($notification.length === 0) {
+        console.error('Notification elements not found');
+        return;
+    }
+    
+    // Clear any existing content/classes
+    $notification.removeClass('show');
     $title.text(title);
     $body.text(body);
-    $notification.addClass('show');
-    alertSound.play();
-
+    loadCardData(); //Refresh cards in case a card was served
     
-    // Remove after 10 seconds
+    // Force reflow then show
+    setTimeout(() => {
+        $notification.addClass('show');
+    }, 10);
+    
+    // Try to play sound but don't let it break the notification
+    setTimeout(() => {
+        try {
+            actionSound.src = '/tritone.m4r'
+            actionSound.play().catch(() => {}); // Silently ignore failures
+        } catch (e) {
+            // Audio failed, but notification still works
+        }
+    }, 100);
+    
+    // Remove after 5 seconds
     setTimeout(() => {
         $notification.removeClass('show');
     }, 5000);
@@ -1628,6 +1673,12 @@ function animateScoreChange(playerGender, newScore, pointsChanged) {
     
     // Add counting class for scale effect
     scoreElement.classList.add('counting');
+    try {
+        actionSound.src = '/score-change.m4r'
+        actionSound.play().catch(() => {}); // Silently ignore failures
+    } catch (e) {
+        // Audio failed, but notification still works
+    }
     setTimeout(() => {
         scoreElement.classList.remove('counting');
     }, 1700);
@@ -1779,6 +1830,8 @@ function sendBump() {
     .then(data => {
         if (data.success) {
             $bubble.text(data.message);
+            actionSound.src = '/bumped.m4r';
+            actionSound.play();
         } else {
             $bubble.text('Failed to send bump');
         }
@@ -2198,6 +2251,9 @@ function setDiceCount(count) {
 
 function rollDice() {
     if (isDiceRolling) return;
+
+    actionSound.src = '/dice-roll.m4r';
+    actionSound.play();
     
     isDiceRolling = true;
     const rollButton = document.getElementById('rollButton');
@@ -2302,7 +2358,7 @@ function initializeDigitalCards() {
         // Refresh card data periodically
         setInterval(() => {
             loadCardData();
-        }, 10000); // Every 15 seconds
+        }, 10000); // Every 10 seconds
     }
 }
 
