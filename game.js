@@ -42,6 +42,39 @@ $(document).ready(function() {
     });
 });
 
+function setSoundEnabled(enabled) {
+    localStorage.setItem('couples_quest_sound_enabled', enabled ? 'true' : 'false');
+}
+
+function isSoundEnabled() {
+    return localStorage.getItem('couples_quest_sound_enabled') !== 'false'; // default true
+}
+
+function playSoundIfEnabled(soundFile) {
+    if (isSoundEnabled()) {
+        actionSound.src = soundFile;
+        actionSound.play().catch(() => {});
+    }
+}
+
+function toggleSound() {
+    const enabled = !isSoundEnabled();
+    setSoundEnabled(enabled);
+    updateSoundToggleText();
+}
+
+function updateSoundToggleText() {
+    const toggleText = document.getElementById('soundToggleText');
+    const icon = document.querySelector('.flyout-menu-item.sound i');
+    if (isSoundEnabled()) {
+        toggleText.textContent = 'Sound: On';
+        icon.className = 'fa-solid fa-volume-high';
+    } else {
+        toggleText.textContent = 'Sound: Off';
+        icon.className = 'fa-solid fa-volume-slash';
+    }
+}
+
 function setOverlayActive(yes) {
     if(yes) {
         $('body').addClass('overlay-active');
@@ -413,8 +446,7 @@ function serveSelectedCard() {
     if (selectedCardElement) {
         selectedCardElement.classList.add('serving');
         setTimeout(()=> {
-            actionSound.src = '/card-served.m4r';
-            actionSound.play();
+            playSoundIfEnabled('/card-served.m4r');
         }, 500);
     }
     
@@ -579,8 +611,7 @@ function showCardDrawAnimation(cardData) {
     setTimeout(() => {
         deckContainer.classList.remove('show', 'shuffling');
         drawnCard.classList.add('flip-in');
-        actionSound.src = '/card-drawn.m4r';
-        actionSound.play();
+        playSoundIfEnabled('/card-drawn.m4r');
     }, 1400);
     
     // Step 4: Slide card out (show card longer)
@@ -829,8 +860,7 @@ function completeSelectedCard() {
     // Start discard animation
     if (selectedCardElement) {
         selectedCardElement.classList.add('discarding');
-        actionSound.src = '/card-completed.m4r';
-        actionSound.play();
+        playSoundIfEnabled('/card-completed.m4r');
     }
     
     
@@ -882,8 +912,7 @@ function vetoSelectedCard() {
     // Start discard animation
     if (selectedCardElement) {
         selectedCardElement.classList.add('discarding');
-        actionSound.src = '/card-vetoed.m4r';
-        actionSound.play();
+        playSoundIfEnabled('/card-vetoed.m4r');
     }
     
     // Make API call
@@ -1370,15 +1399,7 @@ function showInAppNotification(title, body) {
         $notification.addClass('show');
     }, 10);
     
-    // Try to play sound but don't let it break the notification
-    setTimeout(() => {
-        try {
-            actionSound.src = '/tritone.m4r'
-            actionSound.play().catch(() => {}); // Silently ignore failures
-        } catch (e) {
-            // Audio failed, but notification still works
-        }
-    }, 100);
+    playSoundIfEnabled('/tritone.m4r');
     
     // Remove after 5 seconds
     setTimeout(() => {
@@ -1688,12 +1709,7 @@ function animateScoreChange(playerGender, newScore, pointsChanged) {
     
     // Add counting class for scale effect
     scoreElement.classList.add('counting');
-    try {
-        actionSound.src = '/score-change.m4r'
-        actionSound.play().catch(() => {}); // Silently ignore failures
-    } catch (e) {
-        // Audio failed, but notification still works
-    }
+    playSoundIfEnabled('/score-change.m4r');
     setTimeout(() => {
         scoreElement.classList.remove('counting');
     }, 1700);
@@ -1845,8 +1861,7 @@ function sendBump() {
     .then(data => {
         if (data.success) {
             $bubble.text(data.message);
-            actionSound.src = '/bumped.m4r';
-            actionSound.play();
+            playSoundIfEnabled('/bumped.m4r');
         } else {
             $bubble.text('Failed to send bump');
         }
@@ -2221,8 +2236,7 @@ function rollDiceChoice(count) {
     if (die1) {
         die1.onclick = (e) => {
             e.stopPropagation();
-            actionSound.src = '/dice-roll.m4r';
-            actionSound.play();
+            playSoundIfEnabled('/dice-roll.m4r');
             setTimeout(() => rollDice(), 500);
         };
     }
@@ -2230,8 +2244,7 @@ function rollDiceChoice(count) {
     if (die2) {
         die2.onclick = (e) => {
             e.stopPropagation();
-            actionSound.src = '/dice-roll.m4r';
-            actionSound.play();
+            playSoundIfEnabled('/dice-roll.m4r');
             setTimeout(() => rollDice(), 500);
         };
     }
@@ -2241,8 +2254,7 @@ function rollDiceChoice(count) {
         setDiceColor(gameData.currentPlayerGender);
     }
     initializeDicePosition();
-    actionSound.src = '/dice-roll.m4r';
-    actionSound.play();
+    playSoundIfEnabled('/dice-roll.m4r');
     setTimeout(() => rollDice(), 500);
 }
 
@@ -2541,6 +2553,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Set theme
     loadThemePreference();
+    updateSoundToggleText();
     
     // Get game data from the page (set by PHP)
     if (typeof window.gameDataFromPHP !== 'undefined') {
@@ -2769,3 +2782,4 @@ window.openRulesOverlay = openRulesOverlay;
 window.closeRulesOverlay = closeRulesOverlay;
 window.handleRulesOverlayClick = handleRulesOverlayClick;
 window.toggleTheme = toggleTheme;
+window.toggleSound = toggleSound;

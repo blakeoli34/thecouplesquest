@@ -1042,6 +1042,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         <div class="flyout-menu-item-icon"><i class="fa-solid fa-palette"></i></div>
                         <div class="flyout-menu-item-text" id="themeToggleText">Theme: Color</div>
                     </div>
+                    <div class="flyout-menu-item sound" onclick="toggleSound()">
+                        <div class="flyout-menu-item-icon"><i class="fa-solid fa-volume-high"></i></div>
+                        <div class="flyout-menu-item-text" id="soundToggleText">Sound: On</div>
+                    </div>
                 </div>
             </div>
 
