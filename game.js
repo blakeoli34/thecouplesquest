@@ -26,6 +26,14 @@ let selectedCard = null;
 let selectedHandCard = null;
 let isCardSelected = false;
 
+function setOverlayActive(yes) {
+    if(yes) {
+        $('body').addClass('overlay-active');
+    } else {
+        $('body').removeClass('overlay-active');
+    }
+}
+
 // Load card data for digital games
 function loadCardData() {
     if (!document.body.classList.contains('digital')) return;
@@ -153,6 +161,7 @@ function openServeCards() {
     }
     countDisplay.textContent = `${cardData.serve_count || 0} Cards`;
     document.getElementById('serveCardsOverlay').classList.add('active');
+    setOverlayActive(true);
 }
 
 // Open hand cards overlay
@@ -166,6 +175,7 @@ function openHandCards() {
     ];
     populateCardGrid('handCardsGrid', allHandCards, 'hand');
     document.getElementById('handCardsOverlay').classList.add('active');
+    setOverlayActive(true);
 }
 
 // Populate card grid
@@ -530,6 +540,7 @@ function showCardDrawAnimation(cardData) {
     }
     
     // Reset states
+    setOverlayActive(true);
     overlay.classList.add('active');
     deckContainer.classList.remove('shuffling');
     drawnCard.classList.remove('flip-in', 'slide-out');
@@ -582,6 +593,7 @@ function showCardDrawAnimation(cardData) {
     setTimeout(() => {
         overlay.classList.remove('active');
         drawnCard.classList.remove('flip-in', 'slide-out');
+        setOverlayActive(false);
     }, 7200);
 }
 
@@ -908,6 +920,7 @@ function closeCardOverlay(overlayId) {
         clearCardSelection();
     }
     document.getElementById(overlayId).classList.remove('active');
+    setOverlayActive(false);
     selectedCard = null;
 }
 
@@ -1384,6 +1397,7 @@ function openMenu() {
     const actionButtons = document.querySelectorAll('.action-button');
 
     $('.player-name').addClass('hide');
+    setOverlayActive(true);
     
     menuButton.classList.add('active');
     menuOverlay.classList.add('active');
@@ -1404,6 +1418,7 @@ function closeMenu() {
     const pointButtons = document.querySelectorAll('.point-button');
 
     $('.player-name').removeClass('hide');
+    setOverlayActive(false);
     
     menuButton.classList.remove('active');
     menuOverlay.classList.remove('active');
@@ -1506,6 +1521,7 @@ function openNotifyModal() {
     const modal = document.getElementById('notifyModal');
     if (modal) {
         modal.classList.add('active');
+        setOverlayActive(true);
         // Check notification status when modal opens
         setTimeout(checkNotificationStatusForModal, 100);
     }
@@ -1516,6 +1532,7 @@ function openTimerModal() {
     const modal = document.getElementById('timerModal');
     if (modal) {
         modal.classList.add('active');
+        setOverlayActive(true);
     }
 }
 
@@ -1524,6 +1541,7 @@ function openHistoryModal() {
     const modal = document.getElementById('historyModal');
     if (modal) {
         modal.classList.add('active');
+        setOverlayActive(true);
     }
 }
 
@@ -1531,6 +1549,7 @@ function openEndGameModal() {
     const modal = document.getElementById('endGameModal');
     if(modal) {
         modal.classList.add('active');
+        setOverlayActive(true);
     }
 }
 
@@ -1538,6 +1557,7 @@ function closeModal(modalId) {
     const modal = document.getElementById(modalId);
     if (modal) {
         modal.classList.remove('active');
+        setOverlayActive(false);
     }
 }
 
@@ -1706,12 +1726,14 @@ function showTimerDeleteModal(timerId, description) {
     
     document.getElementById('timerDeleteDescription').textContent = `"${description}"`;
     modal.classList.add('active');
+    setOverlayActive(true);
 }
 
 function hideTimerDeleteModal() {
     const modal = document.getElementById('timerDeleteModal');
     if (modal) {
         modal.classList.remove('active');
+        setOverlayActive(false);
     }
     selectedTimerId = null;
 }
@@ -1967,6 +1989,7 @@ function setupModalHandlers() {
         modal.addEventListener('click', function(e) {
             if (e.target === this) {
                 this.classList.remove('active');
+                setOverlayActive(false);
             }
         });
     });
@@ -2382,6 +2405,7 @@ function openRulesOverlay() {
         if (data.success) {
             document.getElementById('rulesContent').innerHTML = data.content;
             document.getElementById('rulesOverlay').classList.add('active');
+            setOverlayActive(true);
         } else {
             alert('Failed to load rules');
         }
@@ -2394,11 +2418,42 @@ function openRulesOverlay() {
 
 function closeRulesOverlay() {
     document.getElementById('rulesOverlay').classList.remove('active');
+    setOverlayActive(false);
 }
 
 function handleRulesOverlayClick(event) {
     if (event.target.classList.contains('card-overlay')) {
         closeRulesOverlay();
+    }
+}
+
+function toggleTheme() {
+    const body = document.body;
+    const toggleText = document.getElementById('themeToggleText');
+    
+    if (body.classList.contains('gradient-theme')) {
+        // Switch to Color theme
+        body.classList.remove('gradient-theme');
+        toggleText.textContent = 'Theme: Color';
+        localStorage.setItem('couples_quest_theme', 'color');
+    } else {
+        // Switch to Gradient theme
+        body.classList.add('gradient-theme');
+        toggleText.textContent = 'Theme: Gradient';
+        localStorage.setItem('couples_quest_theme', 'gradient');
+    }
+}
+
+function loadThemePreference() {
+    const savedTheme = localStorage.getItem('couples_quest_theme');
+    const toggleText = document.getElementById('themeToggleText');
+    
+    if (savedTheme === 'gradient') {
+        document.body.classList.add('gradient-theme');
+        if (toggleText) toggleText.textContent = 'Theme: Gradient';
+    } else {
+        // Default to color theme
+        if (toggleText) toggleText.textContent = 'Theme: Color';
     }
 }
 
@@ -2409,6 +2464,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Store device ID and check auth
     storeDeviceId();
     checkLocalStorageAuth();
+
+    // Set theme
+    loadThemePreference();
     
     // Get game data from the page (set by PHP)
     if (typeof window.gameDataFromPHP !== 'undefined') {
@@ -2535,6 +2593,10 @@ document.addEventListener('DOMContentLoaded', function() {
             clearInterval(statusInterval);
         });
     }
+
+    setTimeout(() => {
+        $('.game-timer').addClass('visible');
+    }, 1000);
     
     // Start periodic refresh for active games
     if (gameData.gameStatus === 'active') {
@@ -2632,3 +2694,4 @@ window.setCustomDuration = setCustomDuration;
 window.openRulesOverlay = openRulesOverlay;
 window.closeRulesOverlay = closeRulesOverlay;
 window.handleRulesOverlayClick = handleRulesOverlayClick;
+window.toggleTheme = toggleTheme;

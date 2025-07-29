@@ -740,6 +740,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             --color-pink: <?= Config::COLOR_PINK ?>;
             --color-blue-dark: <?= Config::COLOR_BLUE_DARK ?>;
             --color-pink-dark: <?= Config::COLOR_PINK_DARK ?>;
+            --color-blue-light: <?= Config::COLOR_BLUE_LIGHT ?>;
+            --color-pink-light: <?= Config::COLOR_PINK_LIGHT ?>;
             --animation-spring: cubic-bezier(0.2, 0.8, 0.3, 1.1);
         }
     </style>
@@ -1035,6 +1037,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     <div class="flyout-menu-item" onclick="openNotifyModal()">
                         <div class="flyout-menu-item-icon"><i class="fa-solid fa-bell"></i></div>
                         <div class="flyout-menu-item-text">Notifications</div>
+                    </div>
+                    <div class="flyout-menu-item" onclick="toggleTheme()">
+                        <div class="flyout-menu-item-icon"><i class="fa-solid fa-palette"></i></div>
+                        <div class="flyout-menu-item-text" id="themeToggleText">Theme: Color</div>
                     </div>
                 </div>
             </div>
