@@ -70,10 +70,12 @@ function sendDailyNotifications() {
                 $scoreStatus = '';
                 if ($player['score'] > $player['opponent_score']) {
                     $scoreDiff = $player['score'] - $player['opponent_score'];
-                    $scoreStatus = "You're winning by {$scoreDiff} points! 🎉";
+                    $pointText = $scoreDiff === 1 ? 'point' : 'points';
+                    $scoreStatus = "You're winning by {$scoreDiff} {$pointText}! 🎉";
                 } elseif ($player['score'] < $player['opponent_score']) {
                     $scoreDiff = $player['opponent_score'] - $player['score'];
-                    $scoreStatus = "You're behind by {$scoreDiff} points. Time to catch up! 💪";
+                    $pointText = $scoreDiff === 1 ? 'point' : 'points';
+                    $scoreStatus = "You're behind by {$scoreDiff} {$pointText}. Time to catch up! 💪";
                 } else {
                     $scoreStatus = "It's a tie! Who will take the lead? 🤝";
                 }
@@ -86,7 +88,8 @@ function sendDailyNotifications() {
                     $handCount = $stmt->fetchColumn() ?: 0;
                     
                     if ($handCount > 0) {
-                        $cardCountText = " You have {$handCount} cards in your hand.";
+                        $cardText = $handCount === 1 ? 'card' : 'cards';
+                        $cardCountText = " You have {$handCount} {$cardText} in your hand.";
                     }
                 }
 
