@@ -33,6 +33,16 @@ $stmt->execute([$player['game_id']]);
 $gameData = $stmt->fetch();
 
 $players = getGamePlayers($player['game_id']);
+$currentPlayer = null;
+$opponentPlayer = null;
+
+foreach ($players as $p) {
+    if ($p['device_id'] === $deviceId) {
+        $currentPlayer = $p;
+    } else {
+        $opponentPlayer = $p;
+    }
+}
 $gameStatus = $gameData['status']; // Use fresh game data
 $gameMode = $gameData['game_mode']; // Get current mode
 

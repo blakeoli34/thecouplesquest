@@ -2551,9 +2551,6 @@ document.addEventListener('DOMContentLoaded', function() {
     storeDeviceId();
     checkLocalStorageAuth();
 
-    // Set theme
-    loadThemePreference();
-    updateSoundToggleText();
     
     // Get game data from the page (set by PHP)
     if (typeof window.gameDataFromPHP !== 'undefined') {
@@ -2688,6 +2685,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Start periodic refresh for active games
     if (gameData.gameStatus === 'active') {
         refreshGameData();
+        loadThemePreference();
+        updateSoundToggleText();
         setInterval(refreshGameData, 5000); // Refresh every 10 seconds
     }
 });
