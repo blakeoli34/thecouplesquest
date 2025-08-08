@@ -1070,6 +1070,25 @@ body:not(.digital) .digital-only {
     box-shadow: inset 0 0 2px rgba(0,0,0,0.3);
 }
 
+.die-face.sexy {
+    display: block;
+    padding: 10px;
+}
+
+.die-face.sexy .die-text {
+    width: 100%;
+    height: 100%;
+    font-size: 12px;
+    font-weight: 700;
+    color: white;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    line-height: 1;
+}
+
 /* Die face 1 - center dot */
 .die-face.face-1 .die-dot:nth-child(1) { grid-column: 2; grid-row: 2; }
 

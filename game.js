@@ -2218,6 +2218,7 @@ function showDiceChoiceButtons() {
         <div class="dice-choice-buttons">
             <button class="dice-choice-btn" onclick="event.stopPropagation(); rollDiceChoice(1)">1 Die</button>
             <button class="dice-choice-btn" onclick="event.stopPropagation(); rollDiceChoice(2)">2 Dice</button>
+            <button class="dice-choice-btn" onclick="event.stopPropagation(); rollDiceChoice('sexy')">Sexy</button>
         </div>
     `;
 }
@@ -2249,11 +2250,17 @@ function rollDiceChoice(count) {
         };
     }
     
-    // Update dice color and auto-roll
-    if (gameData.currentPlayerGender) {
-        setDiceColor(gameData.currentPlayerGender);
+    // Set up dice based on type
+    if (count === 'sexy') {
+        setupSexyDice();
+    } else {
+        // Update dice color and auto-roll for regular dice
+        if (gameData.currentPlayerGender) {
+            setDiceColor(gameData.currentPlayerGender);
+        }
+        initializeDicePosition();
     }
-    initializeDicePosition();
+    
     playSoundIfEnabled('/dice-roll.m4r');
     setTimeout(() => rollDice(), 500);
 }
@@ -2265,11 +2272,13 @@ function setDiceCount(count) {
     document.querySelectorAll('.dice-count-btn').forEach(btn => {
         btn.classList.remove('active');
     });
-    event.target.classList.add('active');
+    if (event && event.target) {
+        event.target.classList.add('active');
+    }
     
     // Update dice container
     const container = document.getElementById('diceContainer');
-    if (count === 2) {
+    if (count === 2 || count === 'sexy') {
         container.classList.add('two-dice');
     } else {
         container.classList.remove('two-dice');
@@ -2293,20 +2302,27 @@ function rollDice() {
         rollButton.textContent = 'Rolling...';
     }
     
-    // Generate random values
-    const die1Value = Math.floor(Math.random() * 6) + 1;
-    const die2Value = currentDiceCount === 2 ? Math.floor(Math.random() * 6) + 1 : 0;
+    // Generate random values based on dice type
+    let die1Value, die2Value;
+    
+    if (currentDiceCount === 'sexy') {
+        die1Value = Math.floor(Math.random() * 6) + 1;
+        die2Value = Math.floor(Math.random() * 6) + 1;
+    } else {
+        die1Value = Math.floor(Math.random() * 6) + 1;
+        die2Value = currentDiceCount === 2 ? Math.floor(Math.random() * 6) + 1 : 0;
+    }
     
     const die1 = document.getElementById('die1');
     const die2 = document.getElementById('die2');
     
     if (die1) {
-        const extraSpins1 = Math.floor(Math.random() * 4) + 1; // extra spins
+        const extraSpins1 = Math.floor(Math.random() * 4) + 1;
         const finalRotation1 = getDieRotationForValue(die1Value);
         die1.style.transform = `rotateX(${finalRotation1.x + (extraSpins1 * 360)}deg) rotateY(${finalRotation1.y + (extraSpins1 * 360)}deg)`;
     }
     
-    if (currentDiceCount === 2 && die2) {
+    if ((currentDiceCount === 2 || currentDiceCount === 'sexy') && die2) {
         const extraSpins2 = Math.floor(Math.random() * 4) + 3;
         const finalRotation2 = getDieRotationForValue(die2Value);
         die2.style.transform = `rotateX(${finalRotation2.x + (extraSpins2 * 360)}deg) rotateY(${finalRotation2.y + (extraSpins2 * 360)}deg)`;
@@ -2346,6 +2362,66 @@ function setDiceColor(gender) {
             die.classList.add('two');
         }
     });
+}
+
+function setupSexyDice() {
+    currentDiceCount = 'sexy';
+    
+    // Update dice container to show both dice
+    const container = document.getElementById('diceContainer');
+    container.classList.add('two-dice');
+    
+    // Set dice color
+    if (gameData.currentPlayerGender) {
+        setDiceColor(gameData.currentPlayerGender);
+    }
+    
+    // Set up sex dice faces
+    setupSexyDiceFaces();
+    
+    // Initialize to random positions
+    initializeSexyDicePosition();
+}
+
+function setupSexyDiceFaces() {
+    const die1 = document.getElementById('die1');
+    const die2 = document.getElementById('die2');
+    
+    if (!die1 || !die2) return;
+    
+    // Die 1 - Action dice (same for both genders)
+    const actions = ['Rub', 'Pinch', 'Kiss', 'Lick', 'Suck', 'Do Whatever You Want to'];
+    
+    // Die 2 - Body parts (different based on gender)
+    const bodyParts = gameData.currentPlayerGender === 'female' 
+        ? ['His Booty', 'His Neck', 'His Nipples', 'Your Choice', 'His Penis', 'His Balls']
+        : ['Her Booty', 'Her Neck', 'Her Boobs', 'Her Nipples', 'Your Choice', 'Her Vagina'];
+    
+    // Update die 1 faces
+    const die1Faces = die1.querySelectorAll('.die-face');
+    die1Faces.forEach((face, index) => {
+        face.classList.add('sexy');
+        face.innerHTML = `<div class="die-text">${actions[index]}</div>`;
+    });
+    
+    // Update die 2 faces  
+    const die2Faces = die2.querySelectorAll('.die-face');
+    die2Faces.forEach((face, index) => {
+        face.classList.add('sexy');
+        face.innerHTML = `<div class="die-text">${bodyParts[index]}</div>`;
+    });
+}
+
+function initializeSexyDicePosition() {
+    const die1 = document.getElementById('die1');
+    const die2 = document.getElementById('die2');
+    
+    if (die1) {
+        setDieRotation(die1, Math.floor(Math.random() * 6) + 1);
+    }
+    if (die2) {
+        setDieRotation(die2, Math.floor(Math.random() * 6) + 1);
+    }
 }
 
 // Mode selection handler
