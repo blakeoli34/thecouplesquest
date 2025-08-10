@@ -217,7 +217,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             
         case 'create_timer':
             $description = trim($_POST['description']);
-            $minutes = intval($_POST['minutes']);
+            $minutes = floatval($_POST['minutes']);
             $result = createTimer($player['game_id'], $player['id'], $description, $minutes);
             echo json_encode($result);
             exit;
@@ -226,6 +226,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $timerId = intval($_POST['timer_id']);
             $result = deleteTimer($timerId, $player['game_id']);
             echo json_encode($result);
+            exit;
+
+        case 'timer_expired':
+            $timerId = intval($_POST['timer_id']);
+            $description = $_POST['description'];
+            
+            // Send push notification
+            if ($player['fcm_token']) {
+                $result = sendPushNotification(
+                    $player['fcm_token'],
+                    'Timer Expired ⏰',
+                    $description
+                );
+            }
+            
+            echo json_encode(['success' => true]);
             exit;
             
         case 'send_bump':
@@ -1174,6 +1190,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             <div class="form-group">
                 <label>Duration</label>
                 <select id="timerDuration">
+                    <option value="0.5">30 seconds</option>
+                    <option value="1">1 minute</option>
+                    <option value="5">5 minutes</option>
                     <option value="10">10 minutes</option>
                     <option value="15">15 minutes</option>
                     <option value="30">30 minutes</option>
@@ -1183,6 +1202,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     <option value="480">8 hours</option>
                     <option value="720">12 hours</option>
                     <option value="1440">24 hours</option>
+                    <option value="10080">7 days</option>
                 </select>
             </div>
             

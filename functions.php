@@ -200,7 +200,8 @@ function createTimer($gameId, $playerId, $description, $durationMinutes) {
         
         $startTime = new DateTime('now', new DateTimeZone('UTC'));
         $endTime = clone $startTime;
-        $endTime->add(new DateInterval('PT' . $durationMinutes . 'M'));
+        $seconds = $durationMinutes * 60;
+        $endTime->add(new DateInterval('PT' . $seconds . 'S'));
         
         $stmt = $pdo->prepare("
             INSERT INTO timers (game_id, player_id, description, duration_minutes, start_time, end_time) 

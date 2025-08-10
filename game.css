@@ -252,6 +252,30 @@ body:not(.digital) .digital-only {
     display: block;
 }
 
+.timer-countdown {
+    display: block;
+    font-weight: 700;
+    font-size: 11px;
+}
+
+.timer-expiring {
+    animation: timerGrow 10s forwards;
+    transform-origin: top right;
+}
+
+@keyframes timerGrow {
+    0% { 
+        transform: scale(1);
+        background: rgba(255,255,255,0.2);
+        color: white;
+    }
+    100% { 
+        transform: scale(1.5);
+        background: rgba(255,255,255,1);
+        color: #c62828;
+    }
+}
+
 .board-separator {
     position: absolute;
     top: 50%;

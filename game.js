@@ -52,6 +52,7 @@ function isSoundEnabled() {
 
 function playSoundIfEnabled(soundFile) {
     if (isSoundEnabled()) {
+        console.log('playing sound');
         actionSound.src = soundFile;
         actionSound.play().catch(() => {});
     }
@@ -1846,6 +1847,84 @@ function deleteSelectedTimer() {
     });
 }
 
+// Timer management object
+const timerManager = {
+    intervals: new Map(),
+    
+    startTimer(timerId, endTime) {
+        this.stopTimer(timerId); // Clear any existing interval
+        
+        const interval = setInterval(() => {
+            const now = new Date();
+            const end = new Date(endTime + 'Z');
+            const diff = end - now;
+            
+            if (diff <= 0) {
+                this.expireTimer(timerId);
+                return;
+            }
+            
+            this.updateTimerDisplay(timerId, diff);
+        }, 1000);
+        
+        this.intervals.set(timerId, interval);
+    },
+    
+    stopTimer(timerId) {
+        if (this.intervals.has(timerId)) {
+            clearInterval(this.intervals.get(timerId));
+            this.intervals.delete(timerId);
+        }
+    },
+    
+    updateTimerDisplay(timerId, diff) {
+        const badge = document.querySelector(`[data-timer-id="${timerId}"]`);
+        if (!badge) return;
+        
+        const timeString = this.formatTime(diff);
+        const descSpan = badge.querySelector('.timer-title');
+        const timeSpan = badge.querySelector('.timer-countdown');
+        
+        if (timeSpan) {
+            timeSpan.textContent = timeString;
+        }
+        
+        // Pulse in last 10 seconds
+        if (diff <= 10000) {
+            badge.classList.add('timer-expiring');
+        } else {
+            badge.classList.remove('timer-expiring');
+        }
+    },
+    
+    expireTimer(timerId) {
+        this.stopTimer(timerId);
+        const badge = document.querySelector(`[data-timer-id="${timerId}"]`);
+        if (badge) {
+            const description = badge.querySelector('.timer-title').textContent;
+            
+            badge.querySelector('.timer-countdown').textContent = '0:00';
+            setTimeout(() => {
+                badge.remove();
+                refreshGameData();
+            }, 1000);
+        }
+    },
+    
+    formatTime(milliseconds) {
+        const totalSeconds = Math.ceil(milliseconds / 1000);
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+        
+        if (hours > 0) {
+            return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        } else {
+            return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }
+    }
+};
+
 // Bump notification function
 function sendBump() {
     let $bubble = $('.bump-send-display');
@@ -2034,33 +2113,41 @@ function updateTimerDisplay(timers) {
     
     if (!currentTimers || !opponentTimers) return;
     
-    currentTimers.innerHTML = '';
-    opponentTimers.innerHTML = '';
+    // Get existing timer IDs to avoid recreating them
+    const existingTimerIds = new Set();
+    document.querySelectorAll('[data-timer-id]').forEach(badge => {
+        existingTimerIds.add(badge.dataset.timerId);
+    });
     
     timers.forEach(timer => {
+        // Skip if timer already exists and is running
+        if (existingTimerIds.has(timer.id.toString())) {
+            return;
+        }
+        
         const div = document.createElement('div');
         div.className = 'timer-badge';
+        div.dataset.timerId = timer.id;
         div.title = timer.description;
         div.onclick = () => showTimerDeleteModal(timer.id, timer.description);
         
-        // Treat database time as UTC
         const endTime = new Date(timer.end_time + 'Z');
         const now = new Date();
         const diff = endTime - now;
         
         if (diff > 0) {
-            const hours = Math.floor(diff / (1000 * 60 * 60));
-            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-
             const title = '<span class="timer-title">' + timer.description + '</span>';
+            const countdown = '<span class="timer-countdown">' + timerManager.formatTime(diff) + '</span>';
             
-            div.innerHTML = title.concat(hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`);
+            div.innerHTML = title + countdown;
             
             if (timer.player_id == gameData.currentPlayerId) {
                 currentTimers.appendChild(div);
             } else {
                 opponentTimers.appendChild(div);
             }
+            
+            timerManager.startTimer(timer.id, timer.end_time);
         }
     });
 }
@@ -2757,13 +2844,20 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(() => {
         $('.game-timer').addClass('visible');
     }, 1000);
+
+    // Clear all timer intervals on page unload
+    window.addEventListener('beforeunload', () => {
+        timerManager.intervals.forEach((interval, timerId) => {
+            timerManager.stopTimer(timerId);
+        });
+    });
     
     // Start periodic refresh for active games
     if (gameData.gameStatus === 'active') {
         refreshGameData();
         loadThemePreference();
         updateSoundToggleText();
-        setInterval(refreshGameData, 5000); // Refresh every 10 seconds
+        setInterval(refreshGameData, 5000); // Refresh every 5 seconds
     }
 });
 

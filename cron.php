@@ -9,6 +9,16 @@ ini_set('error_log', '/path/to/your/logs/cron_errors.log'); // Update this path
 
 $action = $argv[1] ?? 'all';
 
+// fast execute
+if ($action === 'timers') {
+    // Only check timers, skip other operations
+    $expiredCount = checkExpiredTimers();
+    if ($expiredCount > 0) {
+        error_log("Processed $expiredCount expired timers");
+    }
+    exit;
+}
+
 // Log cron execution
 error_log("Cron job started with action: $action at " . date('Y-m-d H:i:s'));
 
@@ -123,7 +133,7 @@ function sendDailyNotifications() {
 }
 
 function checkExpiredTimers() {
-    error_log("Checking expired timers...");
+    error_log("Checking for expired timers...");
     
     try {
         $pdo = Config::getDatabaseConnection();
@@ -137,8 +147,6 @@ function checkExpiredTimers() {
         ");
         $stmt->execute();
         $expiredTimers = $stmt->fetchAll();
-        
-        error_log("Found " . count($expiredTimers) . " expired timers");
         
         $notificationsSent = 0;
         
@@ -170,8 +178,6 @@ function checkExpiredTimers() {
                 error_log("Error processing expired timer {$timer['id']}: " . $e->getMessage());
             }
         }
-        
-        error_log("Timer check completed: {$notificationsSent} notifications sent, " . count($expiredTimers) . " timers deactivated");
         return count($expiredTimers);
         
     } catch (Exception $e) {
