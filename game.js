@@ -160,6 +160,9 @@ function updateHandBadge() {
             badge.remove();
         }
     }
+
+    // Update app icon badge
+    updateAppBadge(handCount);
 }
 
 function updateOpponentHandDisplay() {
@@ -1363,6 +1366,38 @@ function checkNotificationStatusForModal() {
     }
 }
 
+// App badge functionality
+let badgeSupported = false;
+
+function checkBadgeSupport() {
+    badgeSupported = 'setAppBadge' in navigator;
+    console.log('Badge support:', badgeSupported);
+}
+
+function updateAppBadge(count) {
+    if (!badgeSupported || !document.body.classList.contains('digital')) return;
+    
+    try {
+        if (count > 0) {
+            navigator.setAppBadge(count);
+        } else {
+            navigator.clearAppBadge();
+        }
+    } catch (error) {
+        console.log('Badge update failed:', error);
+    }
+}
+
+function clearAppBadge() {
+    if (badgeSupported) {
+        try {
+            navigator.clearAppBadge();
+        } catch (error) {
+            console.log('Badge clear failed:', error);
+        }
+    }
+}
+
 // Show notification in foreground
 function showNotification(payload) {
     const title = payload.data.title || 'The Couples Quest';
@@ -1411,6 +1446,11 @@ function showInAppNotification(title, body) {
         $title.empty();
         $body.empty();
     }, 5500);
+
+    // Refresh card data to update badge
+    if (document.body.classList.contains('digital')) {
+        setTimeout(() => loadCardData(), 1000);
+    }
 }
 
 // ===========================================
@@ -2723,6 +2763,8 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initialize Firebase (but don't request permission automatically)
     initializeFirebase();
+
+    checkBadgeSupport();
     
     // Check notification status if button exists
     setTimeout(checkNotificationStatus, 500);
@@ -2859,6 +2901,16 @@ document.addEventListener('DOMContentLoaded', function() {
         updateSoundToggleText();
         setInterval(refreshGameData, 5000); // Refresh every 5 seconds
     }
+
+    // Clear badge when app becomes visible
+    document.addEventListener('visibilitychange', function() {
+        if (!document.hidden && document.body.classList.contains('digital')) {
+            // Reload card data to get fresh count
+            setTimeout(() => {
+                loadCardData();
+            }, 500);
+        }
+    });
 });
 
 // Confetti at game end
