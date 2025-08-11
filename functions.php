@@ -216,7 +216,26 @@ function createTimer($gameId, $playerId, $description, $durationMinutes) {
             $endTime->format('Y-m-d H:i:s')
         ]);
         
-        return ['success' => true, 'timer_id' => $pdo->lastInsertId()];
+        $timerId = $pdo->lastInsertId();
+
+        // Add dynamic at job for timer expiration
+        $endTimeLocal = clone $endTime;
+        $endTimeLocal->setTimezone(new DateTimeZone('America/Indiana/Indianapolis'));
+
+        // Format for at command (without seconds, we'll add sleep for precision)
+        $atTime = $endTimeLocal->format('H:i M j, Y');
+        $seconds = $endTimeLocal->format('s');
+
+        // Create command that sleeps to the exact second, then executes
+        $atCommand = "sleep {$seconds} && /usr/bin/php /var/www/thecouplesquest/cron.php timer_{$timerId}";
+
+        // Schedule the job with at
+        $atJob = shell_exec("echo '{$atCommand}' | at {$atTime} 2>&1");
+
+        // Log the at job creation for debugging
+        error_log("Created at job for timer {$timerId}: {$atTime} +{$seconds}s - Result: {$atJob}");
+
+        return ['success' => true, 'timer_id' => $timerId];
         
     } catch (Exception $e) {
         error_log("Error creating timer: " . $e->getMessage());
@@ -247,6 +266,28 @@ function deleteTimer($timerId, $gameId) {
         $pdo = Config::getDatabaseConnection();
         $stmt = $pdo->prepare("DELETE FROM timers WHERE id = ? AND game_id = ?");
         $stmt->execute([$timerId, $gameId]);
+        
+        // Remove at job - find and remove jobs containing our timer ID
+        $atJobs = shell_exec('atq 2>/dev/null') ?: '';
+        $lines = explode("\n", trim($atJobs));
+        
+        foreach ($lines as $line) {
+            if (empty($line)) continue;
+            
+            $parts = explode("\t", $line);
+            if (count($parts) >= 1) {
+                $jobId = trim($parts[0]);
+                
+                // Check if this job contains our timer command
+                $jobContent = shell_exec("at -c {$jobId} 2>/dev/null | tail -1");
+                if (strpos($jobContent, "timer_{$timerId}") !== false) {
+                    shell_exec("atrm {$jobId} 2>/dev/null");
+                    error_log("Removed at job {$jobId} for timer {$timerId}");
+                    break;
+                }
+            }
+        }
+        
         return ['success' => true];
     } catch (Exception $e) {
         error_log("Error deleting timer: " . $e->getMessage());

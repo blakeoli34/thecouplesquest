@@ -9,12 +9,12 @@ ini_set('error_log', '/path/to/your/logs/cron_errors.log'); // Update this path
 
 $action = $argv[1] ?? 'all';
 
-// fast execute
-if ($action === 'timers') {
-    // Only check timers, skip other operations
-    $expiredCount = checkExpiredTimers();
+// Check if this is a specific timer call
+if (isset($argv[1]) && strpos($argv[1], 'timer_') === 0) {
+    $timerId = str_replace('timer_', '', $argv[1]);
+    $expiredCount = checkExpiredTimers($timerId);
     if ($expiredCount > 0) {
-        error_log("Processed $expiredCount expired timers");
+        error_log("Processed timer $timerId");
     }
     exit;
 }
@@ -132,52 +132,74 @@ function sendDailyNotifications() {
     }
 }
 
-function checkExpiredTimers() {
-    error_log("Checking for expired timers...");
+function checkExpiredTimers($specificTimerId = null) {
+    error_log("Checking for expired timers" . ($specificTimerId ? " - timer ID: $specificTimerId" : ""));
     
     try {
         $pdo = Config::getDatabaseConnection();
         
-        // Get expired timers - Fixed to use UTC_TIMESTAMP()
-        $stmt = $pdo->prepare("
-            SELECT t.*, p.fcm_token, p.first_name 
-            FROM timers t
-            JOIN players p ON t.player_id = p.id
-            WHERE t.is_active = TRUE AND t.end_time <= UTC_TIMESTAMP()
-        ");
-        $stmt->execute();
-        $expiredTimers = $stmt->fetchAll();
+        if ($specificTimerId) {
+            // Process specific timer (called from cron)
+            $stmt = $pdo->prepare("
+                SELECT t.*, p.fcm_token, p.first_name 
+                FROM timers t
+                JOIN players p ON t.player_id = p.id
+                WHERE t.id = ? AND t.is_active = TRUE
+            ");
+            $stmt->execute([$specificTimerId]);
+            $expiredTimers = $stmt->fetchAll();
+        } else {
+            // Process all expired timers (fallback/manual call)
+            $stmt = $pdo->prepare("
+                SELECT t.*, p.fcm_token, p.first_name 
+                FROM timers t
+                JOIN players p ON t.player_id = p.id
+                WHERE t.is_active = TRUE AND t.end_time <= UTC_TIMESTAMP()
+            ");
+            $stmt->execute();
+            $expiredTimers = $stmt->fetchAll();
+        }
         
         $notificationsSent = 0;
         
         foreach ($expiredTimers as $timer) {
             try {
-                // Send notification if FCM token exists
-                if ($timer['fcm_token'] && !empty($timer['fcm_token'])) {
-                    $result = sendPushNotification(
-                        $timer['fcm_token'],
-                        'Timer Expired ⏰',
-                        $timer['description']
-                    );
-                    
-                    if ($result) {
-                        $notificationsSent++;
-                        error_log("Timer notification sent for timer {$timer['id']} to {$timer['first_name']}");
+                // Send notification with retry logic
+                $notificationSent = false;
+                for ($attempt = 1; $attempt <= 3; $attempt++) {
+                    if ($timer['fcm_token'] && !empty($timer['fcm_token'])) {
+                        $result = sendPushNotification(
+                            $timer['fcm_token'],
+                            'Timer Expired ⏰',
+                            $timer['description']
+                        );
+                        
+                        if ($result) {
+                            $notificationSent = true;
+                            $notificationsSent++;
+                            error_log("Timer notification sent for timer {$timer['id']} to {$timer['first_name']} (attempt $attempt)");
+                            break;
+                        } else {
+                            error_log("Failed to send timer notification for timer {$timer['id']} (attempt $attempt)");
+                            if ($attempt < 3) {
+                                sleep(5); // 5 second delay between retries
+                            }
+                        }
                     } else {
-                        error_log("Failed to send timer notification for timer {$timer['id']} to {$timer['first_name']}");
+                        error_log("No FCM token for timer {$timer['id']} player {$timer['first_name']}");
+                        break;
                     }
-                } else {
-                    error_log("No FCM token for timer {$timer['id']} player {$timer['first_name']}");
                 }
                 
-                // Mark timer as inactive
-                $stmt = $pdo->prepare("UPDATE timers SET is_active = FALSE WHERE id = ?");
+                // Delete timer (whether notification succeeded or not after 3 attempts)
+                $stmt = $pdo->prepare("DELETE FROM timers WHERE id = ?");
                 $stmt->execute([$timer['id']]);
                 
             } catch (Exception $e) {
                 error_log("Error processing expired timer {$timer['id']}: " . $e->getMessage());
             }
         }
+        
         return count($expiredTimers);
         
     } catch (Exception $e) {
