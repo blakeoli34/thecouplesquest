@@ -367,36 +367,69 @@ function sendPushNotification($fcmToken, $title, $body, $data = []) {
         return false;
     }
     
-    // Check if we have the required FCM configuration
-    if (!defined('Config::FCM_PROJECT_ID') || !Config::FCM_PROJECT_ID || Config::FCM_PROJECT_ID === 'your-firebase-project-id') {
-        error_log("FCM: Project ID not configured properly");
+    // Validate token format (basic check)
+    if (!preg_match('/^[A-Za-z0-9_-]+:[A-Za-z0-9_-]+$/', $fcmToken) && 
+        !preg_match('/^[A-Za-z0-9_-]{140,}$/', $fcmToken)) {
+        error_log("FCM: Invalid token format");
         return false;
     }
-
+    
     $data = [
         'title' => $title,
         'body' => $body
     ];
     
-    // FCM v1 API endpoint
     $url = 'https://fcm.googleapis.com/v1/projects/' . Config::FCM_PROJECT_ID . '/messages:send';
     
-    // Ensure data is an object/map, not an array
-    if (empty($data)) {
-        $data = new stdClass(); // Empty object
-    } elseif (is_array($data) && array_values($data) === $data) {
-        // Convert indexed array to associative array
-        $data = (object)$data;
-    }
-    
+    // Enhanced message structure for iOS PWA
     $message = [
         'message' => [
             'token' => $fcmToken,
             'data' => $data,
+            'notification' => [
+                'title' => $title,
+                'body' => $body
+            ],
+            'webpush' => [
+                'headers' => [
+                    'TTL' => '3600' // 1 hour TTL
+                ],
+                'notification' => [
+                    'title' => $title,
+                    'body' => $body,
+                    'icon' => '/icon-192x192.png',
+                    'badge' => '/badge-72x72.png',
+                    'tag' => 'couples-quest-' . time(),
+                    'requireInteraction' => true,
+                    'silent' => false,
+                    'vibrate' => [200, 100, 200],
+                    'actions' => [
+                        [
+                            'action' => 'open',
+                            'title' => 'Open Game'
+                        ]
+                    ]
+                ]
+            ],
+            'apns' => [
+                'headers' => [
+                    'apns-priority' => '10',
+                    'apns-push-type' => 'alert'
+                ],
+                'payload' => [
+                    'aps' => [
+                        'alert' => [
+                            'title' => $title,
+                            'body' => $body
+                        ],
+                        'badge' => 1,
+                        'sound' => 'default'
+                    ]
+                ]
+            ]
         ]
     ];
     
-    // Get OAuth 2.0 access token
     $accessToken = getAccessToken();
     if (!$accessToken) {
         error_log("Failed to get FCM access token");
@@ -414,8 +447,8 @@ function sendPushNotification($fcmToken, $title, $body, $data = []) {
     curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($message));
-    curl_setopt($ch, CURLOPT_TIMEOUT, 30); // Add timeout
-    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10); // Add connection timeout
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
     
     $result = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -430,17 +463,18 @@ function sendPushNotification($fcmToken, $title, $body, $data = []) {
     if ($httpCode !== 200) {
         error_log("FCM API error: HTTP $httpCode - $result");
         
-        // Try to parse the error for more specific logging
         $errorData = json_decode($result, true);
         if ($errorData && isset($errorData['error'])) {
             error_log("FCM error details: " . $errorData['error']['message']);
             
-            // Handle token errors specifically
+            // Handle token errors - mark token as invalid
             if (isset($errorData['error']['details'])) {
                 foreach ($errorData['error']['details'] as $detail) {
-                    if (isset($detail['errorCode']) && in_array($detail['errorCode'], ['UNREGISTERED', 'INVALID_ARGUMENT'])) {
-                        error_log("FCM token appears to be invalid or unregistered");
-                        // You might want to remove this token from the database
+                    if (isset($detail['errorCode']) && 
+                        in_array($detail['errorCode'], ['UNREGISTERED', 'INVALID_ARGUMENT'])) {
+                        error_log("FCM token invalid, clearing from database");
+                        clearInvalidFcmToken($fcmToken);
+                        return false;
                     }
                 }
             }
@@ -448,8 +482,66 @@ function sendPushNotification($fcmToken, $title, $body, $data = []) {
         return false;
     }
     
-    error_log("FCM notification sent successfully to token: " . substr($fcmToken, 0, 20) . "...");
+    error_log("FCM notification sent successfully");
     return true;
+}
+
+// Function to clear invalid tokens
+function clearInvalidFcmToken($fcmToken) {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        $stmt = $pdo->prepare("UPDATE players SET fcm_token = NULL WHERE fcm_token = ?");
+        $stmt->execute([$fcmToken]);
+        error_log("Cleared invalid FCM token from database");
+    } catch (Exception $e) {
+        error_log("Error clearing invalid FCM token: " . $e->getMessage());
+    }
+}
+
+// Enhanced token update with validation
+function updateFcmToken($deviceId, $fcmToken) {
+    try {
+        // Validate token format
+        if (!preg_match('/^[A-Za-z0-9_-]+:[A-Za-z0-9_-]+$/', $fcmToken) && 
+            !preg_match('/^[A-Za-z0-9_-]{140,}$/', $fcmToken)) {
+            error_log("Invalid FCM token format provided");
+            return false;
+        }
+        
+        $pdo = Config::getDatabaseConnection();
+        $stmt = $pdo->prepare("UPDATE players SET fcm_token = ?, fcm_token_updated = NOW() WHERE device_id = ?");
+        $stmt->execute([$fcmToken, $deviceId]);
+        
+        error_log("FCM token updated successfully for device: " . substr($deviceId, 0, 8) . "...");
+        return true;
+    } catch (Exception $e) {
+        error_log("Error updating FCM token: " . $e->getMessage());
+        return false;
+    }
+}
+
+// Add retry mechanism for critical notifications
+function sendCriticalNotification($fcmToken, $title, $body, $maxRetries = 3) {
+    $attempt = 1;
+    
+    while ($attempt <= $maxRetries) {
+        error_log("Sending critical notification (attempt $attempt/$maxRetries)");
+        
+        if (sendPushNotification($fcmToken, $title, $body)) {
+            return true;
+        }
+        
+        if ($attempt < $maxRetries) {
+            $delay = $attempt * 2; // Progressive delay
+            error_log("Notification failed, retrying in {$delay} seconds");
+            sleep($delay);
+        }
+        
+        $attempt++;
+    }
+    
+    error_log("Critical notification failed after $maxRetries attempts");
+    return false;
 }
 
 function getAccessToken() {
@@ -751,18 +843,6 @@ function sendTestNotification($deviceId) {
             'success' => false,
             'message' => 'Failed to send test: ' . $e->getMessage()
         ];
-    }
-}
-
-function updateFcmToken($deviceId, $fcmToken) {
-    try {
-        $pdo = Config::getDatabaseConnection();
-        $stmt = $pdo->prepare("UPDATE players SET fcm_token = ? WHERE device_id = ?");
-        $stmt->execute([$fcmToken, $deviceId]);
-        return true;
-    } catch (Exception $e) {
-        error_log("Error updating FCM token: " . $e->getMessage());
-        return false;
     }
 }
 

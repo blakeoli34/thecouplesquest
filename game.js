@@ -1217,70 +1217,111 @@ function enableNotificationsFromModal() {
     });
 }
 
-// Setup Firebase messaging after permission granted
+// Enhanced Firebase messaging with better reliability for iOS PWA
+
+// Add token refresh monitoring
 function setupFirebaseMessaging() {
-    if (!firebaseMessaging) {
-        console.log('Firebase messaging not available');
-        return;
-    }
+    if (!firebaseMessaging) return;
     
     const vapidKey = 'BAhDDY44EUfm9YKOElboy-2fb_6lzVhW4_TLMr4Ctiw6oA_ROcKZ09i5pKMQx3s7SoWgjuPbW-eGI7gFst6qjag';
     
-    if (vapidKey === 'your-actual-vapid-key-here') {
-        console.log('⚠️ VAPID key not configured. Please set your actual VAPID key.');
-        const statusElements = [
-            document.getElementById('notificationStatus'),
-            document.getElementById('notificationModalStatusText')
-        ];
-        statusElements.forEach(element => {
-            if (element) {
-                element.innerHTML += '<br><span style="color: #ffd43b;">⚠️ Firebase push notifications need setup</span>';
-            }
-        });
-        return;
-    }
-    
-    firebaseMessaging.getToken({ vapidKey: vapidKey }).then((currentToken) => {
+    // Get initial token
+    firebaseMessaging.getToken({ vapidKey }).then((currentToken) => {
         if (currentToken) {
             console.log('FCM Token received:', currentToken);
+            updateTokenOnServer(currentToken);
             
-            // Send token to server
-            fetch('game.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: 'action=update_fcm_token&fcm_token=' + encodeURIComponent(currentToken)
-            })
-            .then(response => response.json())
-            .then(data => {
-                console.log('Token update result:', data);
-                if (data.success) {
-                    const statusElements = [
-                        document.getElementById('notificationStatus'),
-                        document.getElementById('notificationModalStatusText')
-                    ];
-                    statusElements.forEach(element => {
-                        if (element) {
-                            if (element.id === 'notificationModalStatusText') {
-                                element.textContent = '✅ Notifications are enabled! 🔥 Global notifications ready!';
-                            } else {
-                                element.innerHTML += '<br><span style="color: #51cf66;">🔥 Global notifications ready!</span>';
-                            }
-                        }
-                    });
-                }
-            })
-            .catch(error => {
-                console.error('Error updating token:', error);
-            });
-        } else {
-            console.log('No FCM token available');
+            // Store token locally for comparison
+            localStorage.setItem('fcm_token', currentToken);
         }
     }).catch((err) => {
         console.log('Error getting FCM token:', err);
-        console.log('This is likely due to missing or invalid VAPID key');
     });
+
+    // Monitor token refresh
+    firebaseMessaging.onTokenRefresh(() => {
+        console.log('FCM Token refreshed');
+        firebaseMessaging.getToken({ vapidKey }).then((refreshedToken) => {
+            console.log('New token:', refreshedToken);
+            updateTokenOnServer(refreshedToken);
+            localStorage.setItem('fcm_token', refreshedToken);
+        }).catch((err) => {
+            console.log('Unable to retrieve refreshed token:', err);
+        });
+    });
+
+    // Enhanced foreground message handling
+    firebaseMessaging.onMessage((payload) => {
+        console.log('Message received in foreground:', payload);
+        
+        // Multiple fallback approaches for payload parsing
+        let title = payload.notification?.title || 
+                   payload.data?.title || 
+                   'The Couples Quest';
+        let body = payload.notification?.body || 
+                  payload.data?.body || 
+                  'New notification';
+        
+        // Always show in-app notification for foreground
+        showInAppNotification(title, body);
+        
+        // For iOS PWA: also try to show browser notification
+        if ('Notification' in window && Notification.permission === 'granted') {
+            try {
+                new Notification(title, {
+                    body: body,
+                    icon: '/icon-192x192.png',
+                    badge: '/badge-72x72.png',
+                    tag: 'couples-quest',
+                    requireInteraction: false
+                });
+            } catch (e) {
+                console.log('Browser notification failed:', e);
+            }
+        }
+    });
+}
+
+function updateTokenOnServer(token) {
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'action=update_fcm_token&fcm_token=' + encodeURIComponent(token)
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('Token update result:', data);
+    })
+    .catch(error => {
+        console.error('Error updating token:', error);
+        // Retry after delay
+        setTimeout(() => updateTokenOnServer(token), 5000);
+    });
+}
+
+// Periodic token validation (check every 30 minutes)
+setInterval(() => {
+    if (firebaseMessaging) {
+        firebaseMessaging.getToken().then((currentToken) => {
+            const storedToken = localStorage.getItem('fcm_token');
+            if (currentToken && currentToken !== storedToken) {
+                console.log('Token changed, updating server');
+                updateTokenOnServer(currentToken);
+                localStorage.setItem('fcm_token', currentToken);
+            }
+        });
+    }
+}, 30 * 60 * 1000);
+
+// Keep service worker alive with periodic heartbeat
+if ('serviceWorker' in navigator) {
+    setInterval(() => {
+        navigator.serviceWorker.ready.then(registration => {
+            if (registration.active) {
+                registration.active.postMessage({type: 'HEARTBEAT'});
+            }
+        });
+    }, 30000); // Every 30 seconds
 }
 
 
