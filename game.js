@@ -809,20 +809,28 @@ function showCardSelectionActions() {
                 actions.innerHTML = `<button class="btn btn-complete" onclick="completeChanceCard(${selectedHandCard.id})">Complete</button>`;
             }
         } else {
-            // Check if card has veto penalties
-            const hasVetoPenalty = selectedHandCard.veto_subtract || selectedHandCard.veto_steal || 
-                                 selectedHandCard.veto_draw_chance || selectedHandCard.veto_draw_snap_dare || 
-                                 selectedHandCard.veto_draw_spicy || 
-                                 ['snap', 'dare', 'spicy'].includes(selectedHandCard.card_type);
-            
-            const vetoButton = hasVetoPenalty ? 
-                `<button class="btn btn-veto" onclick="vetoSelectedCard()">Veto</button>` :
-                `<button class="btn btn-veto" disabled>No Veto</button>`;
-            
-            actions.innerHTML = `
-                <button class="btn btn-complete" onclick="completeSelectedCard()">Complete</button>
-                ${vetoButton}
-            `;
+            // Check if this is a win/loss card
+            if (selectedHandCard.win_loss == 1) {
+                actions.innerHTML = `
+                    <button class="btn btn-complete" onclick="winSelectedCard()">Win</button>
+                    <button class="btn btn-veto" onclick="loseSelectedCard()">Loss</button>
+                `;
+            } else {
+                // Regular complete/veto logic
+                const hasVetoPenalty = selectedHandCard.veto_subtract || selectedHandCard.veto_steal || 
+                                    selectedHandCard.veto_draw_chance || selectedHandCard.veto_draw_snap_dare || 
+                                    selectedHandCard.veto_draw_spicy || 
+                                    ['snap', 'dare', 'spicy'].includes(selectedHandCard.card_type);
+                
+                const vetoButton = hasVetoPenalty ? 
+                    `<button class="btn btn-veto" onclick="vetoSelectedCard()">Veto</button>` :
+                    `<button class="btn btn-veto" disabled>No Veto</button>`;
+                
+                actions.innerHTML = `
+                    <button class="btn btn-complete" onclick="completeSelectedCard()">Complete</button>
+                    ${vetoButton}
+                `;
+            }
         }
         
         actions.classList.add('show');
@@ -969,6 +977,90 @@ function vetoSelectedCard() {
         clearCardSelection();
         console.error('Error vetoing card:', error);
         alert('Failed to veto card');
+    });
+}
+
+// Win selected card
+function winSelectedCard() {
+    if (!selectedHandCard) return;
+    
+    const selectedCardElement = document.querySelector('.game-card.selected');
+    if (selectedCardElement) {
+        selectedCardElement.classList.add('discarding');
+        playSoundIfEnabled('/card-completed.m4r');
+    }
+    
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `action=win_hand_card&card_id=${selectedHandCard.card_id || selectedHandCard.id}&player_card_id=${selectedHandCard.id}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            setTimeout(() => {
+                hideCardSelectionActions();
+                closeCardOverlay('handCardsOverlay');
+                loadCardData();
+                setTimeout(() => {
+                    if (data.score_changes && data.score_changes.length > 0) {
+                        data.score_changes.forEach(change => {
+                            updateScore(change.player_id, change.points);
+                        });
+                    }
+                }, 1500);
+            }, 1100);
+        } else {
+            clearCardSelection();
+            alert('Failed to win card: ' + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        clearCardSelection();
+        console.error('Error winning card:', error);
+        alert('Failed to win card');
+    });
+}
+
+// Lose selected card
+function loseSelectedCard() {
+    if (!selectedHandCard) return;
+    
+    const selectedCardElement = document.querySelector('.game-card.selected');
+    if (selectedCardElement) {
+        selectedCardElement.classList.add('discarding');
+        playSoundIfEnabled('/card-vetoed.m4r');
+    }
+    
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `action=lose_hand_card&card_id=${selectedHandCard.card_id || selectedHandCard.id}&player_card_id=${selectedHandCard.id}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            setTimeout(() => {
+                hideCardSelectionActions();
+                closeCardOverlay('handCardsOverlay');
+                loadCardData();
+                setTimeout(() => {
+                    if (data.score_changes && data.score_changes.length > 0) {
+                        data.score_changes.forEach(change => {
+                            updateScore(change.player_id, change.points);
+                        });
+                    }
+                }, 1500);
+            }, 1100);
+        } else {
+            clearCardSelection();
+            alert('Failed to lose card: ' + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        clearCardSelection();
+        console.error('Error losing card:', error);
+        alert('Failed to lose card');
     });
 }
 
@@ -3011,6 +3103,8 @@ window.drawSingleCard = drawSingleCard;
 window.selectHandCard = selectHandCard;
 window.completeSelectedCard = completeSelectedCard;
 window.vetoSelectedCard = vetoSelectedCard;
+window.winSelectedCard = winSelectedCard;
+window.loseSelectedCard = loseSelectedCard;
 window.clearCardSelection = clearCardSelection;
 window.handleOverlayClick = handleOverlayClick;
 window.closeCardOverlay = closeCardOverlay;

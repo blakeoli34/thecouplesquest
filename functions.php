@@ -1869,6 +1869,117 @@ function vetoHandCard($gameId, $playerId, $cardId, $playerCardId) {
     }
 }
 
+function processWinLossCard($gameId, $playerId, $cardId, $playerCardId, $isWin) {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        $pdo->beginTransaction();
+        
+        // Get card details
+        $stmt = $pdo->prepare("
+            SELECT pc.*, c.*
+            FROM player_cards pc
+            JOIN cards c ON pc.card_id = c.id
+            WHERE pc.id = ? AND pc.player_id = ? AND pc.game_id = ?
+        ");
+        $stmt->execute([$playerCardId, $playerId, $gameId]);
+        $playerCard = $stmt->fetch();
+        
+        if (!$playerCard) {
+            throw new Exception("Card not found in player's hand");
+        }
+        
+        $opponentId = getOpponentPlayerId($gameId, $playerId);
+        $response = ['success' => true, 'score_changes' => []];
+        
+        if ($isWin) {
+            // Player wins: gets points, opponent gets veto penalty
+            if ($playerCard['card_points']) {
+                $response['score_changes'][] = ['player_id' => $playerId, 'points' => $playerCard['card_points']];
+            }
+            
+            // Apply veto penalties to opponent
+            if ($playerCard['veto_subtract']) {
+                $response['score_changes'][] = ['player_id' => $opponentId, 'points' => -$playerCard['veto_subtract']];
+            }
+            if ($playerCard['veto_steal']) {
+                $response['score_changes'][] = ['player_id' => $opponentId, 'points' => -$playerCard['veto_steal']];
+                $response['score_changes'][] = ['player_id' => $playerId, 'points' => $playerCard['veto_steal']];
+            }
+            // Handle draw penalties for opponent
+            if ($playerCard['veto_draw_chance']) {
+                drawCards($gameId, $opponentId, 'chance', $playerCard['veto_draw_chance']);
+            }
+            if ($playerCard['veto_draw_snap_dare']) {
+                $opponent = getPlayerById($opponentId);
+                $drawType = ($opponent['gender'] === 'female') ? 'snap' : 'dare';
+                drawCards($gameId, $opponentId, $drawType, $playerCard['veto_draw_snap_dare']);
+            }
+            if ($playerCard['veto_draw_spicy']) {
+                drawCards($gameId, $opponentId, 'spicy', $playerCard['veto_draw_spicy']);
+            }
+        } else {
+            // Player loses: gets veto penalty, opponent gets points
+            if ($playerCard['card_points']) {
+                $response['score_changes'][] = ['player_id' => $opponentId, 'points' => $playerCard['card_points']];
+            }
+            
+            // Apply veto penalties to player
+            if ($playerCard['veto_subtract']) {
+                $response['score_changes'][] = ['player_id' => $playerId, 'points' => -$playerCard['veto_subtract']];
+            }
+            if ($playerCard['veto_steal']) {
+                $response['score_changes'][] = ['player_id' => $playerId, 'points' => -$playerCard['veto_steal']];
+                $response['score_changes'][] = ['player_id' => $opponentId, 'points' => $playerCard['veto_steal']];
+            }
+            // Handle draw penalties for player
+            if ($playerCard['veto_draw_chance']) {
+                drawCards($gameId, $playerId, 'chance', $playerCard['veto_draw_chance']);
+            }
+            if ($playerCard['veto_draw_snap_dare']) {
+                $player = getPlayerById($playerId);
+                $drawType = ($player['gender'] === 'female') ? 'snap' : 'dare';
+                drawCards($gameId, $playerId, $drawType, $playerCard['veto_draw_snap_dare']);
+            }
+            if ($playerCard['veto_draw_spicy']) {
+                drawCards($gameId, $playerId, 'spicy', $playerCard['veto_draw_spicy']);
+            }
+        }
+        
+        // Send notification to opponent
+        $stmt = $pdo->prepare("SELECT first_name FROM players WHERE id = ?");
+        $stmt->execute([$playerId]);
+        $playerName = $stmt->fetchColumn();
+        
+        $stmt = $pdo->prepare("SELECT fcm_token FROM players WHERE id = ?");
+        $stmt->execute([$opponentId]);
+        $opponentToken = $stmt->fetchColumn();
+        
+        if ($opponentToken) {
+            $action = $isWin ? 'won' : 'lost';
+            sendPushNotification(
+                $opponentToken,
+                "Card " . ucfirst($action) . "!",
+                "$playerName $action the {$playerCard['card_name']} card you served them!"
+            );
+        }
+        
+        // Remove card from player's hand
+        $stmt = $pdo->prepare("UPDATE player_cards SET quantity = quantity - 1 WHERE id = ?");
+        $stmt->execute([$playerCardId]);
+
+        $stmt = $pdo->prepare("DELETE FROM player_cards WHERE id = ? AND quantity <= 0");
+        $stmt->execute([$playerCardId]);
+        
+        $pdo->commit();
+        return $response;
+        
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        error_log("Error processing win/loss card: " . $e->getMessage());
+        return ['success' => false, 'message' => $e->getMessage()];
+    }
+}
+
 function returnCardToDeck($gameId, $cardId, $quantity = 1) {
     try {
         $pdo = Config::getDatabaseConnection();

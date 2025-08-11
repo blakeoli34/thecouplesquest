@@ -439,6 +439,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             echo json_encode($result);
             exit;
 
+        case 'win_hand_card':
+            if ($gameMode !== 'digital') {
+                echo json_encode(['success' => false, 'message' => 'Not a digital game']);
+                exit;
+            }
+            
+            $cardId = intval($_POST['card_id']);
+            $playerCardId = intval($_POST['player_card_id']);
+            $result = processWinLossCard($player['game_id'], $player['id'], $cardId, $playerCardId, true);
+            echo json_encode($result);
+            exit;
+
+        case 'lose_hand_card':
+            if ($gameMode !== 'digital') {
+                echo json_encode(['success' => false, 'message' => 'Not a digital game']);
+                exit;
+            }
+            
+            $cardId = intval($_POST['card_id']);
+            $playerCardId = intval($_POST['player_card_id']);
+            $result = processWinLossCard($player['game_id'], $player['id'], $cardId, $playerCardId, false);
+            echo json_encode($result);
+            exit;
+
         case 'complete_chance_card':
             if ($gameMode !== 'digital') {
                 echo json_encode(['success' => false, 'message' => 'Not a digital game']);
