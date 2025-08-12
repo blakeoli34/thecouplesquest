@@ -1354,23 +1354,8 @@ function setupFirebaseMessaging() {
                   payload.data?.body || 
                   'New notification';
         
-        // Always show in-app notification for foreground
+        // Only show in-app notification for foreground (Firebase handles the rest)
         showInAppNotification(title, body);
-        
-        // For iOS PWA: also try to show browser notification
-        if ('Notification' in window && Notification.permission === 'granted') {
-            try {
-                new Notification(title, {
-                    body: body,
-                    icon: '/icon-192x192.png',
-                    badge: '/badge-72x72.png',
-                    tag: 'couples-quest',
-                    requireInteraction: false
-                });
-            } catch (e) {
-                console.log('Browser notification failed:', e);
-            }
-        }
     });
 }
 

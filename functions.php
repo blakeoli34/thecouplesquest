@@ -381,50 +381,14 @@ function sendPushNotification($fcmToken, $title, $body, $data = []) {
     
     $url = 'https://fcm.googleapis.com/v1/projects/' . Config::FCM_PROJECT_ID . '/messages:send';
     
-    // Enhanced message structure for iOS PWA
+    // Enhanced message structure - use data-only to prevent duplicates
     $message = [
         'message' => [
             'token' => $fcmToken,
             'data' => $data,
-            'notification' => [
-                'title' => $title,
-                'body' => $body
-            ],
             'webpush' => [
                 'headers' => [
                     'TTL' => '3600' // 1 hour TTL
-                ],
-                'notification' => [
-                    'title' => $title,
-                    'body' => $body,
-                    'icon' => '/icon-192x192.png',
-                    'badge' => '/badge-72x72.png',
-                    'tag' => 'couples-quest-' . time(),
-                    'requireInteraction' => true,
-                    'silent' => false,
-                    'vibrate' => [200, 100, 200],
-                    'actions' => [
-                        [
-                            'action' => 'open',
-                            'title' => 'Open Game'
-                        ]
-                    ]
-                ]
-            ],
-            'apns' => [
-                'headers' => [
-                    'apns-priority' => '10',
-                    'apns-push-type' => 'alert'
-                ],
-                'payload' => [
-                    'aps' => [
-                        'alert' => [
-                            'title' => $title,
-                            'body' => $body
-                        ],
-                        'badge' => 1,
-                        'sound' => 'default'
-                    ]
                 ]
             ]
         ]
