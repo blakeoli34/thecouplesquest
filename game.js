@@ -26,6 +26,9 @@ let selectedCard = null;
 let selectedHandCard = null;
 let isCardSelected = false;
 
+let wheelPrizes = [];
+let isWheelSpinning = false;
+
 let actionSound = new Audio('data:audio/mpeg;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsuY29tIC8gTGFTb25vdGhlcXVlLm9yZwBURU5DAAAAHQAAA1N3aXRjaCBQbHVzIMKpIE5DSCBTb2Z0d2FyZQBUSVQyAAAABgAAAzIyMzUAVFNTRQAAAA8AAANMYXZmNTcuODMuMTAwAAAAAAAAAAAAAAD/80DEAAAAA0gAAAAATEFNRTMuMTAwVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQsRbAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQMSkAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV');
 
 $(document).ready(function() {
@@ -2869,6 +2872,150 @@ function loadThemePreference() {
     }
 }
 
+function checkWheelAvailability() {
+    if (!document.body.classList.contains('digital')) return;
+    
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'action=can_spin_wheel'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.can_spin) {
+            document.getElementById('wheelButton').style.display = 'flex';
+        } else {
+            document.getElementById('wheelButton').style.display = 'none';
+        }
+    });
+}
+
+function openWheelOverlay() {
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'action=get_wheel_data'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            wheelPrizes = data.prizes;
+            populateWheel(data.prizes);
+            document.getElementById('wheelOverlay').classList.add('active');
+            setOverlayActive(true);
+        }
+    });
+}
+
+function spinWheelAction() {
+    if (isWheelSpinning) return;
+    
+    isWheelSpinning = true;
+    
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'action=spin_wheel'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const wheelBackground = document.querySelector('.wheel-background');
+            const result = document.getElementById('wheelResult');
+            
+            // Calculate rotation to land on winning segment
+            const targetSegment = data.winning_index;
+            const segmentAngle = (targetSegment * 60) + 30;
+            
+            // Do 5 full rotations (1800deg) plus the angle to reach the target
+            const finalRotation = 1800 + (360 - segmentAngle);
+            
+            wheelBackground.style.transform = `rotate(${finalRotation}deg)`;
+            
+            playSoundIfEnabled('/dice-roll.m4r');
+            
+            // Show result after spin animation
+            setTimeout(() => {
+                if (result) {
+                    result.textContent = data.winning_prize.display_text;
+                    result.classList.add('show');
+                }
+                
+                // Hide wheel button since it's been used
+                document.getElementById('wheelButton').style.display = 'none';
+                
+                // Auto-close after showing result
+                setTimeout(() => {
+                    closeWheelOverlay();
+                    
+                    // Execute prize after overlay closes
+                    setTimeout(() => {
+                        executePrize(data.winning_prize);
+                    }, 500);
+                }, 3000);
+                
+            }, 3000);
+        } else {
+            alert('Failed to spin wheel: ' + (data.message || 'Unknown error'));
+            isWheelSpinning = false;
+        }
+    })
+    .catch(error => {
+        console.error('Error spinning wheel:', error);
+        alert('Failed to spin wheel');
+        isWheelSpinning = false;
+    });
+}
+
+function executePrize(prize) {
+    switch (prize.prize_type) {
+        case 'points':
+            updateScore(gameData.currentPlayerId, prize.prize_value);
+            break;
+        case 'draw_chance':
+            manualDrawCard('chance');
+            break;
+        case 'draw_snap_dare':
+            // Use existing logic - draw based on current player's gender
+            const drawType = gameData.currentPlayerGender === 'female' ? 'snap' : 'dare';
+            manualDrawCard(drawType);
+            break;
+        case 'draw_spicy':
+            manualDrawCard('spicy');
+            break;
+    }
+    
+    isWheelSpinning = false;
+}
+
+function handleWheelOverlayClick(event) {
+    if (event.target.classList.contains('wheel-overlay')) {
+        closeWheelOverlay();
+    }
+}
+
+function closeWheelOverlay() {
+    document.getElementById('wheelOverlay').classList.remove('active');
+    setOverlayActive(false);
+    isWheelSpinning = false;
+}
+
+function populateWheel(prizes) {
+    for (let i = 1; i <= 6; i++) {
+        const textElement = document.getElementById(`wheelText${i}`);
+        const prize = prizes[i - 1];
+        if (textElement) {
+            textElement.textContent = prize.display_text;
+        }
+    }
+    
+    // Reset wheel state
+    const wheelBackground = document.querySelector('.wheel-background');
+    if (wheelBackground) {
+        wheelBackground.style.transform = 'rotate(0deg)';
+    }
+}
+
 // Initialize everything when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Game page loaded');
@@ -3034,6 +3181,16 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 500);
         }
     });
+
+    // Check wheel availability for digital games
+    if (document.body.classList.contains('digital')) {
+        setTimeout(() => checkWheelAvailability(), 1000);
+        
+        // Check periodically for wheel availability
+        setInterval(() => {
+            checkWheelAvailability();
+        }, 60000); // Every minute
+    }
 });
 
 // Confetti at game end
@@ -3129,3 +3286,7 @@ window.closeRulesOverlay = closeRulesOverlay;
 window.handleRulesOverlayClick = handleRulesOverlayClick;
 window.toggleTheme = toggleTheme;
 window.toggleSound = toggleSound;
+window.openWheelOverlay = openWheelOverlay;
+window.spinWheelAction = spinWheelAction;
+window.closeWheelOverlay = closeWheelOverlay;
+window.handleWheelOverlayClick = handleWheelOverlayClick;

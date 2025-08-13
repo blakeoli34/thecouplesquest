@@ -664,6 +664,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
             exit;
 
+        case 'can_spin_wheel':
+            if ($gameMode !== 'digital') {
+                echo json_encode(['success' => false]);
+                exit;
+            }
+            
+            $canSpin = canPlayerSpinWheel($player['id']);
+            echo json_encode(['success' => true, 'can_spin' => $canSpin]);
+            exit;
+
+        case 'get_wheel_data':
+            if ($gameMode !== 'digital') {
+                echo json_encode(['success' => false]);
+                exit;
+            }
+            
+            // Get player gender for formatting
+            $playerGender = $currentPlayer['gender'];
+            
+            $prizes = getDailyWheelPrizes();
+            if (empty($prizes)) {
+                echo json_encode(['success' => false, 'message' => 'Not enough prizes configured']);
+                exit;
+            }
+            
+            // Format prizes for this player's gender
+            $formattedPrizes = array_map(function($prize) use ($playerGender) {
+                return formatPrizeForPlayer($prize, $playerGender);
+            }, $prizes);
+            
+            echo json_encode(['success' => true, 'prizes' => $formattedPrizes]);
+            exit;
+
+        case 'spin_wheel':
+            if ($gameMode !== 'digital') {
+                echo json_encode(['success' => false, 'message' => 'Not a digital game']);
+                exit;
+            }
+            
+            $result = spinWheel($player['game_id'], $player['id']);
+            echo json_encode($result);
+            exit;
+
         case 'get_rules':
             try {
                 $stmt = $pdo->query("SELECT content FROM game_rules ORDER BY id LIMIT 1");
@@ -1367,6 +1410,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             </div>
             <div class="card-meta" id="drawCardMeta">
                 <!-- Points badge will be added here if applicable -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Wheel Button (only shows when available) -->
+    <div class="wheel-button" id="wheelButton" onclick="openWheelOverlay()" style="display: none;">
+        <i class="fa-solid fa-arrows-spin"></i>
+    </div>
+
+    <!-- Wheel Overlay -->
+    <div class="wheel-overlay" id="wheelOverlay" onclick="handleWheelOverlayClick(event)">
+        <div class="wheel-container">
+            <div class="wheel-result" id="wheelResult">Spin the Daily Wheel</div>
+            <div class="wheel" id="wheel">
+                <div class="wheel-background">
+                    <div class="wheel-text wheel-text-1" id="wheelText1"></div>
+                    <div class="wheel-text wheel-text-2" id="wheelText2"></div>
+                    <div class="wheel-text wheel-text-3" id="wheelText3"></div>
+                    <div class="wheel-text wheel-text-4" id="wheelText4"></div>
+                    <div class="wheel-text wheel-text-5" id="wheelText5"></div>
+                    <div class="wheel-text wheel-text-6" id="wheelText6"></div>
+                </div>
+                <div class="wheel-pointer"></div>
+                <div class="wheel-center" onclick="event.stopPropagation(); spinWheelAction()">SPIN</div>
             </div>
         </div>
     </div>

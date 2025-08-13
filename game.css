@@ -2128,6 +2128,220 @@ body.digital .hybrid-menu-item {
     padding-left: 20px;
 }
 
+.wheel-button {
+    position: fixed;
+    bottom: 120px;
+    right: 18px;
+    width: 72px;
+    height: 72px;
+    background: rgba(250,250,250,0.7);
+    border: solid 2px #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    color: #111;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    z-index: 1000;
+    backdrop-filter: blur(8px);
+}
+
+.wheel-button i {
+    animation: wheelSpin 5s linear infinite;
+}
+
+@keyframes wheelSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.wheel-button:hover {
+    transform: scale(1.1);
+}
+
+.overlay-active .wheel-button {
+    bottom: -80px;
+    opacity: 0;
+}
+
+.wheel-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.8);
+    backdrop-filter: blur(8px);
+    z-index: 3000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.3s;
+}
+
+.wheel-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.wheel-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 30px;
+    max-width: 400px;
+    width: 100%;
+}
+
+.wheel-result {
+    color: white;
+    font-size: 24px;
+    font-weight: 700;
+    text-align: center;
+    min-height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.8;
+}
+
+.wheel-result.show {
+    animation: resultPulse 2s ease forwards;
+}
+
+@keyframes resultPulse {
+    0%, 50%, 100% {
+        transform: scale(1);
+        opacity: 0.8;
+    }
+
+    25%, 75% {
+        transform: scale(1.1);
+        opacity: 1;
+    }
+
+}
+
+.wheel {
+    width: 300px;
+    height: 300px;
+    border-radius: 50%;
+    position: relative;
+    border: 4px solid white;
+    box-shadow: 0 0 30px rgba(0,0,0,0.5);
+}
+
+.wheel-background {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    position: relative;
+    transition: transform 3s ease-out;
+}
+
+/* Gender-specific wheel colors using conic-gradient */
+.male .wheel-background {
+    background: conic-gradient(
+        var(--color-blue) 0deg 60deg,
+        var(--color-blue-dark) 60deg 120deg,
+        var(--color-blue-light) 120deg 180deg,
+        var(--color-blue) 180deg 240deg,
+        var(--color-blue-dark) 240deg 300deg,
+        var(--color-blue-light) 300deg 360deg
+    );
+}
+
+.female .wheel-background {
+    background: conic-gradient(
+        var(--color-pink) 0deg 60deg,
+        var(--color-pink-dark) 60deg 120deg,
+        var(--color-pink-light) 120deg 180deg,
+        var(--color-pink) 180deg 240deg,
+        var(--color-pink-dark) 240deg 300deg,
+        var(--color-pink-light) 300deg 360deg
+    );
+}
+
+.wheel-text {
+    position: absolute;
+    color: white;
+    font-weight: bold;
+    font-size: 11px;
+    text-align: center;
+    line-height: 1.1;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.7);
+    width: 50px;
+    top: 50%;
+    left: 50%;
+}
+
+.wheel-text-1 {
+    transform: translate(-50%, -50%) rotate(30deg) translateY(-80px);
+}
+
+.wheel-text-2 {
+    transform: translate(-50%, -50%) rotate(90deg) translateY(-80px);
+}
+
+.wheel-text-3 {
+    transform: translate(-50%, -50%) rotate(150deg) translateY(-80px);
+}
+
+.wheel-text-4 {
+    transform: translate(-50%, -50%) rotate(210deg) translateY(-80px);
+}
+
+.wheel-text-5 {
+    transform: translate(-50%, -50%) rotate(270deg) translateY(-80px);
+}
+
+.wheel-text-6 {
+    transform: translate(-50%, -50%) rotate(330deg) translateY(-80px);
+}
+
+.wheel-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 60px;
+    height: 60px;
+    background: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: #333;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    z-index: 10;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+}
+
+.wheel-center:hover {
+    transform: translate(-50%, -50%) scale(1.1);
+}
+
+.wheel-pointer {
+    position: absolute;
+    top: -15px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 12px solid transparent;
+    border-right: 12px solid transparent;
+    border-top: 20px solid white;
+    z-index: 15;
+}
+
 @media (prefers-color-scheme: dark) {
     .player-score.female {
         background: var(--color-pink-dark);
@@ -2369,6 +2583,12 @@ body.digital .hybrid-menu-item {
     
     .rules-content h1, .rules-content h2, .rules-content h3 {
         color: #e6e6e6;
+    }
+
+    .wheel-button {
+        background: rgba(25,25,25,0.7);
+        border-color: #111;
+        color: #ccc;
     }
 }
 

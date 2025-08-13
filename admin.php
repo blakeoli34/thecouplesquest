@@ -58,6 +58,77 @@ if ($_POST && isset($_POST['action'])) {
             $counts = getCardCounts($type);
             echo json_encode(['success' => true, 'cards' => $cards, 'counts' => $counts]);
             exit;
+
+        case 'get_wheel_prizes':
+            try {
+                $pdo = Config::getDatabaseConnection();
+                $stmt = $pdo->query("SELECT * FROM wheel_prizes ORDER BY prize_type, id");
+                $prizes = $stmt->fetchAll();
+                echo json_encode(['success' => true, 'prizes' => $prizes]);
+            } catch (Exception $e) {
+                error_log("Error getting wheel prizes: " . $e->getMessage());
+                echo json_encode(['success' => false, 'message' => 'Failed to load prizes']);
+            }
+            exit;
+
+        case 'save_wheel_prize':
+            try {
+                $pdo = Config::getDatabaseConnection();
+                
+                $id = !empty($_POST['id']) ? intval($_POST['id']) : null;
+                $prizeType = $_POST['prize_type'];
+                $prizeValue = !empty($_POST['prize_value']) ? intval($_POST['prize_value']) : null;
+                $displayText = trim($_POST['display_text']);
+                $weight = intval($_POST['weight']) ?: 1;
+                $isActive = intval($_POST['is_active']);
+                
+                if (empty($displayText)) {
+                    echo json_encode(['success' => false, 'message' => 'Display text is required']);
+                    exit;
+                }
+                
+                if ($prizeType === 'points' && $prizeValue === null) {
+                    echo json_encode(['success' => false, 'message' => 'Point value is required for point prizes']);
+                    exit;
+                }
+                
+                if ($id) {
+                    // Update existing prize
+                    $stmt = $pdo->prepare("
+                        UPDATE wheel_prizes 
+                        SET prize_type = ?, prize_value = ?, display_text = ?, weight = ?, is_active = ?
+                        WHERE id = ?
+                    ");
+                    $stmt->execute([$prizeType, $prizeValue, $displayText, $weight, $isActive, $id]);
+                } else {
+                    // Insert new prize
+                    $stmt = $pdo->prepare("
+                        INSERT INTO wheel_prizes (prize_type, prize_value, display_text, weight, is_active)
+                        VALUES (?, ?, ?, ?, ?)
+                    ");
+                    $stmt->execute([$prizeType, $prizeValue, $displayText, $weight, $isActive]);
+                }
+                
+                echo json_encode(['success' => true]);
+                
+            } catch (Exception $e) {
+                error_log("Error saving wheel prize: " . $e->getMessage());
+                echo json_encode(['success' => false, 'message' => 'Failed to save prize']);
+            }
+            exit;
+
+        case 'delete_wheel_prize':
+            try {
+                $id = intval($_POST['id']);
+                $pdo = Config::getDatabaseConnection();
+                $stmt = $pdo->prepare("DELETE FROM wheel_prizes WHERE id = ?");
+                $stmt->execute([$id]);
+                echo json_encode(['success' => true]);
+            } catch (Exception $e) {
+                error_log("Error deleting wheel prize: " . $e->getMessage());
+                echo json_encode(['success' => false, 'message' => 'Failed to delete prize']);
+            }
+            exit;
     }
 }
 
@@ -1302,6 +1373,20 @@ function showLoginForm($error = null) {
             </div>
         </div>
 
+        <!-- Wheel Prizes Management -->
+        <div class="section">
+            <h2>Wheel Prizes Management</h2>
+            
+            <div class="card-header">
+                <h3>Wheel Prizes</h3>
+                <button class="btn" onclick="openWheelPrizeModal()">Add New Prize</button>
+            </div>
+            
+            <div class="prizes-list" id="wheel-prizes-list">
+                <!-- Prizes will be loaded here -->
+            </div>
+        </div>
+
         <!-- Game Rules Management -->
         <div class="section">
             <h2>Game Rules</h2>            
@@ -1556,6 +1641,53 @@ function showLoginForm($error = null) {
             <div class="confirm-buttons">
                 <button class="btn btn-secondary" onclick="closeCardModal()">Cancel</button>
                 <button class="btn" onclick="saveCard()">Save Card</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Wheel Prize Management Modal -->
+    <div class="confirm-dialog" id="wheelPrizeModal">
+        <div class="confirm-content" style="max-width: 500px;">
+            <h3 id="wheelPrizeModalTitle">Add Prize</h3>
+            <form id="wheelPrizeForm" class="modal-form">
+                <input type="hidden" id="wheelPrizeId">
+                
+                <div class="form-group">
+                    <label for="wheelPrizeType">Prize Type</label>
+                    <select id="wheelPrizeType" onchange="togglePrizeValueField()">
+                        <option value="points">Points</option>
+                        <option value="draw_chance">Draw Chance Card</option>
+                        <option value="draw_snap_dare">Draw Snap/Dare Card</option>
+                        <option value="draw_spicy">Draw Spicy Card</option>
+                    </select>
+                </div>
+                
+                <div class="form-group" id="prizeValueGroup">
+                    <label for="wheelPrizeValue">Point Value</label>
+                    <input type="number" id="wheelPrizeValue" placeholder="e.g. 5 or -3">
+                </div>
+                
+                <div class="form-group">
+                    <label for="wheelDisplayText">Display Text</label>
+                    <input type="text" id="wheelDisplayText" placeholder="e.g. +5 Points" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="wheelWeight">Weight (higher = more common)</label>
+                    <input type="number" id="wheelWeight" min="1" value="1" required>
+                </div>
+                
+                <div class="checkbox-group">
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="wheelIsActive" checked>
+                        <label for="wheelIsActive">Active</label>
+                    </div>
+                </div>
+            </form>
+            
+            <div class="confirm-buttons">
+                <button class="btn btn-secondary" onclick="closeWheelPrizeModal()">Cancel</button>
+                <button class="btn" onclick="saveWheelPrize()">Save Prize</button>
             </div>
         </div>
     </div>
@@ -1899,6 +2031,171 @@ function showLoginForm($error = null) {
                 dialog.classList.remove('active');
             });
         }
+
+        // Wheel Prize Management Functions
+        function loadWheelPrizes() {
+            fetch('admin.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'action=get_wheel_prizes'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    displayWheelPrizes(data.prizes);
+                }
+            });
+        }
+
+        function displayWheelPrizes(prizes) {
+            const container = document.getElementById('wheel-prizes-list');
+            container.innerHTML = '';
+            
+            if (prizes.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">No prizes configured</p>';
+                return;
+            }
+            
+            prizes.forEach(prize => {
+                const prizeElement = document.createElement('div');
+                prizeElement.className = 'card-item';
+                
+                let typeDisplay = '';
+                switch(prize.prize_type) {
+                    case 'points': typeDisplay = `Points (${prize.prize_value})`; break;
+                    case 'draw_chance': typeDisplay = 'Draw Chance Card'; break;
+                    case 'draw_snap_dare': typeDisplay = 'Draw Snap/Dare Card'; break;
+                    case 'draw_spicy': typeDisplay = 'Draw Spicy Card'; break;
+                }
+                
+                prizeElement.innerHTML = `
+                    <h4>${prize.display_text}</h4>
+                    <div class="card-meta">
+                        <span>Type: ${typeDisplay}</span> • 
+                        <span>Weight: ${prize.weight}</span> • 
+                        <span>Status: ${prize.is_active ? 'Active' : 'Inactive'}</span>
+                    </div>
+                    <div class="card-actions">
+                        <button class="btn-small btn-warning" onclick="editWheelPrize(${prize.id})">Edit</button>
+                        <button class="btn-small btn-danger" onclick="confirmDeleteWheelPrize(${prize.id}, '${prize.display_text}')">Delete</button>
+                    </div>
+                `;
+                container.appendChild(prizeElement);
+            });
+        }
+
+        function openWheelPrizeModal(prizeId = null) {
+            const modal = document.getElementById('wheelPrizeModal');
+            const title = document.getElementById('wheelPrizeModalTitle');
+            
+            // Reset form
+            document.getElementById('wheelPrizeForm').reset();
+            document.getElementById('wheelPrizeId').value = prizeId || '';
+            document.getElementById('wheelWeight').value = '1';
+            document.getElementById('wheelIsActive').checked = true;
+            
+            title.textContent = prizeId ? 'Edit Prize' : 'Add Prize';
+            togglePrizeValueField(); // Show/hide point value field
+            
+            if (prizeId) {
+                loadWheelPrizeData(prizeId);
+            }
+            
+            modal.classList.add('active');
+        }
+
+        function loadWheelPrizeData(prizeId) {
+            fetch('admin.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'action=get_wheel_prizes'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const prize = data.prizes.find(p => p.id == prizeId);
+                    if (prize) {
+                        document.getElementById('wheelPrizeType').value = prize.prize_type;
+                        document.getElementById('wheelPrizeValue').value = prize.prize_value || '';
+                        document.getElementById('wheelDisplayText').value = prize.display_text;
+                        document.getElementById('wheelWeight').value = prize.weight;
+                        document.getElementById('wheelIsActive').checked = prize.is_active == 1;
+                        togglePrizeValueField();
+                    }
+                }
+            });
+        }
+
+        function togglePrizeValueField() {
+            const prizeType = document.getElementById('wheelPrizeType').value;
+            const valueGroup = document.getElementById('prizeValueGroup');
+            
+            if (prizeType === 'points') {
+                valueGroup.style.display = 'block';
+                document.getElementById('wheelPrizeValue').required = true;
+            } else {
+                valueGroup.style.display = 'none';
+                document.getElementById('wheelPrizeValue').required = false;
+                document.getElementById('wheelPrizeValue').value = '';
+            }
+        }
+
+        function closeWheelPrizeModal() {
+            document.getElementById('wheelPrizeModal').classList.remove('active');
+        }
+
+        function saveWheelPrize() {
+            const formData = new FormData();
+            formData.append('action', 'save_wheel_prize');
+            formData.append('id', document.getElementById('wheelPrizeId').value);
+            formData.append('prize_type', document.getElementById('wheelPrizeType').value);
+            formData.append('prize_value', document.getElementById('wheelPrizeValue').value);
+            formData.append('display_text', document.getElementById('wheelDisplayText').value);
+            formData.append('weight', document.getElementById('wheelWeight').value);
+            formData.append('is_active', document.getElementById('wheelIsActive').checked ? '1' : '0');
+            
+            fetch('admin.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    closeWheelPrizeModal();
+                    loadWheelPrizes();
+                } else {
+                    alert('Error saving prize: ' + (data.message || 'Unknown error'));
+                }
+            });
+        }
+
+        function editWheelPrize(prizeId) {
+            openWheelPrizeModal(prizeId);
+        }
+
+        function confirmDeleteWheelPrize(prizeId, displayText) {
+            if (confirm(`Are you sure you want to delete the prize "${displayText}"?`)) {
+                fetch('admin.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: `action=delete_wheel_prize&id=${prizeId}`
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        loadWheelPrizes();
+                    } else {
+                        alert('Error deleting prize: ' + (data.message || 'Unknown error'));
+                    }
+                });
+            }
+        }
+
+        // Load wheel prizes when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add to existing DOMContentLoaded if it exists, or create new one
+            setTimeout(() => loadWheelPrizes(), 500);
+        });
 
         // Close dialog when clicking outside
         document.querySelectorAll('.confirm-dialog').forEach(dialog => {

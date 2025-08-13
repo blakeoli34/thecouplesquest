@@ -2331,4 +2331,189 @@ function getBlockingChanceCardNames($gameId, $playerId) {
         return [];
     }
 }
+
+function canPlayerSpinWheel($playerId) {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        $stmt = $pdo->prepare("
+            SELECT spun_at FROM wheel_spins 
+            WHERE player_id = ? 
+            ORDER BY spun_at DESC 
+            LIMIT 1
+        ");
+        $stmt->execute([$playerId]);
+        $lastSpin = $stmt->fetchColumn();
+        
+        if (!$lastSpin) {
+            return true; // Never spun before
+        }
+        
+        $lastSpinTime = new DateTime($lastSpin);
+        $now = new DateTime();
+        $timeDiff = $now->diff($lastSpinTime);
+        
+        // Check if 24 hours have passed
+        return ($timeDiff->days >= 1 || ($timeDiff->h >= 24));
+        
+    } catch (Exception $e) {
+        error_log("Error checking wheel spin eligibility: " . $e->getMessage());
+        return false;
+    }
+}
+
+function getWheelPrizes() {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        $stmt = $pdo->prepare("
+            SELECT * FROM wheel_prizes 
+            WHERE is_active = TRUE 
+            ORDER BY id
+        ");
+        $stmt->execute();
+        return $stmt->fetchAll();
+        
+    } catch (Exception $e) {
+        error_log("Error getting wheel prizes: " . $e->getMessage());
+        return [];
+    }
+}
+
+function getDailyWheelPrizes() {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        $today = date('Y-m-d');
+        
+        // Check if today's wheel already exists
+        $stmt = $pdo->prepare("SELECT prizes_json FROM daily_wheels WHERE wheel_date = ?");
+        $stmt->execute([$today]);
+        $existingWheel = $stmt->fetchColumn();
+        
+        if ($existingWheel) {
+            // Return existing wheel
+            return json_decode($existingWheel, true);
+        }
+
+        // Clean up wheels older than 1 week
+        $weekAgo = date('Y-m-d', strtotime('-7 days'));
+        $stmt = $pdo->prepare("DELETE FROM daily_wheels WHERE wheel_date < ?");
+        $stmt->execute([$weekAgo]);
+        
+        
+        // Generate new wheel for today
+        $allPrizes = getWheelPrizes();
+        if (count($allPrizes) < 6) {
+            return []; // Not enough prizes
+        }
+        
+        // Simply select 6 random prizes (no weighting for selection)
+        $selectedPrizes = [];
+        $availablePrizes = $allPrizes;
+        
+        for ($i = 0; $i < 6; $i++) {
+            if (empty($availablePrizes)) {
+                // If we run out of unique prizes, start over with all prizes
+                $availablePrizes = $allPrizes;
+            }
+            
+            $randomIndex = array_rand($availablePrizes);
+            $selectedPrizes[] = $availablePrizes[$randomIndex];
+            
+            // Remove selected prize to avoid duplicates (unless we need to repeat)
+            unset($availablePrizes[$randomIndex]);
+            $availablePrizes = array_values($availablePrizes); // Reindex array
+        }
+        
+        // Store today's wheel
+        $prizesJson = json_encode($selectedPrizes);
+        $stmt = $pdo->prepare("INSERT INTO daily_wheels (wheel_date, prizes_json) VALUES (?, ?)");
+        $stmt->execute([$today, $prizesJson]);
+        
+        return $selectedPrizes;
+        
+    } catch (Exception $e) {
+        error_log("Error getting daily wheel prizes: " . $e->getMessage());
+        return [];
+    }
+}
+
+function formatPrizeForPlayer($prize, $playerGender) {
+    $formattedPrize = $prize;
+    
+    // Customize display text for snap/dare based on gender
+    if ($prize['prize_type'] === 'draw_snap_dare') {
+        if ($playerGender === 'female') {
+            $formattedPrize['display_text'] = str_replace('Snap/Dare', 'Snap', $prize['display_text']);
+        } else {
+            $formattedPrize['display_text'] = str_replace('Snap/Dare', 'Dare', $prize['display_text']);
+        }
+    }
+    
+    return $formattedPrize;
+}
+
+function spinWheel($gameId, $playerId) {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        
+        // Check if player can spin
+        if (!canPlayerSpinWheel($playerId)) {
+            return ['success' => false, 'message' => 'Wheel already spun today'];
+        }
+        
+        // Get player info for gender formatting
+        $stmt = $pdo->prepare("SELECT gender FROM players WHERE id = ?");
+        $stmt->execute([$playerId]);
+        $playerGender = $stmt->fetchColumn();
+        
+        // Get today's wheel prizes
+        $prizes = getDailyWheelPrizes();
+        if (empty($prizes)) {
+            return ['success' => false, 'message' => 'Not enough prizes configured'];
+        }
+
+        // Format prizes for this player's gender
+        $formattedPrizes = array_map(function($prize) use ($playerGender) {
+            return formatPrizeForPlayer($prize, $playerGender);
+        }, $prizes);
+        
+        // Create weighted array based on prize weights for landing probability
+        $weightedIndexes = [];
+        foreach ($formattedPrizes as $index => $prize) {
+            $weight = intval($prize['weight']) ?: 1;
+            for ($i = 0; $i < $weight; $i++) {
+                $weightedIndexes[] = $index;
+            }
+        }
+        
+        // Select random weighted index
+        $randomWeightedIndex = array_rand($weightedIndexes);
+        $winningIndex = $weightedIndexes[$randomWeightedIndex];
+        $winningPrize = $formattedPrizes[$winningIndex];
+        
+        // Record the spin (use original prize data)
+        $originalWinningPrize = $prizes[$winningIndex];
+        $stmt = $pdo->prepare("
+            INSERT INTO wheel_spins (player_id, game_id, prize_type, prize_value, display_text)
+            VALUES (?, ?, ?, ?, ?)
+        ");
+        $stmt->execute([
+            $playerId,
+            $gameId, 
+            $originalWinningPrize['prize_type'],
+            $originalWinningPrize['prize_value'],
+            $winningPrize['display_text'] // Use formatted display text
+        ]);
+        
+        return [
+            'success' => true,
+            'prizes' => $formattedPrizes,
+            'winning_prize' => $winningPrize,
+            'winning_index' => $winningIndex
+        ];
+        
+    } catch (Exception $e) {
+        error_log("Error spinning wheel: " . $e->getMessage());
+        return ['success' => false, 'message' => 'Failed to spin wheel'];
+    }
+}
 ?>
