@@ -96,9 +96,12 @@ function sendDailyNotifications() {
                     $stmt = $pdo->prepare("SELECT SUM(quantity) as hand_count FROM player_cards WHERE game_id = ? AND player_id = ? AND card_type != 'serve'");
                     $stmt->execute([$player['game_id'], $player['id']]);
                     $handCount = $stmt->fetchColumn() ?: 0;
+                    $cardText = 'card';
                     
                     if ($handCount > 0) {
-                        $cardText = $handCount === 1 ? 'card' : 'cards';
+                        if($handCount > 1) {
+                            $cardText = 'cards';
+                        }
                         $cardCountText = " You have {$handCount} {$cardText} in your hand.";
                     }
                 }

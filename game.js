@@ -2163,7 +2163,7 @@ function loadHistory() {
             const div = document.createElement('div');
             div.className = 'history-item';
             
-            const time = new Date(item.timestamp + 'Z');
+            const time = new Date(item.timestamp);
             const options = {
                 month: 'long',
                 day: 'numeric',
@@ -2175,16 +2175,21 @@ function loadHistory() {
             const formattedDate = formatter.format(time);
             const change = item.points_changed < 0 ? Math.abs(item.points_changed) : item.points_changed;
             var modifiedWord = 'added',
+            pointWord = 'points',
             modifiedWordNext = 'to';
             if(item.points_changed < 0) {
                 modifiedWord = 'subtracted',
                 modifiedWordNext = 'from';
             }
+
+            if(change === 1) {
+                pointWord = 'point';
+            }
             
             div.innerHTML = `
                 <div class="history-time">${formattedDate}</div>
                 <div class="history-change">
-                    ${item.modified_by_name} ${modifiedWord} ${change} points ${modifiedWordNext} ${item.player_name}'s score
+                    ${item.modified_by_name} ${modifiedWord} ${change} ${pointWord} ${modifiedWordNext} ${item.player_name}'s score
                 </div>
             `;
             
