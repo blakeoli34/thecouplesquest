@@ -2335,25 +2335,24 @@ function getBlockingChanceCardNames($gameId, $playerId) {
 function canPlayerSpinWheel($playerId) {
     try {
         $pdo = Config::getDatabaseConnection();
+        
+        // Use Indianapolis timezone
+        $timezone = new DateTimeZone('America/Indiana/Indianapolis');
+        $today = (new DateTime('now', $timezone))->format('Y-m-d');
+        
+        // Check if player has spun today (based on Indianapolis timezone)
         $stmt = $pdo->prepare("
             SELECT spun_at FROM wheel_spins 
             WHERE player_id = ? 
+            AND DATE(CONVERT_TZ(spun_at, '+00:00', '-05:00')) = ?
             ORDER BY spun_at DESC 
             LIMIT 1
         ");
-        $stmt->execute([$playerId]);
-        $lastSpin = $stmt->fetchColumn();
+        $stmt->execute([$playerId, $today]);
+        $todaySpin = $stmt->fetchColumn();
         
-        if (!$lastSpin) {
-            return true; // Never spun before
-        }
-        
-        $lastSpinTime = new DateTime($lastSpin);
-        $now = new DateTime();
-        $timeDiff = $now->diff($lastSpinTime);
-        
-        // Check if 24 hours have passed
-        return ($timeDiff->days >= 1 || ($timeDiff->h >= 24));
+        // Can spin if no spin today
+        return !$todaySpin;
         
     } catch (Exception $e) {
         error_log("Error checking wheel spin eligibility: " . $e->getMessage());
@@ -2381,7 +2380,15 @@ function getWheelPrizes() {
 function getDailyWheelPrizes() {
     try {
         $pdo = Config::getDatabaseConnection();
-        $today = date('Y-m-d');
+        
+        // Use Indianapolis timezone for determining "today"
+        $timezone = new DateTimeZone('America/Indiana/Indianapolis');
+        $today = (new DateTime('now', $timezone))->format('Y-m-d');
+        
+        // Clean up wheels older than 1 week
+        $weekAgo = (new DateTime('-7 days', $timezone))->format('Y-m-d');
+        $stmt = $pdo->prepare("DELETE FROM daily_wheels WHERE wheel_date < ?");
+        $stmt->execute([$weekAgo]);
         
         // Check if today's wheel already exists
         $stmt = $pdo->prepare("SELECT prizes_json FROM daily_wheels WHERE wheel_date = ?");
@@ -2392,12 +2399,6 @@ function getDailyWheelPrizes() {
             // Return existing wheel
             return json_decode($existingWheel, true);
         }
-
-        // Clean up wheels older than 1 week
-        $weekAgo = date('Y-m-d', strtotime('-7 days'));
-        $stmt = $pdo->prepare("DELETE FROM daily_wheels WHERE wheel_date < ?");
-        $stmt->execute([$weekAgo]);
-        
         
         // Generate new wheel for today
         $allPrizes = getWheelPrizes();
