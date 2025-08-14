@@ -2003,7 +2003,10 @@ function deleteSelectedTimer() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            refreshGameData();
+            // Remove timer from UI immediately instead of waiting for refresh
+            timerManager.removeTimer(selectedTimerId);
+            // Still refresh game data for other potential updates
+            setTimeout(() => refreshGameData(), 500);
         } else {
             alert('Failed to delete timer.');
         }
@@ -2091,6 +2094,20 @@ const timerManager = {
         } else {
             return `${minutes}:${seconds.toString().padStart(2, '0')}`;
         }
+    }
+};
+
+timerManager.removeTimer = function(timerId) {
+    // Stop the interval
+    if (this.intervals.has(timerId)) {
+        clearInterval(this.intervals.get(timerId));
+        this.intervals.delete(timerId);
+    }
+    
+    // Remove timer badge from UI immediately
+    const badge = document.querySelector(`[data-timer-id="${timerId}"]`);
+    if (badge) {
+        badge.remove();
     }
 };
 
@@ -2293,6 +2310,17 @@ function updateTimerDisplay(timers) {
         existingTimerIds.add(badge.dataset.timerId);
     });
     
+    // Get timer IDs from server response
+    const serverTimerIds = new Set(timers.map(timer => timer.id.toString()));
+    
+    // Remove timers that no longer exist on server
+    existingTimerIds.forEach(timerId => {
+        if (!serverTimerIds.has(timerId)) {
+            timerManager.removeTimer(timerId);
+        }
+    });
+    
+    // Add new timers
     timers.forEach(timer => {
         // Skip if timer already exists and is running
         if (existingTimerIds.has(timer.id.toString())) {
