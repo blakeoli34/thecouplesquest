@@ -2146,6 +2146,13 @@ body.digital .hybrid-menu-item {
     transition: all 0.3s ease;
     z-index: 1000;
     backdrop-filter: blur(8px);
+    transform: scale(0);
+    pointer-events: none;
+}
+
+.wheel-button.available {
+    transform: scale(1);
+    pointer-events: auto;
 }
 
 .wheel-button i {
@@ -2161,9 +2168,10 @@ body.digital .hybrid-menu-item {
     transform: scale(1.1);
 }
 
-.overlay-active .wheel-button {
-    bottom: -80px;
-    opacity: 0;
+.overlay-active .wheel-button,
+.wheel-button.hide {
+    transform: scale(0);
+    pointer-events: none;
 }
 
 .wheel-overlay {
@@ -2248,10 +2256,10 @@ body.digital .hybrid-menu-item {
 .male .wheel-background {
     background: conic-gradient(
         var(--color-blue) 0deg 60deg,
-        var(--color-blue-dark) 60deg 120deg,
-        var(--color-blue-light) 120deg 180deg,
-        var(--color-blue) 180deg 240deg,
-        var(--color-blue-dark) 240deg 300deg,
+        var(--color-blue-light) 60deg 120deg,
+        var(--color-blue) 120deg 180deg,
+        var(--color-blue-light) 180deg 240deg,
+        var(--color-blue) 240deg 300deg,
         var(--color-blue-light) 300deg 360deg
     );
 }
@@ -2259,22 +2267,21 @@ body.digital .hybrid-menu-item {
 .female .wheel-background {
     background: conic-gradient(
         var(--color-pink) 0deg 60deg,
-        var(--color-pink-dark) 60deg 120deg,
-        var(--color-pink-light) 120deg 180deg,
-        var(--color-pink) 180deg 240deg,
-        var(--color-pink-dark) 240deg 300deg,
+        var(--color-pink-light) 60deg 120deg,
+        var(--color-pink) 120deg 180deg,
+        var(--color-pink-light) 180deg 240deg,
+        var(--color-pink) 240deg 300deg,
         var(--color-pink-light) 300deg 360deg
     );
 }
 
 .wheel-text {
     position: absolute;
-    color: white;
+    color: #121212;
     font-weight: bold;
-    font-size: 11px;
+    font-size: 14px;
     text-align: center;
     line-height: 1.1;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.7);
     width: 50px;
     top: 50%;
     left: 50%;

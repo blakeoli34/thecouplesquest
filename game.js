@@ -711,7 +711,7 @@ function openDrawPopover() {
             closeDrawPopover();
             return;
         }
-        
+        handleWheelButtonState(false);
         popover.classList.add('active');
         updateDrawPopoverCounts(); // Add this line
         
@@ -724,6 +724,7 @@ function openDrawPopover() {
 function closeDrawPopover() {
     const popover = document.getElementById('drawPopover');
     if (popover) {
+        handleWheelButtonState(true);
         popover.classList.remove('active');
         document.removeEventListener('click', closeDrawPopoverOnClickOutside);
     }
@@ -1122,8 +1123,15 @@ function displayActiveEffects() {
 }
 
 $('.bottom-right-menu').on('click', function() {
-    $(this).toggleClass('open');
-    $('.blocking-indicator').toggleClass('move');
+    if($(this).hasClass('open')) {
+        $(this).removeClass('open');
+        handleWheelButtonState(true);
+        $('.blocking-indicator').removeClass('move');
+    } else {
+        $(this).addClass('open');
+        handleWheelButtonState(false);
+        $('.blocking-indicator').addClass('move');
+    }
 });
 
 // Check for device ID in localStorage as fallback
@@ -2428,7 +2436,7 @@ function openDicePopover() {
             closeDicePopover();
             return;
         }
-        
+        handleWheelButtonState(false);
         showDiceChoiceButtons();
         popover.classList.add('active');
         
@@ -2453,6 +2461,7 @@ function initializeDicePosition() {
 function closeDicePopover() {
     const popover = document.getElementById('dicePopover');
     if (popover) {
+        handleWheelButtonState(true);
         popover.classList.remove('active');
         document.removeEventListener('click', closeDicePopoverOnClickOutside);
     }
@@ -2883,11 +2892,22 @@ function checkWheelAvailability() {
     .then(response => response.json())
     .then(data => {
         if (data.success && data.can_spin) {
-            document.getElementById('wheelButton').style.display = 'flex';
+            document.getElementById('wheelButton').classList.add('available');
         } else {
-            document.getElementById('wheelButton').style.display = 'none';
+            document.getElementById('wheelButton').classList.remove('available');
         }
     });
+}
+
+function handleWheelButtonState(bool) {
+    var $wheelButton = $('.wheel-button');
+    if($wheelButton.hasClass('available')) {
+        if(bool === true) {
+            $wheelButton.removeClass('hide');
+        } else {
+            $wheelButton.addClass('hide');
+        }
+    }
 }
 
 function openWheelOverlay() {

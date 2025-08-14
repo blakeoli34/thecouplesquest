@@ -1415,7 +1415,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     </div>
 
     <!-- Wheel Button (only shows when available) -->
-    <div class="wheel-button" id="wheelButton" onclick="openWheelOverlay()" style="display: none;">
+    <div class="wheel-button" id="wheelButton" onclick="openWheelOverlay()">
         <i class="fa-solid fa-arrows-spin"></i>
     </div>
 
