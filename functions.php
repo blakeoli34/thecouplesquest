@@ -849,6 +849,16 @@ function resetGameForNewRound($gameId) {
         $stmt = $pdo->prepare("DELETE FROM score_history WHERE game_id = ?");
         $stmt->execute([$gameId]);
         
+        // Clear digital game data - THIS WAS MISSING
+        $stmt = $pdo->prepare("DELETE FROM game_decks WHERE game_id = ?");
+        $stmt->execute([$gameId]);
+        
+        $stmt = $pdo->prepare("DELETE FROM player_cards WHERE game_id = ?");
+        $stmt->execute([$gameId]);
+        
+        $stmt = $pdo->prepare("DELETE FROM active_chance_effects WHERE game_id = ?");
+        $stmt->execute([$gameId]);
+        
         $pdo->commit();
         return ['success' => true];
         
