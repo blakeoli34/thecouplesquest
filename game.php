@@ -361,12 +361,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         }
                         break;
                     case 'snap_modify':
-                    case 'dare_modify':  
+                        // Show if this player is the target OR if they own it and no target (self-modifier)
+                        if ($effect['target_player_id'] == $player['id'] || 
+                            ($effect['player_id'] == $player['id'] && !$effect['target_player_id'])) {
+                            $activeModifiers['snap'] = $cardName;
+                        }
+                        break;
+                    case 'dare_modify':
+                        // Show if this player is the target OR if they own it and no target (self-modifier)
+                        if ($effect['target_player_id'] == $player['id'] || 
+                            ($effect['player_id'] == $player['id'] && !$effect['target_player_id'])) {
+                            $activeModifiers['dare'] = $cardName;
+                        }
+                        break;
                     case 'spicy_modify':
                         // These only affect the player who drew the card
                         if ($effect['player_id'] == $player['id']) {
-                            $cardType = str_replace('_modify', '', $effect['effect_type']);
-                            $activeModifiers[$cardType] = $cardName;
+                            $activeModifiers['spicy'] = $cardName;
                         }
                         break;
                     case 'veto_modify':
