@@ -1448,81 +1448,71 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
         // After completing serve/snap/dare/spicy cards, handle modifier effects
         if (in_array($playerCard['card_type'], ['accepted_serve', 'snap', 'dare', 'spicy'])) {
             $effectType = $playerCard['card_type'] === 'accepted_serve' ? 'challenge_modify' : $playerCard['card_type'] . '_modify';
-            $modifyEffects = getActiveChanceEffects($gameId, $effectType, $playerId);
+            
+            // Get all effects of this type that target this player
+            $allEffects = getActiveChanceEffects($gameId, $effectType);
+            $usedEffects = [];
+            
+            foreach ($allEffects as $effect) {
+                if ($effect['target_player_id'] == $playerId || 
+                    ($effect['player_id'] == $playerId && !$effect['target_player_id'])) {
+                    $usedEffects[] = $effect;
+                }
+            }
             
             // Remove used modifiers
-            foreach ($modifyEffects as $effect) {
-                if ($effect['player_id'] == $playerId) {
-                    $stmt = $pdo->prepare("SELECT timer FROM cards WHERE id = ?");
-                    $stmt->execute([$effect['chance_card_id']]);
-                    $hasTimer = $stmt->fetchColumn();
-                    
-                    if (!$hasTimer && !$effect['timer_id']) {
-                        $stmt = $pdo->prepare("DELETE FROM player_cards WHERE game_id = ? AND player_id = ? AND card_id = ?");
-                        $stmt->execute([$gameId, $playerId, $effect['chance_card_id']]);
-                        removeActiveChanceEffect($effect['id']);
-                    } elseif ($effect['effect_value'] === 'challenge_reward_opponent') {
-                        $stmt = $pdo->prepare("DELETE FROM player_cards WHERE game_id = ? AND player_id = ? AND card_id = ?");
-                        $stmt->execute([$gameId, $playerId, $effect['chance_card_id']]);
-                        removeActiveChanceEffect($effect['id']);
-                    } elseif ($hasTimer) {
-                        // Check timer completion type
-                        $stmt = $pdo->prepare("SELECT timer_completion_type FROM cards WHERE id = ?");
-                        $stmt->execute([$effect['chance_card_id']]);
-                        $completionType = $stmt->fetchColumn();
-                        
-                        if ($completionType === 'first_trigger') {
-                            // Remove card and clear timer for first_trigger cards like Time Crunch
-                            $stmt = $pdo->prepare("DELETE FROM player_cards WHERE game_id = ? AND player_id = ? AND card_id = ?");
-                            $stmt->execute([$gameId, $playerId, $effect['chance_card_id']]);
-                            if ($effect['timer_id']) {
-                                $stmt = $pdo->prepare("DELETE FROM timers WHERE id = ?");
-                                $stmt->execute([$effect['timer_id']]);
-                            }
-                            removeActiveChanceEffect($effect['id']);
-                        }
-                    }
+            foreach ($usedEffects as $effect) {
+                $stmt = $pdo->prepare("SELECT timer FROM cards WHERE id = ?");
+                $stmt->execute([$effect['chance_card_id']]);
+                $hasTimer = $stmt->fetchColumn();
+                
+                if (!$hasTimer && !$effect['timer_id']) {
+                    // Non-timer effect - remove chance card from hand
+                    $stmt = $pdo->prepare("DELETE FROM player_cards WHERE game_id = ? AND player_id = ? AND card_id = ?");
+                    $stmt->execute([$gameId, $effect['player_id'], $effect['chance_card_id']]);
                 }
-            }
-
-            // Check for any queued modifiers that can now activate
-            $stmt = $pdo->prepare("
-                SELECT pc.*, c.* FROM player_cards pc
-                JOIN cards c ON pc.card_id = c.id
-                WHERE pc.game_id = ? AND c.card_type = 'chance' AND 
-                (c.challenge_modify = 1 OR c.opponent_challenge_modify = 1)
-                ORDER BY pc.id ASC
-            ");
-            $stmt->execute([$gameId]);
-            $allQueuedModifiers = $stmt->fetchAll();
-
-            foreach ($allQueuedModifiers as $modifier) {
-                if ($modifier['challenge_modify']) {
-                    $existingForPlayer = getActiveChanceEffects($gameId, 'challenge_modify', $modifier['player_id']);
-                    if (empty($existingForPlayer)) {
-                        $modifyValue = $modifier['score_modify'] !== 'none' ? $modifier['score_modify'] : 'modify';
-                        addActiveChanceEffect($gameId, $modifier['player_id'], $modifier['card_id'], 'challenge_modify', $modifyValue);
-                        break;
-                    }
-                } elseif ($modifier['opponent_challenge_modify']) {
-                    $targetId = getOpponentPlayerId($gameId, $modifier['player_id']);
-                    $activeEffects = getActiveChanceEffects($gameId, 'challenge_modify');
-                    $targetHasModifier = false;
-                    foreach ($activeEffects as $active) {
-                        if (($active['target_player_id'] == $targetId) || ($active['player_id'] == $targetId && !$active['target_player_id'])) {
-                            $targetHasModifier = true;
-                            break;
-                        }
-                    }
-                    if (!$targetHasModifier) {
-                        $modifyValue = $modifier['score_modify'] !== 'none' ? $modifier['score_modify'] : 'modify';
-                        addActiveChanceEffect($gameId, $modifier['player_id'], $modifier['card_id'], 'challenge_modify', $modifyValue, $targetId);
-                        break;
-                    }
-                }
+                
+                removeActiveChanceEffect($effect['id']);
             }
             
-            checkRecurringEffectCompletion($gameId, $playerId, $playerCard['card_type']);
+            // Activate next modifier for each effect owner
+            foreach ($usedEffects as $effect) {
+                $effectOwnerId = $effect['player_id'];
+                
+                // Check if this effect owner can use this card type
+                $ownerPlayer = getPlayerById($effectOwnerId);
+                $canUseCardType = true;
+                
+                if ($effectType === 'snap_modify' && $ownerPlayer['gender'] !== 'female') {
+                    $canUseCardType = false;
+                } elseif ($effectType === 'dare_modify' && $ownerPlayer['gender'] !== 'male') {
+                    $canUseCardType = false;
+                }
+                
+                // Look for next modifier card
+                $cardTypeField = str_replace('_modify', '_modify', $effectType);
+                $stmt = $pdo->prepare("
+                    SELECT pc.*, c.* FROM player_cards pc
+                    JOIN cards c ON pc.card_id = c.id
+                    WHERE pc.game_id = ? AND pc.player_id = ? AND c.card_type = 'chance' AND c.{$cardTypeField} = 1
+                    ORDER BY pc.id ASC LIMIT 1
+                ");
+                $stmt->execute([$gameId, $effectOwnerId]);
+                $nextModifier = $stmt->fetch();
+                
+                if ($nextModifier) {
+                    $modifyValue = $nextModifier['double_it'] ? 'double' : 'modify';
+                    
+                    if ($canUseCardType) {
+                        // Effect owner can use this card type
+                        addActiveChanceEffect($gameId, $effectOwnerId, $nextModifier['card_id'], $effectType, $modifyValue);
+                    } else {
+                        // Effect owner can't use this card type - target opponent
+                        $targetId = getOpponentPlayerId($gameId, $effectOwnerId);
+                        addActiveChanceEffect($gameId, $effectOwnerId, $nextModifier['card_id'], $effectType, $modifyValue, $targetId);
+                    }
+                }
+            }
         }
         
         $pdo->commit();
@@ -1822,6 +1812,54 @@ function vetoHandCard($gameId, $playerId, $cardId, $playerCardId) {
 
         if (!empty($drawnCards)) {
             $response['drawn_cards'] = $drawnCards;
+        }
+
+        checkRecurringEffectCompletion($gameId, $playerId, $playerCard['card_type']);
+
+        // Check for new modifiers to activate for snap/dare/spicy cards
+        if (in_array($playerCard['card_type'], ['snap', 'dare', 'spicy'])) {
+            $effectType = $playerCard['card_type'] . '_modify';
+            
+            // Check if there are any queued modifiers for this card type
+            $stmt = $pdo->prepare("
+                SELECT pc.*, c.* FROM player_cards pc
+                JOIN cards c ON pc.card_id = c.id
+                WHERE pc.game_id = ? AND c.card_type = 'chance' AND c.{$effectType} = 1
+                ORDER BY pc.id ASC
+            ");
+            $stmt->execute([$gameId]);
+            $allModifiers = $stmt->fetchAll();
+            
+            foreach ($allModifiers as $modifier) {
+                $ownerPlayer = getPlayerById($modifier['player_id']);
+                $canUseCardType = true;
+                
+                if ($effectType === 'snap_modify' && $ownerPlayer['gender'] !== 'female') {
+                    $canUseCardType = false;
+                } elseif ($effectType === 'dare_modify' && $ownerPlayer['gender'] !== 'male') {
+                    $canUseCardType = false;
+                }
+                
+                $targetPlayerId = $canUseCardType ? $modifier['player_id'] : getOpponentPlayerId($gameId, $modifier['player_id']);
+                
+                // Check if target already has this modifier active
+                $existingEffects = getActiveChanceEffects($gameId, $effectType);
+                $hasActiveModifier = false;
+                
+                foreach ($existingEffects as $existing) {
+                    if (($existing['target_player_id'] == $targetPlayerId) || 
+                        ($existing['player_id'] == $targetPlayerId && !$existing['target_player_id'])) {
+                        $hasActiveModifier = true;
+                        break;
+                    }
+                }
+                
+                if (!$hasActiveModifier) {
+                    $modifyValue = $modifier['double_it'] ? 'double' : 'modify';
+                    addActiveChanceEffect($gameId, $modifier['player_id'], $modifier['card_id'], $effectType, $modifyValue, $canUseCardType ? null : $targetPlayerId);
+                    break; // Only activate one modifier
+                }
+            }
         }
 
         return $response;
@@ -2163,24 +2201,72 @@ function processChanceCard($gameId, $playerId, $cardData) {
     }
 
     if ($cardData['snap_modify']) {
-        // Check if there's already an active effect
-        $existingEffect = getActiveChanceEffects($gameId, 'snap_modify', $playerId);
-        if (empty($existingEffect)) {
-            addActiveChanceEffect($gameId, $playerId, $cardData['id'], 'snap_modify', $cardData['double_it'] ? 'double' : 'modify');
-            $effects[] = "Next snap card modified";
+        $player = getPlayerById($playerId);
+        
+        if ($player['gender'] === 'female') {
+            // Female draws snap modifier - affects herself
+            $existingEffect = getActiveChanceEffects($gameId, 'snap_modify', $playerId);
+            if (empty($existingEffect)) {
+                addActiveChanceEffect($gameId, $playerId, $cardData['id'], 'snap_modify', $cardData['double_it'] ? 'double' : 'modify');
+                $effects[] = "Next snap card modified";
+            } else {
+                $effects[] = "Snap modifier queued - will activate when current one is cleared";
+            }
         } else {
-            $effects[] = "Snap modifier already active - complete current one first";
+            // Male draws snap modifier - affects opponent (female)
+            $opponentId = getOpponentPlayerId($gameId, $playerId);
+            $existingEffect = getActiveChanceEffects($gameId, 'snap_modify');
+            $opponentHasModifier = false;
+            
+            foreach ($existingEffect as $effect) {
+                if (($effect['target_player_id'] == $opponentId) || 
+                    ($effect['player_id'] == $opponentId && !$effect['target_player_id'])) {
+                    $opponentHasModifier = true;
+                    break;
+                }
+            }
+            
+            if (!$opponentHasModifier) {
+                addActiveChanceEffect($gameId, $playerId, $cardData['id'], 'snap_modify', $cardData['double_it'] ? 'double' : 'modify', $opponentId);
+                $effects[] = "Opponent's next snap card modified";
+            } else {
+                $effects[] = "Opponent snap modifier queued";
+            }
         }
     }
 
     if ($cardData['dare_modify']) {
-        // Check if there's already an active effect
-        $existingEffect = getActiveChanceEffects($gameId, 'dare_modify', $playerId);
-        if (empty($existingEffect)) {
-            addActiveChanceEffect($gameId, $playerId, $cardData['id'], 'dare_modify', $cardData['double_it'] ? 'double' : 'modify');
-            $effects[] = "Next dare card modified";
+        $player = getPlayerById($playerId);
+        
+        if ($player['gender'] === 'male') {
+            // Male draws dare modifier - affects himself
+            $existingEffect = getActiveChanceEffects($gameId, 'dare_modify', $playerId);
+            if (empty($existingEffect)) {
+                addActiveChanceEffect($gameId, $playerId, $cardData['id'], 'dare_modify', $cardData['double_it'] ? 'double' : 'modify');
+                $effects[] = "Next dare card modified";
+            } else {
+                $effects[] = "Dare modifier queued - will activate when current one is cleared";
+            }
         } else {
-            $effects[] = "Dare modifier already active - complete current one first";
+            // Female draws dare modifier - affects opponent (male)
+            $opponentId = getOpponentPlayerId($gameId, $playerId);
+            $existingEffect = getActiveChanceEffects($gameId, 'dare_modify');
+            $opponentHasModifier = false;
+            
+            foreach ($existingEffect as $effect) {
+                if (($effect['target_player_id'] == $opponentId) || 
+                    ($effect['player_id'] == $opponentId && !$effect['target_player_id'])) {
+                    $opponentHasModifier = true;
+                    break;
+                }
+            }
+            
+            if (!$opponentHasModifier) {
+                addActiveChanceEffect($gameId, $playerId, $cardData['id'], 'dare_modify', $cardData['double_it'] ? 'double' : 'modify', $opponentId);
+                $effects[] = "Opponent's next dare card modified";
+            } else {
+                $effects[] = "Opponent dare modifier queued";
+            }
         }
     }
 
