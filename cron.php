@@ -167,9 +167,35 @@ function checkExpiredTimers($specificTimerId = null) {
         
         foreach ($expiredTimers as $timer) {
             try {
-                // Send notification with retry logic
-                $notificationSent = false;
-                for ($attempt = 1; $attempt <= 3; $attempt++) {
+                // Check if this is a recurring timer (Clock Siphon)
+                $stmt = $pdo->prepare("SELECT * FROM active_chance_effects WHERE timer_id = ? AND effect_type = 'recurring_timer'");
+                $stmt->execute([$timer['id']]);
+                $recurringEffect = $stmt->fetch();
+                
+                if ($recurringEffect) {
+                    // This is a Clock Siphon - subtract point and create new timer
+                    $pointsToSubtract = $recurringEffect['effect_value'] ?: 1;
+                    
+                    // Subtract point
+                    $stmt = $pdo->prepare("UPDATE players SET score = score - ? WHERE id = ?");
+                    $stmt->execute([$pointsToSubtract, $timer['player_id']]);
+                    
+                    // Get the repeat interval from the original card
+                    $stmt = $pdo->prepare("SELECT repeat_count FROM cards WHERE id = ?");
+                    $stmt->execute([$recurringEffect['chance_card_id']]);
+                    $interval = $stmt->fetchColumn() ?: 5; // Default to 5 minutes
+                    
+                    // Create new timer
+                    $newTimer = createTimer($timer['game_id'], $timer['player_id'], $timer['description'], $interval);
+                    if ($newTimer['success']) {
+                        // Update the effect with new timer ID
+                        $stmt = $pdo->prepare("UPDATE active_chance_effects SET timer_id = ? WHERE id = ?");
+                        $stmt->execute([$newTimer['timer_id'], $recurringEffect['id']]);
+                        
+                        error_log("Clock Siphon: Subtracted $pointsToSubtract points from player {$timer['player_id']}, created new timer {$newTimer['timer_id']}");
+                    }
+                } else {
+                    // Regular timer - send notification if token exists
                     if ($timer['fcm_token'] && !empty($timer['fcm_token'])) {
                         $result = sendPushNotification(
                             $timer['fcm_token'],
@@ -178,23 +204,13 @@ function checkExpiredTimers($specificTimerId = null) {
                         );
                         
                         if ($result) {
-                            $notificationSent = true;
                             $notificationsSent++;
-                            error_log("Timer notification sent for timer {$timer['id']} to {$timer['first_name']} (attempt $attempt)");
-                            break;
-                        } else {
-                            error_log("Failed to send timer notification for timer {$timer['id']} (attempt $attempt)");
-                            if ($attempt < 3) {
-                                sleep(5); // 5 second delay between retries
-                            }
+                            error_log("Timer notification sent for timer {$timer['id']} to {$timer['first_name']}");
                         }
-                    } else {
-                        error_log("No FCM token for timer {$timer['id']} player {$timer['first_name']}");
-                        break;
                     }
                 }
                 
-                // Delete timer (whether notification succeeded or not after 3 attempts)
+                // Delete the expired timer
                 $stmt = $pdo->prepare("DELETE FROM timers WHERE id = ?");
                 $stmt->execute([$timer['id']]);
                 

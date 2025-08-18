@@ -813,7 +813,7 @@ function showCardSelectionActions() {
             const isTimerOnlyCard = selectedHandCard.timer && !selectedHandCard.roll_dice;
             
             if ((hasModifiers || isTimerOnlyCard) && !isDiceTimerCard) {
-                actions.innerHTML = `<button class="btn btn-complete" disabled title="Auto-completes when conditions are met">Complete (Auto)</button>`;
+                actions.innerHTML = `<button class="btn btn-complete" disabled title="Auto-completes when conditions are met">Auto-Complete Only</button>`;
             } else {
                 actions.innerHTML = `<button class="btn btn-complete" onclick="completeChanceCard(${selectedHandCard.id})">Complete</button>`;
             }
