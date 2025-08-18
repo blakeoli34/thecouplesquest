@@ -343,10 +343,14 @@ function getCardDisplayInfo(card, context = 'serve') {
         
         if (card.veto_draw_snap_dare) {
             let snapDareText = 'snap/dare';
-            if (context === 'serve' && gameData.opponentPlayerGender) {
-                snapDareText = gameData.opponentPlayerGender === 'female' ? '<i class="fa-solid fa-camera-retro"></i>' : '<i class="fa-solid fa-hand-point-right"></i>';
-            } else if (context === 'hand' || context === 'pending') {
-                snapDareText = gameData.currentPlayerGender === 'female' ? '<i class="fa-solid fa-camera-retro"></i>' : '<i class="fa-solid fa-hand-point-right"></i>';
+            if(card.win_loss) {
+                snapDareText = '<i class="fa-solid fa-camera-retro"></i> / <i class="fa-solid fa-hand-point-right"></i>';
+            } else {
+                if (context === 'serve' && gameData.opponentPlayerGender) {
+                    snapDareText = gameData.opponentPlayerGender === 'female' ? '<i class="fa-solid fa-camera-retro"></i>' : '<i class="fa-solid fa-hand-point-right"></i>';
+                } else if (context === 'hand' || context === 'pending') {
+                    snapDareText = gameData.currentPlayerGender === 'female' ? '<i class="fa-solid fa-camera-retro"></i>' : '<i class="fa-solid fa-hand-point-right"></i>';
+                }
             }
             penalties.push(`${snapDareText} ${card.veto_draw_snap_dare}`);
         }
@@ -2993,12 +2997,12 @@ function spinWheelAction() {
             const targetSegment = data.winning_index;
             const segmentAngle = (targetSegment * 60) + 30;
             
-            // Do 5 full rotations (1800deg) plus the angle to reach the target
-            const finalRotation = 1800 + (360 - segmentAngle);
+            // Do 6 full rotations (2160deg) plus the angle to reach the target
+            const finalRotation = 2160 + (360 - segmentAngle);
             
             wheelBackground.style.transform = `rotate(${finalRotation}deg)`;
             
-            playSoundIfEnabled('/dice-roll.m4r');
+            playSoundIfEnabled('/wheel-spin.m4r');
             
             // Show result after spin animation
             setTimeout(() => {
@@ -3006,6 +3010,8 @@ function spinWheelAction() {
                     result.textContent = data.winning_prize.display_text;
                     result.classList.add('show');
                 }
+
+                playSoundIfEnabled('/card-drawn.m4r');
                 
                 // Hide wheel button since it's been used
                 document.getElementById('wheelButton').style.display = 'none';
@@ -3020,7 +3026,7 @@ function spinWheelAction() {
                     }, 500);
                 }, 3000);
                 
-            }, 3000);
+            }, 4000);
         } else {
             alert('Failed to spin wheel: ' + (data.message || 'Unknown error'));
             isWheelSpinning = false;

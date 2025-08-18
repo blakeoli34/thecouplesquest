@@ -844,6 +844,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             --color-pink: <?= Config::COLOR_PINK ?>;
             --color-blue-dark: <?= Config::COLOR_BLUE_DARK ?>;
             --color-pink-dark: <?= Config::COLOR_PINK_DARK ?>;
+            --color-blue-mid: <?= Config::COLOR_BLUE_MID ?>;
+            --color-pink-mid: <?= Config::COLOR_PINK_MID ?>;
             --color-blue-light: <?= Config::COLOR_BLUE_LIGHT ?>;
             --color-pink-light: <?= Config::COLOR_PINK_LIGHT ?>;
             --animation-spring: cubic-bezier(0.2, 0.8, 0.3, 1.1);

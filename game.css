@@ -2249,7 +2249,7 @@ body.digital .hybrid-menu-item {
     height: 100%;
     border-radius: 50%;
     position: relative;
-    transition: transform 3s ease-out;
+    transition: transform 4s cubic-bezier(0.36, 0.95, 0.64, 1);
 }
 
 /* Gender-specific wheel colors using conic-gradient */
@@ -2596,6 +2596,45 @@ body.digital .hybrid-menu-item {
         background: rgba(25,25,25,0.7);
         border-color: #111;
         color: #ccc;
+    }
+
+    .wheel {
+        border-color: #333;
+    }
+
+    .wheel-pointer {
+        border-top-color: #333;
+    }
+
+    .wheel-center {
+        background: #333;
+        color: #fff;
+    }
+
+    .male .wheel-background {
+        background: conic-gradient(
+            var(--color-blue-mid) 0deg 60deg,
+            var(--color-blue-dark) 60deg 120deg,
+            var(--color-blue-mid) 120deg 180deg,
+            var(--color-blue-dark) 180deg 240deg,
+            var(--color-blue-mid) 240deg 300deg,
+            var(--color-blue-dark) 300deg 360deg
+        );
+    }
+
+    .female .wheel-background {
+        background: conic-gradient(
+            var(--color-pink-mid) 0deg 60deg,
+            var(--color-pink-dark) 60deg 120deg,
+            var(--color-pink-mid) 120deg 180deg,
+            var(--color-pink-dark) 180deg 240deg,
+            var(--color-pink-mid) 240deg 300deg,
+            var(--color-pink-dark) 300deg 360deg
+        );
+    }
+
+    .wheel-text {
+        color: #fff;
     }
 }
 
