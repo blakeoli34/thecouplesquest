@@ -814,7 +814,7 @@ function showCardSelectionActions() {
             }
         } else {
             // Check if this is a win/loss card
-            if (selectedHandCard.win_loss == 1) {
+            if (selectedHandCard.win_loss == 1 || selectedHandCard.win_loss === true) {
                 actions.innerHTML = `
                     <button class="btn btn-complete" onclick="winSelectedCard()">Win</button>
                     <button class="btn btn-veto" onclick="loseSelectedCard()">Loss</button>
@@ -1013,6 +1013,15 @@ function winSelectedCard() {
                         });
                     }
                 }, 1500);
+                if (data.drawn_cards && data.drawn_cards.length > 0) {
+                    let animationDelay = 1500; // Start after score animations
+                    data.drawn_cards.forEach(drawnCard => {
+                        setTimeout(() => {
+                            showCardDrawAnimation(drawnCard);
+                        }, animationDelay);
+                        animationDelay += 7500; // 7.5 seconds per card
+                    });
+                }
             }, 1100);
         } else {
             clearCardSelection();
@@ -1055,6 +1064,15 @@ function loseSelectedCard() {
                         });
                     }
                 }, 1500);
+                if (data.drawn_cards && data.drawn_cards.length > 0) {
+                    let animationDelay = 1500; // Start after score animations
+                    data.drawn_cards.forEach(drawnCard => {
+                        setTimeout(() => {
+                            showCardDrawAnimation(drawnCard);
+                        }, animationDelay);
+                        animationDelay += 7500; // 7.5 seconds per card
+                    });
+                }
             }, 1100);
         } else {
             clearCardSelection();

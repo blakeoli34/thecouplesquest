@@ -858,6 +858,10 @@ function resetGameForNewRound($gameId) {
         
         $stmt = $pdo->prepare("DELETE FROM active_chance_effects WHERE game_id = ?");
         $stmt->execute([$gameId]);
+
+        // Clear wheel spins
+        $stmt = $pdo->prepare("DELETE FROM wheel_spins WHERE game_id = ?");
+        $stmt->execute([$gameId]);
         
         $pdo->commit();
         return ['success' => true];
@@ -1013,7 +1017,7 @@ function getPlayerCards($gameId, $playerId, $cardType = null) {
                 c.before_next_challenge, c.veto_modify, c.score_modify,
                 c.roll_dice, c.dice_condition, c.dice_threshold, c.double_it,
                 c.opponent_challenge_modify, c.draw_snap_dare, c.draw_spicy,
-                c.score_add, c.score_subtract, c.score_steal, c.repeat_count
+                c.score_add, c.score_subtract, c.score_steal, c.repeat_count, c.win_loss
             FROM player_cards pc
             JOIN cards c ON pc.card_id = c.id
             WHERE pc.game_id = ? AND pc.player_id = ?
@@ -1083,8 +1087,22 @@ function serveCard($gameId, $fromPlayerId, $toPlayerId, $cardId) {
         }
         $stmt->execute([$gameId, $fromPlayerId, $cardId]);
         
-        // Add card directly to recipient's hand as accepted_serve
+        // Get the original card data to preserve win_loss property
+        $stmt = $pdo->prepare("SELECT win_loss FROM cards WHERE id = ?");
+        $stmt->execute([$cardId]);
+        $originalCard = $stmt->fetch();
+
         $success = addCardToHand($gameId, $toPlayerId, $cardId, 'accepted_serve', 1, true);
+
+        // Update the accepted_serve card to preserve win_loss property
+        if ($success && $originalCard && $originalCard['win_loss']) {
+            $stmt = $pdo->prepare("
+                UPDATE player_cards 
+                SET win_loss = ? 
+                WHERE game_id = ? AND player_id = ? AND card_id = ? AND card_type = 'accepted_serve'
+            ");
+            $stmt->execute([1, $gameId, $toPlayerId, $cardId]);
+        }
         
         if (!$success) {
             return ['success' => false, 'message' => 'Failed to add card to hand'];
@@ -1917,6 +1935,7 @@ function processWinLossCard($gameId, $playerId, $cardId, $playerCardId, $isWin) 
                 $response['score_changes'][] = ['player_id' => $opponentId, 'points' => -$playerCard['veto_steal']];
                 $response['score_changes'][] = ['player_id' => $playerId, 'points' => $playerCard['veto_steal']];
             }
+            
             // Handle draw penalties for opponent
             if ($playerCard['veto_draw_chance']) {
                 drawCards($gameId, $opponentId, 'chance', $playerCard['veto_draw_chance']);
@@ -1944,16 +1963,24 @@ function processWinLossCard($gameId, $playerId, $cardId, $playerCardId, $isWin) 
                 $response['score_changes'][] = ['player_id' => $opponentId, 'points' => $playerCard['veto_steal']];
             }
             // Handle draw penalties for player
+            $drawnCards = [];
             if ($playerCard['veto_draw_chance']) {
-                drawCards($gameId, $playerId, 'chance', $playerCard['veto_draw_chance']);
+                $drawResult = drawCards($gameId, $playerId, 'chance', $playerCard['veto_draw_chance']);
+                $drawnCards = array_merge($drawnCards, $drawResult['card_details'] ?? []);
             }
             if ($playerCard['veto_draw_snap_dare']) {
-                $player = getPlayerById($playerId);
-                $drawType = ($player['gender'] === 'female') ? 'snap' : 'dare';
-                drawCards($gameId, $playerId, $drawType, $playerCard['veto_draw_snap_dare']);
+                $opponent = getPlayerById($playerId);
+                $drawType = ($opponent['gender'] === 'female') ? 'snap' : 'dare';
+                $drawResult = drawCards($gameId, $playerId, $drawType, $playerCard['veto_draw_snap_dare']);
+                $drawnCards = array_merge($drawnCards, $drawResult['card_details'] ?? []);
             }
             if ($playerCard['veto_draw_spicy']) {
-                drawCards($gameId, $playerId, 'spicy', $playerCard['veto_draw_spicy']);
+                $drawResult = drawCards($gameId, $playerId, 'spicy', $playerCard['veto_draw_spicy']);
+                $drawnCards = array_merge($drawnCards, $drawResult['card_details'] ?? []);
+            }
+
+            if (!empty($drawnCards)) {
+                $response['drawn_cards'] = $drawnCards;
             }
         }
         
