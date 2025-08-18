@@ -1019,7 +1019,7 @@ function winSelectedCard() {
                     }
                 }, 1500);
                 if (data.drawn_cards && data.drawn_cards.length > 0) {
-                    let animationDelay = 1500; // Start after score animations
+                    let animationDelay = 3500; // Start after score animations
                     data.drawn_cards.forEach(drawnCard => {
                         setTimeout(() => {
                             showCardDrawAnimation(drawnCard);
@@ -1070,7 +1070,7 @@ function loseSelectedCard() {
                     }
                 }, 1500);
                 if (data.drawn_cards && data.drawn_cards.length > 0) {
-                    let animationDelay = 1500; // Start after score animations
+                    let animationDelay = 3500; // Start after score animations
                     data.drawn_cards.forEach(drawnCard => {
                         setTimeout(() => {
                             showCardDrawAnimation(drawnCard);
