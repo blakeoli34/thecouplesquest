@@ -616,6 +616,7 @@ function showCardDrawAnimation(cardData) {
     // Step 2: Start shuffle animation
     setTimeout(() => {
         deckContainer.classList.add('shuffling');
+        playSoundIfEnabled('/card-shuffle.m4r');
     }, 400);
     
     // Step 3: Hide deck and show card flipping in
