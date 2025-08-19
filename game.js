@@ -3261,6 +3261,17 @@ document.addEventListener('DOMContentLoaded', function() {
             checkWheelAvailability();
         }, 60000); // Every minute
     }
+
+    // Clean up expired effects every 30 seconds for digital games
+    if (document.body.classList.contains('digital')) {
+        setInterval(() => {
+            fetch('game.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'action=cleanup_effects'
+            }).catch(() => {}); // Silent cleanup
+        }, 30000);
+    }
 });
 
 // Confetti at game end

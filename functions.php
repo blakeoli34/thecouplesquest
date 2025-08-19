@@ -149,7 +149,7 @@ function updateScore($gameId, $playerId, $pointsToAdd, $modifiedBy) {
 function setGameDuration($gameId, $durationDays) {
     try {
         $pdo = Config::getDatabaseConnection();
-        $timezone = new DateTimeZone('America/New_York'); // Change to your timezone
+        $timezone = new DateTimeZone('America/Indiana/Indianapolis');
         
         $startDate = new DateTime('now', $timezone);
         $endDate = clone $startDate;
@@ -266,6 +266,10 @@ function deleteTimer($timerId, $gameId) {
         $pdo = Config::getDatabaseConnection();
         $stmt = $pdo->prepare("DELETE FROM timers WHERE id = ? AND game_id = ?");
         $stmt->execute([$timerId, $gameId]);
+
+        // Clean up any chance effects linked to this timer
+        $stmt = $pdo->prepare("DELETE FROM active_chance_effects WHERE timer_id = ?");
+        $stmt->execute([$timerId]);
         
         // Remove at job - find and remove jobs containing our timer ID
         $atJobs = shell_exec('atq 2>/dev/null') ?: '';
@@ -2194,8 +2198,28 @@ function removeActiveChanceEffect($effectId) {
 function clearExpiredChanceEffects($gameId) {
     return executeWithDeadlockRetry(function() use ($gameId) {
         $pdo = Config::getDatabaseConnection();
+        
+        // Clear effects with expired timestamps
         $stmt = $pdo->prepare("DELETE FROM active_chance_effects WHERE game_id = ? AND expires_at IS NOT NULL AND expires_at <= NOW()");
-        return $stmt->execute([$gameId]);
+        $stmt->execute([$gameId]);
+        $clearedByTime = $stmt->rowCount();
+        
+        // Clear effects with expired timers
+        $stmt = $pdo->prepare("
+            DELETE ace FROM active_chance_effects ace
+            LEFT JOIN timers t ON ace.timer_id = t.id
+            WHERE ace.game_id = ? 
+            AND ace.timer_id IS NOT NULL 
+            AND (t.id IS NULL OR t.end_time <= UTC_TIMESTAMP())
+        ");
+        $stmt->execute([$gameId]);
+        $clearedByTimer = $stmt->rowCount();
+        
+        if ($clearedByTime > 0 || $clearedByTimer > 0) {
+            error_log("Cleared expired chance effects for game $gameId: $clearedByTime by timestamp, $clearedByTimer by timer");
+        }
+        
+        return true;
     });
 }
 

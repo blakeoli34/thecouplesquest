@@ -213,6 +213,13 @@ function checkExpiredTimers($specificTimerId = null) {
                 // Delete the expired timer
                 $stmt = $pdo->prepare("DELETE FROM timers WHERE id = ?");
                 $stmt->execute([$timer['id']]);
+
+                // Clean up any orphaned chance effects for timers that were just deleted
+                $stmt = $pdo->prepare("
+                    DELETE FROM active_chance_effects 
+                    WHERE timer_id = ? AND game_id = ?
+                ");
+                $stmt->execute([$timer['id'], $timer['game_id']]);
                 
             } catch (Exception $e) {
                 error_log("Error processing expired timer {$timer['id']}: " . $e->getMessage());

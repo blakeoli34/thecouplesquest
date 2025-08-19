@@ -46,8 +46,9 @@ foreach ($players as $p) {
 $gameStatus = $gameData['status']; // Use fresh game data
 $gameMode = $gameData['game_mode']; // Get current mode
 
-$now = new DateTime();
-$endDate = new DateTime($player['end_date']);
+$timezone = new DateTimeZone('America/Indiana/Indianapolis');
+$now = new DateTime('now', $timezone);
+$endDate = new DateTime($player['end_date'], $timezone);
 $timeRemaining = $now < $endDate ? $endDate->diff($now) : null;
 
 $gameTimeText = '';
@@ -121,8 +122,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             if (isset($_POST['custom_date'])) {
                 // Handle custom date
                 $customDate = $_POST['custom_date'];
-                $now = new DateTime();
-                $customDateTime = new DateTime($customDate . ' 23:59:59');
+                $timezone = new DateTimeZone('America/Indiana/Indianapolis');
+                $now = new DateTime('now', $timezone);
+                $customDateTime = new DateTime($customDate . ' 23:59:59', $timezone);
                 
                 // Validate date is at least 1 week from now and max 1 year
                 $minDate = clone $now;
@@ -136,7 +138,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 }
                 
                 // Calculate duration in days from now to selected date
-                $diffDays = $now->diff($customDateTime)->days + 1; // +1 to include the selected day
+                $diffDays = $now->diff($customDateTime)->days + 1;
                 
                 // Manually set the game dates
                 try {
@@ -732,6 +734,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     'message' => 'Failed to load rules'
                 ]);
             }
+            exit;
+
+        case 'cleanup_effects':
+            clearExpiredChanceEffects($player['game_id']);
+            echo json_encode(['success' => true]);
             exit;
 
         case 'end_game':
