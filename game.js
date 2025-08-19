@@ -1290,6 +1290,14 @@ function enableNotificationsFromModal() {
     status.className = 'notification-status disabled';
     
     console.log('User requested to enable notifications from modal');
+
+    // Clear any existing token before requesting new one
+    localStorage.removeItem('fcm_token');
+    if (firebaseMessaging) {
+        firebaseMessaging.deleteToken().catch(() => {
+            // Ignore errors, token might not exist
+        });
+    }
     
     // Check if notifications are supported
     if (!('Notification' in window)) {
@@ -1350,6 +1358,20 @@ function setupFirebaseMessaging() {
     if (!firebaseMessaging) return;
     
     const vapidKey = 'BAhDDY44EUfm9YKOElboy-2fb_6lzVhW4_TLMr4Ctiw6oA_ROcKZ09i5pKMQx3s7SoWgjuPbW-eGI7gFst6qjag';
+
+    // Delete existing token first
+    firebaseMessaging.deleteToken().then(() => {
+        // Get fresh token
+        return firebaseMessaging.getToken({ vapidKey });
+    }).then((currentToken) => {
+        if (currentToken) {
+            console.log('Fresh FCM Token received, length:', currentToken.length);
+            updateTokenOnServer(currentToken);
+            localStorage.setItem('fcm_token', currentToken);
+        }
+    }).catch((err) => {
+        console.log('Error getting fresh FCM token:', err);
+    });
     
     // Get initial token
     firebaseMessaging.getToken({ vapidKey }).then((currentToken) => {
@@ -1362,18 +1384,6 @@ function setupFirebaseMessaging() {
         }
     }).catch((err) => {
         console.log('Error getting FCM token:', err);
-    });
-
-    // Monitor token refresh
-    firebaseMessaging.onTokenRefresh(() => {
-        console.log('FCM Token refreshed');
-        firebaseMessaging.getToken({ vapidKey }).then((refreshedToken) => {
-            console.log('New token:', refreshedToken);
-            updateTokenOnServer(refreshedToken);
-            localStorage.setItem('fcm_token', refreshedToken);
-        }).catch((err) => {
-            console.log('Unable to retrieve refreshed token:', err);
-        });
     });
 
     // Enhanced foreground message handling
@@ -1410,19 +1420,6 @@ function updateTokenOnServer(token) {
     });
 }
 
-// Periodic token validation (check every 30 minutes)
-setInterval(() => {
-    if (firebaseMessaging) {
-        firebaseMessaging.getToken().then((currentToken) => {
-            const storedToken = localStorage.getItem('fcm_token');
-            if (currentToken && currentToken !== storedToken) {
-                console.log('Token changed, updating server');
-                updateTokenOnServer(currentToken);
-                localStorage.setItem('fcm_token', currentToken);
-            }
-        });
-    }
-}, 30 * 60 * 1000);
 
 // Keep service worker alive with periodic heartbeat
 if ('serviceWorker' in navigator) {

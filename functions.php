@@ -366,11 +366,14 @@ function sendPushNotification($fcmToken, $title, $body, $data = []) {
         error_log("FCM: No token provided");
         return false;
     }
+
+    // Log token details for debugging
+    error_log("FCM: Token length: " . strlen($fcmToken));
+    error_log("FCM: Token preview: " . substr($fcmToken, 0, 20) . "...");
     
-    // Validate token format (basic check)
-    if (!preg_match('/^[A-Za-z0-9_-]+:[A-Za-z0-9_-]+$/', $fcmToken) && 
-        !preg_match('/^[A-Za-z0-9_-]{140,}$/', $fcmToken)) {
-        error_log("FCM: Invalid token format");
+    // Basic token validation - just check it's not empty and has reasonable length
+    if (strlen($fcmToken) < 50 || strlen($fcmToken) > 500) {
+        error_log("FCM: Invalid token length");
         return false;
     }
     
@@ -399,6 +402,9 @@ function sendPushNotification($fcmToken, $title, $body, $data = []) {
         error_log("Failed to get FCM access token");
         return false;
     }
+
+    error_log("FCM: Using project ID: " . Config::FCM_PROJECT_ID);
+    error_log("FCM: Full URL: " . $url);
     
     $headers = [
         'Authorization: Bearer ' . $accessToken,
@@ -465,10 +471,9 @@ function clearInvalidFcmToken($fcmToken) {
 // Enhanced token update with validation
 function updateFcmToken($deviceId, $fcmToken) {
     try {
-        // Validate token format
-        if (!preg_match('/^[A-Za-z0-9_-]+:[A-Za-z0-9_-]+$/', $fcmToken) && 
-            !preg_match('/^[A-Za-z0-9_-]{140,}$/', $fcmToken)) {
-            error_log("Invalid FCM token format provided");
+        // Basic token validation
+        if (strlen($fcmToken) < 50 || strlen($fcmToken) > 500) {
+            error_log("Invalid FCM token length provided");
             return false;
         }
         
@@ -784,6 +789,7 @@ function sendTestNotification($deviceId) {
         $player = $stmt->fetch();
         
         if ($player && $player['fcm_token']) {
+            error_log("Test notification - Token from DB: " . substr($player['fcm_token'], 0, 20) . "... (length: " . strlen($player['fcm_token']) . ")");
             $result = sendPushNotification(
                 $player['fcm_token'],
                 'Test Notification',
