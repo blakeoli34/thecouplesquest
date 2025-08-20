@@ -476,9 +476,9 @@ function getCardDisplayInfo(card, context = 'serve') {
         const timeLeft = expiresAt - now;
         
         if (timeLeft > 0) {
-            const days = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
-            const hours = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-            const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+            const days = Math.round(timeLeft / (1000 * 60 * 60 * 24));
+            const hours = Math.round((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.round((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
             
             let timeText;
             if (days > 0) {
