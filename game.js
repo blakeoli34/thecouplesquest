@@ -433,6 +433,28 @@ function getCardDisplayInfo(card, context = 'serve') {
         }
     }
 
+    // Show Card Duration in Serve Context
+    if (context === 'serve' && card.card_duration) {
+        const totalMinutes = card.card_duration;
+        const days = Math.floor(totalMinutes / (24 * 60));
+        const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+        const minutes = totalMinutes % 60;
+        
+        let durationText;
+        if (days > 0) {
+            durationText = `${days}d`;
+            if (hours > 0) durationText += ` ${hours}h`;
+            if (minutes > 0) durationText += ` ${minutes}m`;
+        } else if (hours > 0) {
+            durationText = `${hours}h`;
+            if (minutes > 0) durationText += ` ${minutes}m`;
+        } else {
+            durationText = `${minutes}m`;
+        }
+        
+        badges.push(`<span class="card-badge duration"><i class="fa-solid fa-clock"></i> ${durationText}</span>`);
+    }
+
     // Add veto penalty badges for snap/dare cards
     if (card.card_type === 'snap' || card.card_type === 'dare') {
         badges.push(`<span class="card-badge penalty">-3</span>`);
@@ -445,6 +467,36 @@ function getCardDisplayInfo(card, context = 'serve') {
     // Timer
     if (card.timer) {
         badges.push(`<span class="card-badge timer">${card.timer}min</span>`);
+    }
+
+    // Card Duration Badge
+    if (card.expires_at) {
+        const now = new Date();
+        const expiresAt = new Date(card.expires_at);
+        const timeLeft = expiresAt - now;
+        
+        if (timeLeft > 0) {
+            const days = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+            
+            let timeText;
+            if (days > 0) {
+                timeText = `${days}d`;
+            } else if (hours > 0) {
+                timeText = `${hours}h`;
+            } else {
+                if(minutes == 0) {
+                    timeText = '<1m';
+                } else {
+                    timeText = `${minutes}m`;
+                }
+            }
+            
+            badges.push(`<span class="card-badge duration"><i class="fa-solid fa-clock"></i> ${timeText}</span>`);
+        } else {
+            badges.push(`<span class="card-badge penalty"><i class="fa-solid fa-clock"></i> Expired</span>`);
+        }
     }
 
     // Modifier badges (only for hand cards)
@@ -875,21 +927,22 @@ function showCardSelectionActions() {
     const actions = document.getElementById('cardSelectionActions');
     if (actions) {
         actions.innerHTML = '';
-        
+
+        let isExpired = false;
+        if (selectedHandCard.expires_at) {
+            const now = new Date();
+            const expiresAt = new Date(selectedHandCard.expires_at);
+            isExpired = now >= expiresAt;
+        }
+
         if (selectedHandCard.card_type === 'chance') {
-    
-            // Check if chance card can be auto-completed
+            // Existing chance card logic
             const hasModifiers = selectedHandCard.challenge_modify == 1 || selectedHandCard.snap_modify == 1 || 
                 selectedHandCard.dare_modify == 1 || selectedHandCard.spicy_modify == 1 || 
                 (selectedHandCard.veto_modify && selectedHandCard.veto_modify !== 'none');
             
-            // Opponent modifiers should auto-complete
             const hasOpponentModifiers = selectedHandCard.opponent_challenge_modify == 1;
-            
-            // Special case: dice + timer cards can be manually completed
             const isDiceTimerCard = selectedHandCard.roll_dice == 1 && selectedHandCard.timer;
-            
-            // Cards with timer but no dice roll are auto-only
             const isTimerOnlyCard = selectedHandCard.timer && !selectedHandCard.roll_dice;
             
             if ((hasModifiers || hasOpponentModifiers || isTimerOnlyCard) && !isDiceTimerCard) {
@@ -898,27 +951,31 @@ function showCardSelectionActions() {
                 actions.innerHTML = `<button class="btn btn-complete" onclick="completeChanceCard(${selectedHandCard.id})">Complete</button>`;
             }
         } else {
-            // Check if this is a win/loss card
-            if (selectedHandCard.win_loss == 1 || selectedHandCard.win_loss === true) {
-                actions.innerHTML = `
-                    <button class="btn btn-complete" onclick="winSelectedCard()">Win</button>
-                    <button class="btn btn-veto" onclick="loseSelectedCard()">Loss</button>
-                `;
+            // For non-chance cards
+            if (isExpired) {
+                actions.innerHTML = `<button class="btn btn-veto" onclick="vetoSelectedCard()">Veto (Expired)</button>`;
             } else {
-                // Regular complete/veto logic
-                const hasVetoPenalty = selectedHandCard.veto_subtract || selectedHandCard.veto_steal || 
-                                    selectedHandCard.veto_draw_chance || selectedHandCard.veto_draw_snap_dare || 
-                                    selectedHandCard.veto_draw_spicy || 
-                                    ['snap', 'dare', 'spicy'].includes(selectedHandCard.card_type);
-                
-                const vetoButton = hasVetoPenalty ? 
-                    `<button class="btn btn-veto" onclick="vetoSelectedCard()">Veto</button>` :
-                    `<button class="btn btn-veto" disabled>No Veto</button>`;
-                
-                actions.innerHTML = `
-                    <button class="btn btn-complete" onclick="completeSelectedCard()">Complete</button>
-                    ${vetoButton}
-                `;
+                // Existing win/loss and regular card logic
+                if (selectedHandCard.win_loss == 1 || selectedHandCard.win_loss === true) {
+                    actions.innerHTML = `
+                        <button class="btn btn-complete" onclick="winSelectedCard()">Win</button>
+                        <button class="btn btn-veto" onclick="loseSelectedCard()">Loss</button>
+                    `;
+                } else {
+                    const hasVetoPenalty = selectedHandCard.veto_subtract || selectedHandCard.veto_steal || 
+                                        selectedHandCard.veto_draw_chance || selectedHandCard.veto_draw_snap_dare || 
+                                        selectedHandCard.veto_draw_spicy || 
+                                        ['snap', 'dare', 'spicy'].includes(selectedHandCard.card_type);
+                    
+                    const vetoButton = hasVetoPenalty ? 
+                        `<button class="btn btn-veto" onclick="vetoSelectedCard()">Veto</button>` :
+                        `<button class="btn btn-veto" disabled>No Veto</button>`;
+                    
+                    actions.innerHTML = `
+                        <button class="btn btn-complete" onclick="completeSelectedCard()">Complete</button>
+                        ${vetoButton}
+                    `;
+                }
             }
         }
         

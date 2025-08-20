@@ -1477,6 +1477,12 @@ body:not(.digital) .digital-only {
     color: #1565c0;
 }
 
+.card-badge.duration {
+    background: rgba(0,0,0,0.1);
+    color: rgba(0,0,0,0.6);
+    text-transform: none;
+}
+
 .card-badge.timer {
     background: #fff3e0;
     color: #ef6c00;

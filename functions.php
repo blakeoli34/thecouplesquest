@@ -1024,7 +1024,7 @@ function getPlayerCards($gameId, $playerId, $cardType = null) {
         $pdo = Config::getDatabaseConnection();
         
         $sql = "
-            SELECT pc.*, c.card_name, c.card_description, c.card_points,
+            SELECT pc.*, c.card_name, c.card_description, c.card_points, c.card_duration, pc.expires_at,
                 c.serve_to_her, c.serve_to_him, c.for_her, c.for_him,
                 c.extra_spicy, c.veto_subtract, c.veto_steal,
                 c.veto_draw_chance, c.veto_draw_snap_dare, c.veto_draw_spicy,
@@ -1257,6 +1257,38 @@ function addCardToHand($gameId, $playerId, $cardId, $cardType, $quantity = 1, $f
                 VALUES (?, ?, ?, ?, ?)
             ");
             $stmt->execute([$gameId, $playerId, $cardId, $cardType, $addQuantity]);
+        }
+
+        if ($cardType !== 'serve' && $cardType !== 'accepted_serve') {
+            // Get card duration
+            $stmt = $pdo->prepare("SELECT card_duration FROM cards WHERE id = ?");
+            $stmt->execute([$cardId]);
+            $duration = $stmt->fetchColumn();
+            
+            if ($duration) {
+                $timezone = new DateTimeZone('America/Indiana/Indianapolis');
+                $now = new DateTime('now', $timezone);
+                $expiresAt = clone $now;
+                $expiresAt->add(new DateInterval('PT' . $duration . 'M'));
+                
+                $stmt = $pdo->prepare("UPDATE player_cards SET expires_at = ? WHERE game_id = ? AND player_id = ? AND card_id = ? AND card_type = ?");
+                $stmt->execute([$expiresAt->format('Y-m-d H:i:s'), $gameId, $playerId, $cardId, $cardType]);
+            }
+        } elseif ($cardType === 'accepted_serve') {
+            // For served cards, check original card duration
+            $stmt = $pdo->prepare("SELECT card_duration FROM cards WHERE id = ?");
+            $stmt->execute([$cardId]);
+            $duration = $stmt->fetchColumn();
+            
+            if ($duration) {
+                $timezone = new DateTimeZone('America/Indiana/Indianapolis');
+                $now = new DateTime('now', $timezone);
+                $expiresAt = clone $now;
+                $expiresAt->add(new DateInterval('PT' . $duration . 'M'));
+                
+                $stmt = $pdo->prepare("UPDATE player_cards SET expires_at = ? WHERE game_id = ? AND player_id = ? AND card_id = ? AND card_type = ?");
+                $stmt->execute([$expiresAt->format('Y-m-d H:i:s'), $gameId, $playerId, $cardId, $cardType]);
+            }
         }
         
         return true;

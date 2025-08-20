@@ -304,8 +304,8 @@ function saveCard($data) {
         
         if ($id) {
             // Update existing card
-            $sql = "UPDATE cards SET card_name = ?, card_description = ?, quantity = ?";
-            $params = [$cardName, $cardDescription, intval($data['quantity']) ?: 1];
+            $sql = "UPDATE cards SET card_name = ?, card_description = ?, quantity = ?, card_duration = ?";
+            $params = [$cardName, $cardDescription, intval($data['quantity']) ?: 1, !empty($data['card_duration']) ? intval($data['card_duration']) : null];
             
             // Add type-specific fields
             if ($cardType === 'serve') {
@@ -363,9 +363,10 @@ function saveCard($data) {
         } else {
             // Insert new card
             if ($cardType === 'serve') {
-                $sql = "INSERT INTO cards (card_type, card_name, card_description, quantity, card_points, serve_to_her, serve_to_him, veto_subtract, veto_steal, veto_draw_chance, veto_draw_snap_dare, veto_draw_spicy, win_loss) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                $sql = "INSERT INTO cards (card_type, card_name, card_description, quantity, card_duration, card_points, serve_to_her, serve_to_him, veto_subtract, veto_steal, veto_draw_chance, veto_draw_snap_dare, veto_draw_spicy, win_loss) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                 $params = [
                     $cardType, $cardName, $cardDescription, intval($data['quantity']) ?: 1,
+                    !empty($data['card_duration']) ? intval($data['card_duration']) : null,
                     !empty($data['card_points']) ? intval($data['card_points']) : null,
                     intval($data['serve_to_her']),
                     intval($data['serve_to_him']),
@@ -405,9 +406,10 @@ function saveCard($data) {
                 ];
             } else {
                 // snap, dare, or spicy (simple cards)
-                $sql = "INSERT INTO cards (card_type, card_name, card_description, quantity, for_her, for_him, extra_spicy) VALUES (?, ?, ?, ?, ?, ?, ?)";
+                $sql = "INSERT INTO cards (card_type, card_name, card_description, quantity, card_duration, for_her, for_him, extra_spicy) VALUES (?, ?, ?, ?, ?, ?, ?)";
                 $params = [
                     $cardType, $cardName, $cardDescription, intval($data['quantity']) ?: 1,
+                    !empty($data['card_duration']) ? intval($data['card_duration']) : null,
                     ($cardType === 'spicy') ? intval($data['for_her']) : 0,
                     ($cardType === 'spicy') ? intval($data['for_him']) : 0,
                     ($cardType === 'spicy') ? intval($data['extra_spicy']) : 0
@@ -1422,6 +1424,11 @@ function showLoginForm($error = null) {
                     <label for="cardQuantity">Quantity</label>
                     <input type="number" id="cardQuantity" min="1" value="1" required>
                 </div>
+
+                <div class="form-group">
+                    <label for="cardDuration">Card Duration (minutes, optional)</label>
+                    <input type="number" id="cardDuration" min="0" placeholder="Leave empty for no expiration">
+                </div>
                 
                 <!-- Serve Card Fields -->
                 <div id="serveFields" style="display: none;">
@@ -1870,6 +1877,7 @@ function showLoginForm($error = null) {
             document.getElementById('cardName').value = card.card_name;
             document.getElementById('cardDescription').value = card.card_description;
             if (card.quantity) document.getElementById('cardQuantity').value = card.quantity;
+            if (card.card_duration) document.getElementById('cardDuration').value = card.card_duration;
             
             if (card.card_type === 'serve') {
                 if (card.card_points) document.getElementById('cardPoints').value = card.card_points;
@@ -1926,6 +1934,7 @@ function showLoginForm($error = null) {
             formData.append('card_name', document.getElementById('cardName').value);
             formData.append('card_description', document.getElementById('cardDescription').value);
             formData.append('quantity', document.getElementById('cardQuantity').value || '1');
+            formData.append('card_duration', document.getElementById('cardDuration').value || '');
             
             const cardType = document.getElementById('cardType').value;
             
