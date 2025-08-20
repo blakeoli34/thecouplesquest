@@ -118,6 +118,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
             exit;
 
+        case 'debug_effects':
+            $effects = getActiveChanceEffects($player['game_id']);
+            $timers = getActiveTimers($player['game_id']);
+            
+            // Check for orphaned effects
+            $stmt = $pdo->prepare("
+                SELECT ace.*, t.id as timer_exists, t.end_time, t.is_active
+                FROM active_chance_effects ace
+                LEFT JOIN timers t ON ace.timer_id = t.id
+                WHERE ace.game_id = ?
+            ");
+            $stmt->execute([$player['game_id']]);
+            $effectsWithTimers = $stmt->fetchAll();
+            
+            echo json_encode([
+                'effects' => $effects,
+                'timers' => $timers,
+                'effects_with_timers' => $effectsWithTimers,
+                'current_time' => date('Y-m-d H:i:s')
+            ]);
+            exit;
+
         case 'set_duration':
             if (isset($_POST['custom_date'])) {
                 // Handle custom date

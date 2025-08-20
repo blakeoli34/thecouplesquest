@@ -328,6 +328,11 @@ function processExpiredTimers($gameId) {
                 if ($newTimer['success']) {
                     $stmt = $pdo->prepare("UPDATE active_chance_effects SET timer_id = ? WHERE id = ?");
                     $stmt->execute([$newTimer['timer_id'], $effect['effect_id']]);
+                } else {
+                    // Timer creation failed - remove the effect
+                    $stmt = $pdo->prepare("DELETE FROM active_chance_effects WHERE id = ?");
+                    $stmt->execute([$effect['effect_id']]);
+                    error_log("Failed to create new timer for recurring effect, removed effect");
                 }
             } else {
                 // Regular timer effect - check what type it is
@@ -2204,13 +2209,13 @@ function clearExpiredChanceEffects($gameId) {
         $stmt->execute([$gameId]);
         $clearedByTime = $stmt->rowCount();
         
-        // Clear effects with expired timers
+        // Clear effects with expired or missing timers
         $stmt = $pdo->prepare("
             DELETE ace FROM active_chance_effects ace
             LEFT JOIN timers t ON ace.timer_id = t.id
             WHERE ace.game_id = ? 
             AND ace.timer_id IS NOT NULL 
-            AND (t.id IS NULL OR t.end_time <= UTC_TIMESTAMP())
+            AND (t.id IS NULL OR t.end_time <= UTC_TIMESTAMP() OR t.is_active = FALSE)
         ");
         $stmt->execute([$gameId]);
         $clearedByTimer = $stmt->rowCount();
@@ -2452,7 +2457,7 @@ function processChanceCard($gameId, $playerId, $cardData) {
         }
     }
 
-    // Auto-complete cards with only immediate effects OR dice cards with timers
+    // Auto-complete cards with only immediate effects OR dice cards with timers OR opponent modifiers
     $hasOnlyImmediateEffects = ($cardData['score_add'] || $cardData['score_subtract'] || $cardData['score_steal'] || $cardData['draw_snap_dare'] || $cardData['draw_spicy']) &&
         !$cardData['before_next_challenge'] &&
         !$cardData['challenge_modify'] &&
@@ -2464,10 +2469,26 @@ function processChanceCard($gameId, $playerId, $cardData) {
         !$cardData['timer'] &&
         !$cardData['repeat_count'];
 
+    // Also auto-complete opponent challenge modifiers (like Hot Wife)
+    $isOpponentModifierOnly = $cardData['opponent_challenge_modify'] && 
+        !$cardData['before_next_challenge'] &&
+        !$cardData['challenge_modify'] &&
+        $cardData['veto_modify'] === 'none' &&
+        !$cardData['snap_modify'] &&
+        !$cardData['dare_modify'] &&
+        !$cardData['spicy_modify'] &&
+        !$cardData['timer'] &&
+        !$cardData['repeat_count'] &&
+        !$cardData['score_add'] &&
+        !$cardData['score_subtract'] &&
+        !$cardData['score_steal'] &&
+        !$cardData['draw_snap_dare'] &&
+        !$cardData['draw_spicy'];
+
     // Special case: dice cards with timers can be auto-completed but also remain available for manual completion
     $isDiceTimerCard = $cardData['roll_dice'] && $cardData['timer'];
 
-    if ($hasOnlyImmediateEffects || $isDiceTimerCard) {
+    if ($hasOnlyImmediateEffects || $isDiceTimerCard || $isOpponentModifierOnly) {
         // For dice timer cards, don't remove from hand - just add effects and keep card available
         if (!$isDiceTimerCard) {
             // Remove from player's hand (normal auto-completion)

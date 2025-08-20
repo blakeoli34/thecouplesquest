@@ -800,11 +800,14 @@ function showCardSelectionActions() {
         actions.innerHTML = '';
         
         if (selectedHandCard.card_type === 'chance') {
-            
+    
             // Check if chance card can be auto-completed
             const hasModifiers = selectedHandCard.challenge_modify == 1 || selectedHandCard.snap_modify == 1 || 
                 selectedHandCard.dare_modify == 1 || selectedHandCard.spicy_modify == 1 || 
                 (selectedHandCard.veto_modify && selectedHandCard.veto_modify !== 'none');
+            
+            // Opponent modifiers should auto-complete
+            const hasOpponentModifiers = selectedHandCard.opponent_challenge_modify == 1;
             
             // Special case: dice + timer cards can be manually completed
             const isDiceTimerCard = selectedHandCard.roll_dice == 1 && selectedHandCard.timer;
@@ -812,7 +815,7 @@ function showCardSelectionActions() {
             // Cards with timer but no dice roll are auto-only
             const isTimerOnlyCard = selectedHandCard.timer && !selectedHandCard.roll_dice;
             
-            if ((hasModifiers || isTimerOnlyCard) && !isDiceTimerCard) {
+            if ((hasModifiers || hasOpponentModifiers || isTimerOnlyCard) && !isDiceTimerCard) {
                 actions.innerHTML = `<button class="btn btn-complete" disabled title="Auto-completes when conditions are met">Auto-Complete Only</button>`;
             } else {
                 actions.innerHTML = `<button class="btn btn-complete" onclick="completeChanceCard(${selectedHandCard.id})">Complete</button>`;

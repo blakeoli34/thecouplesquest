@@ -208,6 +208,21 @@ function checkExpiredTimers($specificTimerId = null) {
                             error_log("Timer notification sent for timer {$timer['id']} to {$timer['first_name']}");
                         }
                     }
+                    // Check if this timer is linked to a chance effect that should auto-complete
+                    $stmt = $pdo->prepare("SELECT * FROM active_chance_effects WHERE timer_id = ?");
+                    $stmt->execute([$timer['id']]);
+                    $linkedEffect = $stmt->fetch();
+                    
+                    if ($linkedEffect && $linkedEffect['effect_type'] === 'challenge_modify') {
+                        // This is a timer-based challenge modifier - auto-complete it
+                        $stmt = $pdo->prepare("DELETE FROM player_cards WHERE game_id = ? AND player_id = ? AND card_id = ?");
+                        $stmt->execute([$timer['game_id'], $linkedEffect['player_id'], $linkedEffect['chance_card_id']]);
+                        
+                        $stmt = $pdo->prepare("DELETE FROM active_chance_effects WHERE id = ?");
+                        $stmt->execute([$linkedEffect['id']]);
+                        
+                        error_log("Auto-completed timer-based challenge modifier for timer {$timer['id']}");
+                    }
                 }
                 
                 // Delete the expired timer
