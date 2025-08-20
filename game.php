@@ -886,6 +886,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     <div class="largeScreen">
         <div class="largeScreenTitle">Please Use a Phone</div>
         <div class="largeScreenMessage">This game was designed for mobile phone use only. (iPhone Recommended)<br>Please use a smaller screen size to see the game UI.</div>
+        <div class="largeScreenTitle phone">Please Rotate Your Phone</div>
+        <div class="largeScreenMessage phone">This game was designed for portrait orientation only.<br>Please rotate back to portrait mode to see the game UI.</div>
     </div>
     <div class="container">
         <?php if ($gameStatus === 'waiting' && count($players) < 2): ?>

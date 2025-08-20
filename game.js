@@ -208,16 +208,87 @@ function updateOpponentHandDisplay() {
 function openServeCards() {
     const grid = document.getElementById('serveCardsGrid');
     populateCardGrid('serveCardsGrid', cardData.serve_cards || [], 'serve');
-    // Add count display at top of grid
+    
+    // Enhanced count display with search
     let countDisplay = grid.querySelector('.serve-count-display');
     if (!countDisplay) {
         countDisplay = document.createElement('div');
         countDisplay.className = 'serve-count-display';
+        countDisplay.innerHTML = `
+            <input type="text" class="serve-search-input" placeholder="" 
+                   onkeyup="filterServeCards(this.value)" 
+                   onfocus="this.parentElement.classList.add('searching')"
+                   onblur="handleSearchBlur(this)">
+            <div class="serve-count-text"></div>
+        `;
         grid.appendChild(countDisplay);
     }
-    countDisplay.textContent = `${cardData.serve_count || 0} Cards`;
+    
+    updateServeCountText();
     document.getElementById('serveCardsOverlay').classList.add('active');
     setOverlayActive(true);
+}
+
+function updateServeCountText() {
+    const countText = document.querySelector('.serve-count-text');
+    if (countText) {
+        countText.innerHTML = `<i class="fa-solid fa-search"></i> Search ${cardData.serve_count || 0} Cards`;
+    }
+}
+
+function handleSearchBlur(input) {
+    if (!input.value.trim()) {
+        input.parentElement.classList.remove('searching');
+    }
+}
+
+function filterServeCards(searchTerm) {
+    const grid = document.getElementById('serveCardsGrid');
+    const cards = grid.querySelectorAll('.game-card');
+    const countDisplay = grid.querySelector('.serve-count-display');
+    
+    searchTerm = searchTerm.toLowerCase().trim();
+    let visibleCount = 0;
+    
+    // Remove existing no-results message
+    const existingMessage = grid.querySelector('.no-results-message');
+    if (existingMessage) {
+        existingMessage.remove();
+    }
+    
+    cards.forEach(card => {
+        const cardName = card.querySelector('.card-name').textContent.toLowerCase();
+        const cardDescription = card.querySelector('.card-description').textContent.toLowerCase();
+        
+        const matches = !searchTerm || 
+                       cardName.includes(searchTerm) || 
+                       cardDescription.includes(searchTerm);
+        
+        if (matches) {
+            card.style.display = '';
+            visibleCount++;
+        } else {
+            card.style.display = 'none';
+        }
+    });
+    
+    // Show no results message if needed
+    if (searchTerm && visibleCount === 0) {
+        const noResults = document.createElement('div');
+        noResults.className = 'no-results-message';
+        noResults.textContent = 'No cards found';
+        grid.appendChild(noResults);
+    }
+    
+    // Update count display
+    if (searchTerm) {
+        countDisplay.classList.add('searching');
+        const countText = countDisplay.querySelector('.serve-count-text');
+        countText.textContent = `${visibleCount} of ${cardData.serve_count || 0} Cards`;
+    } else {
+        countDisplay.classList.remove('searching');
+        updateServeCountText();
+    }
 }
 
 // Open hand cards overlay
@@ -430,6 +501,12 @@ function hideServeSelectionActions() {
 }
 
 function clearServeSelection() {
+
+    const searchInput = document.querySelector('.serve-search-input');
+    if (searchInput) {
+        searchInput.value = '';
+        filterServeCards('');
+    }
     if (!isCardSelected) return;
     
     const grid = document.getElementById('serveCardsGrid');
@@ -3323,6 +3400,9 @@ window.addEventListener('load', function() {
 
 // Make functions globally available
 window.openServeCards = openServeCards;
+window.filterServeCards = filterServeCards;
+window.handleSearchBlur = handleSearchBlur;
+window.updateServeCountText = updateServeCountText;
 window.clearServeSelection = clearServeSelection;
 window.showServeSelectionActions = showServeSelectionActions;
 window.hideServeSelectionActions = hideServeSelectionActions;

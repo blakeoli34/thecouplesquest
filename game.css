@@ -1648,6 +1648,59 @@ body:not(.digital) .digital-only {
     background: rgba(255,255,255,0.1);
     border-radius: 15px;
     order: -1; /* Ensure it appears first in flex layout */
+    position: relative;
+    overflow: hidden;
+}
+
+.serve-search-input {
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    text-align: center;
+    outline: none;
+    padding: 0;
+    opacity: 0;
+}
+
+.serve-search-input::placeholder {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.serve-count-text {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+}
+
+.serve-count-text i {
+    margin-right: 8px;
+}
+
+.serve-count-display.searching .serve-count-text {
+    opacity: 0;
+}
+
+.serve-count-display.searching .serve-search-input {
+    opacity: 1;
+}
+
+.no-results-message {
+    color: white;
+    text-align: center;
+    width: 100%;
+    padding: 40px 20px;
+    font-size: 16px;
+    opacity: 0.7;
 }
 
 /* Card action buttons */
@@ -2677,10 +2730,32 @@ body.digital .hybrid-menu-item {
 @media screen and (min-width: 801px) {
     .container,
     .modal,
-    div[class*="overlay"] {
+    div[class*="overlay"],
+    .wheel-button {
         display: none;
     }
     .largeScreen {
         display: flex;
+    }
+    .largeScreen .phone {
+        display: none;
+    }
+}
+
+@media screen and (min-width: 801px) and (orientation: landscape) and (-webkit-min-device-pixel-ratio: 3) {
+    .container,
+    .modal,
+    div[class*="overlay"],
+    .wheel-button {
+        display: none;
+    }
+    .largeScreen {
+        display: flex;
+    }
+    .largeScreen .phone {
+        display: block;
+    }
+    .largeScreen div:not(.phone) {
+        display: none;
     }
 }
