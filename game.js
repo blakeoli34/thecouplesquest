@@ -340,13 +340,41 @@ function createCardElement(card, type) {
            <div class="card-name">${card.card_name}</div>
            ${card.quantity > 1 ? `<div class="card-quantity">${card.quantity}x</div>` : ''}
        </div>
-       <div class="card-description">${card.card_description}</div>
+       <div class="card-description">${formatCardDescription(card, type === 'serve', false)}</div>
        <div class="card-meta">
            ${getCardDisplayInfo(card, type)}
        </div>
    `;
    
    return div;
+}
+
+function formatCardDescription(card, isSelectable = false, isSelected = false) {
+    let description = card.filled_values || card.card_description;
+    
+    // Show input fields for serve cards when selected
+    if (card.card_type === 'serve' && !card.filled_values && isSelectable && isSelected) {
+        let counter = 0;
+        
+        // Handle [fillin long] first
+        while (description.includes('[fillin long]')) {
+            description = description.replace('[fillin long]', 
+                `<textarea class="fillin-textarea" data-fillin="${counter++}" maxlength="500" placeholder="Fill in your custom challenge..."></textarea>`);
+        }
+        
+        // Handle [fillin] second
+        while (description.includes('[fillin]')) {
+            description = description.replace('[fillin]', 
+                `<input type="text" class="fillin-input" data-fillin="${counter++}" maxlength="100" placeholder="">`);
+        }
+    }
+    // Show blanks for serve cards that haven't been filled in
+    else if (card.card_type === 'serve' && !card.filled_values) {
+        description = description.split('[fillin long]').join('Select this card to fill in and serve a custom challenge.');
+        description = description.split('[fillin]').join('<span class="fillin-blank"></span>');
+    }
+    
+    return description;
 }
 
 function getCardType(type) {
@@ -515,7 +543,6 @@ function getCardDisplayInfo(card, context = 'serve') {
 // Select serve card
 function selectServeCard(card) {
     if (isCardSelected) return; // Prevent multiple selections
-    
     selectedCard = card;
     isCardSelected = true;
     
@@ -527,6 +554,13 @@ function selectServeCard(card) {
     const grid = document.getElementById('serveCardsGrid');
     grid.classList.add('has-selection');
     clickedCard.classList.add('selected');
+
+
+    // Update description with inputs for selected card
+    const descriptionElement = clickedCard.querySelector('.card-description');
+    if (descriptionElement) {
+        descriptionElement.innerHTML = formatCardDescription(card, true, true);
+    }
     
     // Add selection state to overlay
     const overlay = document.getElementById('serveCardsOverlay');
@@ -564,6 +598,12 @@ function clearServeSelection() {
     const grid = document.getElementById('serveCardsGrid');
     const overlay = document.getElementById('serveCardsOverlay');
     const selectedCardElement = document.querySelector('.game-card.selected');
+    if (selectedCardElement) {
+        const descriptionElement = selectedCardElement.querySelector('.card-description');
+        if (descriptionElement) {
+            descriptionElement.innerHTML = formatCardDescription(selectedCard, true, false);
+        }
+    }
     
     if (grid) grid.classList.remove('has-selection');
     if (overlay) overlay.classList.remove('has-selection');
@@ -578,28 +618,41 @@ function clearServeSelection() {
 function serveSelectedCard() {
     if (!selectedCard) return;
     
-    const opponentId = gameData.opponentPlayerId;
-    const cardName = selectedCard.card_name;
-    const selectedCardElement = document.querySelector('.game-card.selected');
+    // Get filled values from inputs and textareas
+    const inputs = document.querySelectorAll('.game-card.selected .fillin-input, .game-card.selected .fillin-textarea');
+    const filledValues = Array.from(inputs).map(input => input.value.trim());
     
-    // Start serving animation
-    if (selectedCardElement) {
-        selectedCardElement.classList.add('serving');
-        setTimeout(()=> {
-            playSoundIfEnabled('/card-served.m4r');
-        }, 500);
+    // Validate all fields are filled
+    if (inputs.length > 0 && filledValues.some(val => !val)) {
+        alert('Please fill in all blanks before serving');
+        return;
     }
     
+    // Create filled description
+    let filledDescription = null;
+    if (inputs.length > 0) {
+        filledDescription = selectedCard.card_description;
+        filledValues.forEach(value => {
+            filledDescription = filledDescription.replace('[fillin]', value);
+        });
+    }
+    
+    const opponentId = gameData.opponentPlayerId;
+    const selectedCardElement = document.querySelector('.game-card.selected');
+    
+    if (selectedCardElement) {
+        selectedCardElement.classList.add('serving');
+        setTimeout(() => playSoundIfEnabled('/card-served.m4r'), 500);
+    }
     
     fetch('game.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `action=serve_card&card_id=${selectedCard.card_id || selectedCard.id}&to_player_id=${opponentId}`
+        body: `action=serve_card&card_id=${selectedCard.card_id || selectedCard.id}&to_player_id=${opponentId}&filled_description=${encodeURIComponent(filledDescription || '')}`
     })
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            // Wait for animation to complete
             setTimeout(() => {
                 hideServeSelectionActions();
                 closeCardOverlay('serveCardsOverlay');
@@ -3511,3 +3564,4 @@ window.openWheelOverlay = openWheelOverlay;
 window.spinWheelAction = spinWheelAction;
 window.closeWheelOverlay = closeWheelOverlay;
 window.handleWheelOverlayClick = handleWheelOverlayClick;
+window.formatCardDescription = formatCardDescription;

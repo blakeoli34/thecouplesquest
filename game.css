@@ -1457,6 +1457,63 @@ body:not(.digital) .digital-only {
     flex: 1;
 }
 
+.fillin-blank {
+    display: inline-block;
+    border-bottom: 2px solid #333;
+    min-width: 40px;
+    height: 1em;
+    margin: 0 4px;
+    position: relative;
+}
+
+.fillin-blank::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: currentColor;
+}
+
+.fillin-input {
+    display: inline-block;
+    border: none;
+    border-bottom: 2px solid #333;
+    background: transparent;
+    min-width: 40px;
+    height: 1em;
+    padding: 2px 4px;
+    font: inherit;
+    color: inherit;
+    outline: none;
+}
+
+.fillin-input:focus {
+    border-bottom-color: var(--color-blue);
+    background: rgba(255,255,255,0.1);
+}
+
+.fillin-textarea {
+    display: block;
+    width: 100%;
+    min-height: 120px;
+    border: 2px solid #333;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.1);
+    padding: 8px;
+    font: inherit;
+    color: inherit;
+    outline: none;
+    resize: vertical;
+    margin: 8px 0;
+}
+
+.fillin-textarea:focus {
+    border-color: var(--color-blue);
+    background: rgba(255,255,255,0.2);
+}
+
 .card-meta {
     display: flex;
     flex-wrap: wrap;
@@ -2603,6 +2660,12 @@ body.digital .hybrid-menu-item {
     
     .card-description {
         color: #ccc;
+    }
+
+    .fillin-blank,
+    .fillin-input,
+    .fillin-textarea {
+        border-color: #e6e6e6;
     }
     
     .card-quantity {

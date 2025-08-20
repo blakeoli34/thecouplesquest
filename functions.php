@@ -1024,7 +1024,7 @@ function getPlayerCards($gameId, $playerId, $cardType = null) {
         $pdo = Config::getDatabaseConnection();
         
         $sql = "
-            SELECT pc.*, c.card_name, c.card_description, c.card_points, c.card_duration, pc.expires_at,
+            SELECT pc.*, c.card_name, c.card_description, c.card_points, c.card_duration, pc.expires_at, pc.filled_values,
                 c.serve_to_her, c.serve_to_him, c.for_her, c.for_him,
                 c.extra_spicy, c.veto_subtract, c.veto_steal,
                 c.veto_draw_chance, c.veto_draw_snap_dare, c.veto_draw_spicy,
@@ -1056,7 +1056,7 @@ function getPlayerCards($gameId, $playerId, $cardType = null) {
     }
 }
 
-function serveCard($gameId, $fromPlayerId, $toPlayerId, $cardId) {
+function serveCard($gameId, $fromPlayerId, $toPlayerId, $cardId, $filledDescription = null) {
     try {
         $pdo = Config::getDatabaseConnection();
         
@@ -1117,6 +1117,16 @@ function serveCard($gameId, $fromPlayerId, $toPlayerId, $cardId) {
                 WHERE game_id = ? AND player_id = ? AND card_id = ? AND card_type = 'accepted_serve'
             ");
             $stmt->execute([1, $gameId, $toPlayerId, $cardId]);
+        }
+
+        if ($filledDescription && $success) {
+            $stmt = $pdo->prepare("
+                UPDATE player_cards 
+                SET filled_values = ? 
+                WHERE game_id = ? AND player_id = ? AND card_id = ? AND card_type = 'accepted_serve'
+                ORDER BY id DESC LIMIT 1
+            ");
+            $stmt->execute([$filledDescription, $gameId, $toPlayerId, $cardId]);
         }
         
         if (!$success) {

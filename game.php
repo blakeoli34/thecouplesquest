@@ -445,8 +445,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             
             $cardId = intval($_POST['card_id']);
             $toPlayerId = intval($_POST['to_player_id']);
+            $filledDescription = $_POST['filled_description'] ?? null;
             
-            $result = serveCard($player['game_id'], $player['id'], $toPlayerId, $cardId);
+            $result = serveCard($player['game_id'], $player['id'], $toPlayerId, $cardId, $filledDescription);
             echo json_encode($result);
             exit;
 
