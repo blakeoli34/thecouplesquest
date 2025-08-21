@@ -2185,8 +2185,8 @@ body.digital .hybrid-menu-item {
     top: 50%;
     left: 48px;
     width: 90vw;
-    max-width: 400px;
-    max-height: 60vh;
+    max-width: 350px;
+    max-height: 70vh;
     background: rgba(250,250,250,0.7);
     backdrop-filter: blur(8px);
     box-shadow: 0 -2px 20px rgba(0,0,0,0.1);
@@ -2231,7 +2231,12 @@ body.digital .hybrid-menu-item {
 }
 
 .opponent-hand-popover .card-name {
-    font-size: 16px;
+    font-size: 14px;
+}
+
+.opponent-hand-popover .card-description {
+    font-size: 10px;
+    line-height: 1.2;
 }
 
 .opponent-hand-popover-title {
