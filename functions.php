@@ -1024,15 +1024,16 @@ function getPlayerCards($gameId, $playerId, $cardType = null) {
         $pdo = Config::getDatabaseConnection();
         
         $sql = "
-            SELECT pc.*, c.card_name, c.card_description, c.card_points, c.card_duration, pc.expires_at, pc.filled_values,
-                c.serve_to_her, c.serve_to_him, c.for_her, c.for_him,
-                c.extra_spicy, c.veto_subtract, c.veto_steal,
-                c.veto_draw_chance, c.veto_draw_snap_dare, c.veto_draw_spicy,
-                c.timer, c.challenge_modify, c.snap_modify, c.dare_modify, c.spicy_modify,
-                c.before_next_challenge, c.veto_modify, c.score_modify,
-                c.roll_dice, c.dice_condition, c.dice_threshold, c.double_it,
-                c.opponent_challenge_modify, c.draw_snap_dare, c.draw_spicy,
-                c.score_add, c.score_subtract, c.score_steal, c.repeat_count, c.win_loss
+            SELECT pc.*, c.card_name, c.card_description, c.card_points as original_points, 
+                COALESCE(pc.card_points, c.card_points) as card_points, c.card_duration, pc.expires_at, pc.filled_values,
+            c.serve_to_her, c.serve_to_him, c.for_her, c.for_him,
+            c.extra_spicy, c.veto_subtract, c.veto_steal,
+            c.veto_draw_chance, c.veto_draw_snap_dare, c.veto_draw_spicy,
+            c.timer, c.challenge_modify, c.snap_modify, c.dare_modify, c.spicy_modify,
+            c.before_next_challenge, c.veto_modify, c.score_modify,
+            c.roll_dice, c.dice_condition, c.dice_threshold, c.double_it,
+            c.opponent_challenge_modify, c.draw_snap_dare, c.draw_spicy,
+            c.score_add, c.score_subtract, c.score_steal, c.repeat_count, c.win_loss
             FROM player_cards pc
             JOIN cards c ON pc.card_id = c.id
             WHERE pc.game_id = ? AND pc.player_id = ?
@@ -1150,28 +1151,20 @@ function serveCard($gameId, $fromPlayerId, $toPlayerId, $cardId, $filledDescript
     }
 }
 
-function drawCards($gameId, $playerId, $cardType, $quantity = 1) {
+function drawCards($gameId, $playerId, $cardType, $quantity = 1, $source = 'manual') {
     try {
         $pdo = Config::getDatabaseConnection();
         
         // Get player info for gender restrictions
         $player = getPlayerById($playerId);
-        
+
         // Build gender restriction
+        $genderWhere = "";
         if ($cardType === 'spicy' || $cardType === 'chance') {
             $genderField = ($player['gender'] === 'male') ? 'for_him' : 'for_her';
             $genderWhere = "AND (c.$genderField = 1 OR (c.for_her = 1 AND c.for_him = 1))";
         }
-        
-        // DEBUG: Force specific card for testing
-        $debugGameId = 25; // Set to your test game ID
-        $debugCardId = 139;  // Set to the card ID you want to force
-        
-        $orderBy = "ORDER BY RAND()";
-        if ($cardType === 'chance' && $gameId == $debugGameId) {
-            $orderBy = "ORDER BY CASE WHEN c.id = $debugCardId THEN 0 ELSE 1 END, RAND()";
-        }
-        
+
         // Get available cards from deck
         $stmt = $pdo->prepare("
             SELECT gd.card_id, gd.remaining_quantity, c.card_name, c.*
@@ -1179,7 +1172,7 @@ function drawCards($gameId, $playerId, $cardType, $quantity = 1) {
             JOIN cards c ON gd.card_id = c.id
             WHERE gd.game_id = ? AND gd.player_id = ? AND c.card_type = ? AND gd.remaining_quantity > 0
             $genderWhere
-            $orderBy
+            ORDER BY RAND()
             LIMIT ?
         ");
         $stmt->execute([$gameId, $playerId, $cardType, $quantity]);
@@ -1198,12 +1191,23 @@ function drawCards($gameId, $playerId, $cardType, $quantity = 1) {
             ");
             $stmt->execute([$drawQuantity, $gameId, $playerId, $card['card_id']]);
             
-            // Add to player hand
-            $success = addCardToHand($gameId, $playerId, $card['card_id'], $cardType, $drawQuantity, true);
+            // Calculate points based on card type and source
+            $cardPoints = 0;
+            if ($source === 'manual') {
+                if ($cardType === 'snap' || $cardType === 'dare') {
+                    $cardPoints = 2;
+                } elseif ($cardType === 'spicy') {
+                    $cardPoints = $card['extra_spicy'] ? 4 : 2;
+                }
+            }
+            // For veto_penalty source, cardPoints remains 0
+            
+            // Add to player hand with modified points
+            $success = addCardToHand($gameId, $playerId, $card['card_id'], $cardType, $drawQuantity, true, $cardPoints);
             
             if ($success) {
                 $drawnCards[] = $card['card_name'];
-                $drawnCardDetails[] = $card; // Store full card details
+                $drawnCardDetails[] = $card;
                 
                 // Process chance cards immediately
                 if ($cardType === 'chance') {
@@ -1221,7 +1225,7 @@ function drawCards($gameId, $playerId, $cardType, $quantity = 1) {
     }
 }
 
-function addCardToHand($gameId, $playerId, $cardId, $cardType, $quantity = 1, $forceAdd = false) {
+function addCardToHand($gameId, $playerId, $cardId, $cardType, $quantity = 1, $forceAdd = false, $overridePoints = null) {
     try {
         $pdo = Config::getDatabaseConnection();
         
@@ -1262,30 +1266,23 @@ function addCardToHand($gameId, $playerId, $cardId, $cardType, $quantity = 1, $f
             $stmt->execute([$addQuantity, $existing['id']]);
         } else {
             // Insert new
-            $stmt = $pdo->prepare("
-                INSERT INTO player_cards (game_id, player_id, card_id, card_type, quantity)
-                VALUES (?, ?, ?, ?, ?)
-            ");
-            $stmt->execute([$gameId, $playerId, $cardId, $cardType, $addQuantity]);
-        }
-
-        if ($cardType !== 'serve' && $cardType !== 'accepted_serve') {
-            // Get card duration
-            $stmt = $pdo->prepare("SELECT card_duration FROM cards WHERE id = ?");
-            $stmt->execute([$cardId]);
-            $duration = $stmt->fetchColumn();
-            
-            if ($duration) {
-                $timezone = new DateTimeZone('America/Indiana/Indianapolis');
-                $now = new DateTime('now', $timezone);
-                $expiresAt = clone $now;
-                $expiresAt->add(new DateInterval('PT' . $duration . 'M'));
-                
-                $stmt = $pdo->prepare("UPDATE player_cards SET expires_at = ? WHERE game_id = ? AND player_id = ? AND card_id = ? AND card_type = ?");
-                $stmt->execute([$expiresAt->format('Y-m-d H:i:s'), $gameId, $playerId, $cardId, $cardType]);
+            if ($overridePoints !== null) {
+                $stmt = $pdo->prepare("
+                    INSERT INTO player_cards (game_id, player_id, card_id, card_type, quantity, card_points)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ");
+                $stmt->execute([$gameId, $playerId, $cardId, $cardType, $addQuantity, $overridePoints]);
+            } else {
+                $stmt = $pdo->prepare("
+                    INSERT INTO player_cards (game_id, player_id, card_id, card_type, quantity)
+                    VALUES (?, ?, ?, ?, ?)
+                ");
+                $stmt->execute([$gameId, $playerId, $cardId, $cardType, $addQuantity]);
             }
-        } elseif ($cardType === 'accepted_serve') {
-            // For served cards, check original card duration
+        }
+        
+        // Handle card duration (existing logic remains the same)
+        if ($cardType !== 'serve' && $cardType !== 'accepted_serve') {
             $stmt = $pdo->prepare("SELECT card_duration FROM cards WHERE id = ?");
             $stmt->execute([$cardId]);
             $duration = $stmt->fetchColumn();
@@ -1319,7 +1316,7 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
             
             // Get card details
             $stmt = $pdo->prepare("
-                SELECT pc.*, c.*
+                SELECT pc.*, c.*, COALESCE(pc.card_points, c.card_points) as effective_points
                 FROM player_cards pc
                 JOIN cards c ON pc.card_id = c.id
                 WHERE pc.id = ? AND pc.player_id = ? AND pc.game_id = ?
@@ -1557,6 +1554,11 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
                 $pointsAwarded = $finalPoints;
             }
 
+            // Handle snap, dare, spicy cards with completion rewards
+            if (in_array($playerCard['card_type'], ['snap', 'dare', 'spicy']) && $playerCard['effective_points']) {
+                $pointsAwarded = $playerCard['effective_points'];
+            }
+
             // After completing serve/snap/dare/spicy cards, handle modifier effects
             if (in_array($playerCard['card_type'], ['accepted_serve', 'snap', 'dare', 'spicy'])) {
                 $effectType = $playerCard['card_type'] === 'accepted_serve' ? 'challenge_modify' : $playerCard['card_type'] . '_modify';
@@ -1687,7 +1689,7 @@ function vetoHandCard($gameId, $playerId, $cardId, $playerCardId) {
         
         // Get card details
         $stmt = $pdo->prepare("
-            SELECT pc.*, c.*
+            SELECT pc.*, c.*, COALESCE(pc.card_points, c.card_points) as effective_points
             FROM player_cards pc
             JOIN cards c ON pc.card_id = c.id
             WHERE pc.id = ? AND pc.player_id = ? AND pc.game_id = ?
@@ -1791,14 +1793,14 @@ function vetoHandCard($gameId, $playerId, $cardId, $playerCardId) {
                 $drawCount = $playerCard['veto_draw_snap_dare'] * $vetoMultiplier;
                 $player = getPlayerById($playerId);
                 $drawType = ($player['gender'] === 'female') ? 'snap' : 'dare';
-                $drawResult = drawCards($gameId, $playerId, $drawType, $drawCount);
+                $drawResult = drawCards($gameId, $playerId, $drawType, $drawCount, 'veto_penalty');
                 $drawnCards = array_merge($drawnCards, $drawResult['card_details']);
                 $penalties[] = "Drew {$drawCount} {$drawType} card(s): " . implode(', ', $drawResult['card_names']);
             }
-            
+
             if ($playerCard['veto_draw_spicy']) {
                 $drawCount = $playerCard['veto_draw_spicy'] * $vetoMultiplier;
-                $drawResult = drawCards($gameId, $playerId, 'spicy', $drawCount);
+                $drawResult = drawCards($gameId, $playerId, 'spicy', $drawCount, 'veto_penalty');
                 $drawnCards = array_merge($drawnCards, $drawResult['card_details']);
                 $penalties[] = "Drew {$drawCount} spicy card(s): " . implode(', ', $drawResult['card_names']);
             }
@@ -1825,7 +1827,7 @@ function vetoHandCard($gameId, $playerId, $cardId, $playerCardId) {
             case 'snap':
             case 'dare':
                 if (!$vetoSkipped) {
-                    $penaltyPoints = 3 * $vetoMultiplier;
+                    $penaltyPoints = 2 * $vetoMultiplier;
                     $response['score_changes'][] = ['player_id' => $playerId, 'points' => -$penaltyPoints];
                     $penalties[] = "Lost {$penaltyPoints} points";
                 }
@@ -1834,6 +1836,11 @@ function vetoHandCard($gameId, $playerId, $cardId, $playerCardId) {
                 
             case 'spicy':
             case 'chance':
+                if (!$vetoSkipped && $playerCard['card_type'] === 'spicy') {
+                    $penaltyPoints = $playerCard['extra_spicy'] ? 2 : 1;
+                    $response['score_changes'][] = ['player_id' => $playerId, 'points' => -$penaltyPoints];
+                    $penalties[] = "Lost {$penaltyPoints} points";
+                }
                 returnCardToDeck($gameId, $playerCard['card_id'], 1);
                 $penalties[] = "Card returned to deck";
                 break;

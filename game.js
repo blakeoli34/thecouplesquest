@@ -496,11 +496,17 @@ function getCardDisplayInfo(card, context = 'serve') {
 
     // Add veto penalty badges for snap/dare cards
     if (card.card_type === 'snap' || card.card_type === 'dare') {
-        badges.push(`<span class="card-badge penalty">-3</span>`);
+        badges.push(`<span class="card-badge penalty">-2</span>`);
+    }
+
+    // Add veto penalty for spicy cards
+    if (card.card_type === 'spicy') {
+        const penalty = card.extra_spicy == 1 ? '-2' : '-1';
+        badges.push(`<span class="card-badge penalty">${penalty}</span>`);
     }
 
     if (card.extra_spicy == 1) {
-        badges.push(`<span class="card-badge points">Spicy+</span>`);
+        badges.push(`<span class="card-badge modifier">Spicy+</span>`);
     }
     
     // Timer
@@ -802,7 +808,7 @@ function manualDrawCard(cardType) {
     fetch('game.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `action=manual_draw&card_type=${cardType}&quantity=1`
+        body: `action=manual_draw&card_type=${cardType}&quantity=1&source=manual`
     })
     .then(response => response.json())
     .then(data => {

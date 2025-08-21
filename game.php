@@ -651,13 +651,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             
             $cardType = $_POST['card_type'];
             $quantity = intval($_POST['quantity']) ?: 1;
+            $source = $_POST['source'] ?? 'manual';
             
             if (!in_array($cardType, ['chance', 'snap', 'dare', 'spicy'])) {
                 echo json_encode(['success' => false, 'message' => 'Invalid card type']);
                 exit;
             }
             
-            $drawResult = drawCards($player['game_id'], $player['id'], $cardType, $quantity);
+            $drawResult = drawCards($player['game_id'], $player['id'], $cardType, $quantity, $source);
             $drawnCards = $drawResult['card_names'];
             $cardDetails = !empty($drawResult['card_details']) ? $drawResult['card_details'][0] : null;
             
