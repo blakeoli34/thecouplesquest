@@ -437,6 +437,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             ]);
             exit;
 
+        case 'get_opponent_hand_cards':
+            if ($gameMode !== 'digital') {
+                echo json_encode(['success' => false, 'message' => 'Not a digital game']);
+                exit;
+            }
+            
+            $opponentId = null;
+            foreach ($players as $p) {
+                if ($p['device_id'] !== $deviceId) {
+                    $opponentId = $p['id'];
+                    break;
+                }
+            }
+            
+            if (!$opponentId) {
+                echo json_encode(['success' => false, 'message' => 'Opponent not found']);
+                exit;
+            }
+            
+            // Get all non-serve cards in opponent's hand
+            $allHandCards = getPlayerCards($player['game_id'], $opponentId);
+            $handCards = [];
+            
+            foreach ($allHandCards as $card) {
+                if ($card['card_type'] !== 'serve') {
+                    $handCards[] = $card;
+                }
+            }
+            
+            echo json_encode([
+                'success' => true,
+                'hand_cards' => $handCards
+            ]);
+            exit;
+
         case 'serve_card':
             if ($gameMode !== 'digital') {
                 echo json_encode(['success' => false, 'message' => 'Not a digital game']);
@@ -1048,7 +1083,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 <!-- Opponent Score (Top) -->
                 <div class="player-score opponent <?= $opponentPlayer['gender'] ?>">
                     <div class="player-score-animation"></div>
-                    <div class="opponent-hand-counts" id="opponent-hand-counts"></div>
+                    <div class="opponent-hand-counts" id="opponent-hand-counts" onclick="openOpponentHandPopover()">
+                        <div class="opponent-hand-popover"></div>
+                    </div>
                     <div class="player-timers" id="opponent-timers"></div>
                     <div class="player-name<?= strlen($opponentPlayer['first_name']) > 5 ? ' long' : '' ?>"><?= htmlspecialchars($opponentPlayer['first_name']) ?></div>
                     <div class="player-score-value"><?= $opponentPlayer['score'] ?></div>
@@ -1212,7 +1249,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     opponentPlayerId: <?= $opponentPlayer['id'] ?>,
                     gameStatus: '<?= $gameStatus ?>',
                     currentPlayerGender: '<?= $currentPlayer['gender'] ?>',
-                    opponentPlayerGender: '<?= $opponentPlayer['gender'] ?>'
+                    opponentPlayerGender: '<?= $opponentPlayer['gender'] ?>',
+                    opponentPlayerName: '<?= htmlspecialchars($opponentPlayer['first_name']) ?>'
                 };
             </script>
         <?php endif; ?>

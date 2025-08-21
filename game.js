@@ -171,6 +171,13 @@ function updateHandBadge() {
 function updateOpponentHandDisplay() {
     if (!document.body.classList.contains('digital')) return;
     
+    const container = document.getElementById('opponent-hand-counts');
+    
+    // Skip update if popover is currently open
+    if (container && container.querySelector('.opponent-hand-popover.active')) {
+        return;
+    }
+    
     fetch('game.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -179,7 +186,6 @@ function updateOpponentHandDisplay() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            const container = document.getElementById('opponent-hand-counts');
             if (container) {
                 container.innerHTML = '';
                 
@@ -329,10 +335,13 @@ function createCardElement(card, type) {
    div.dataset.type = type;
    
    if (type === 'serve') {
-       div.onclick = () => selectServeCard(card);
-   } else if (type === 'hand') {
-       div.onclick = () => selectHandCard(card);
-   }
+        div.onclick = () => selectServeCard(card);
+    } else if (type === 'hand') {
+        div.onclick = () => selectHandCard(card);
+    } else if (type === 'opponent') {
+        // No onclick for opponent cards (read-only)
+        div.style.cursor = 'default';
+    }
    
    div.innerHTML = `
        <div class="card-header">
@@ -449,6 +458,8 @@ function getCardDisplayInfo(card, context = 'serve') {
                     snapDareText = gameData.opponentPlayerGender === 'female' ? '<i class="fa-solid fa-camera-retro"></i>' : '<i class="fa-solid fa-hand-point-right"></i>';
                 } else if (context === 'hand' || context === 'pending') {
                     snapDareText = gameData.currentPlayerGender === 'female' ? '<i class="fa-solid fa-camera-retro"></i>' : '<i class="fa-solid fa-hand-point-right"></i>';
+                } else if (context === 'opponent') {
+                    snapDareText = gameData.opponentPlayerGender === 'female' ? '<i class="fa-solid fa-camera-retro"></i>' : '<i class="fa-solid fa-hand-point-right"></i>';
                 }
             }
             penalties.push(`${snapDareText} ${card.veto_draw_snap_dare}`);
@@ -538,6 +549,86 @@ function getCardDisplayInfo(card, context = 'serve') {
     }
     
     return badges.join('');
+}
+
+function openOpponentHandPopover() {
+    if (!document.body.classList.contains('digital')) return;
+    
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'action=get_opponent_hand_cards'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showOpponentHandPopover(data.hand_cards);
+        }
+    })
+    .catch(error => {
+        console.error('Error loading opponent hand:', error);
+    });
+}
+
+function showOpponentHandPopover(cards) {
+    const container = document.getElementById('opponent-hand-counts');
+    if (!container) return;
+    
+    // Remove existing popover
+    const existingPopover = container.querySelector('.opponent-hand-popover');
+    if (existingPopover) {
+        existingPopover.remove();
+    }
+    
+    // Create popover
+    const popover = document.createElement('div');
+    popover.className = 'opponent-hand-popover';
+    
+    let popoverContent = `<div class="opponent-hand-popover-title">${gameData.opponentPlayerName || 'Opponent'}'s Hand</div>`;
+    
+    if (cards.length === 0) {
+        popoverContent += '<p style="text-align: center; color: #666; margin: 20px 0;">No cards in hand</p>';
+    } else {
+        popoverContent += '<div class="popover-card-grid">';
+        cards.forEach(card => {
+            const cardElement = createCardElement(card, 'opponent');
+            popoverContent += cardElement.outerHTML;
+        });
+        popoverContent += '</div>';
+    }
+    
+    popover.innerHTML = popoverContent;
+    container.appendChild(popover);
+    
+    // Show popover
+    setTimeout(() => {
+        popover.classList.add('active');
+    }, 10);
+    
+    // Close on click outside
+    setTimeout(() => {
+        document.addEventListener('click', closeOpponentHandPopoverOnClickOutside);
+    }, 100);
+}
+
+function closeOpponentHandPopover() {
+    const popover = document.querySelector('.opponent-hand-popover');
+    if (popover) {
+        popover.classList.remove('active');
+        setTimeout(() => {
+            popover.remove();
+        }, 300);
+    }
+    document.removeEventListener('click', closeOpponentHandPopoverOnClickOutside);
+}
+
+function closeOpponentHandPopoverOnClickOutside(event) {
+    const popover = document.querySelector('.opponent-hand-popover');
+    const container = document.getElementById('opponent-hand-counts');
+    
+    if (popover && !popover.contains(event.target) && !container.contains(event.target)) {
+        closeOpponentHandPopover();
+    }
 }
 
 // Select serve card
@@ -3565,3 +3656,4 @@ window.spinWheelAction = spinWheelAction;
 window.closeWheelOverlay = closeWheelOverlay;
 window.handleWheelOverlayClick = handleWheelOverlayClick;
 window.formatCardDescription = formatCardDescription;
+window.openOpponentHandPopover = openOpponentHandPopover;
