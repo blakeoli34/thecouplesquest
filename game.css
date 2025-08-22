@@ -1666,6 +1666,53 @@ body.female .opponent-hand-popover .game-card.accepted_serve-card  {
     }
 }
 
+/* Card veto animation */
+.game-card.selected.serve-veto {
+    animation: cardVeto 1s ease-in forwards;
+    z-index: 1002;
+}
+
+@keyframes cardVeto {
+    0%, 20%, 40% {
+        transform: translate(-50%, -50%) scale(1.6);
+        opacity: 1;
+        box-shadow: inherit;
+    }
+    30%, 50% {
+        transform: translate(-50%, -50%) scale(1.6);
+        opacity: 1;
+        box-shadow: 0 8px 25px #c62828;
+    }
+    100% {
+        transform: translate(50%, -75%) scale(0.2) rotate(20deg);
+        opacity: 0;
+        box-shadow: 0 8px 25px #c62828;
+    }
+}
+
+.game-card.selected.non-serve-veto {
+    animation: cardVetoToHand 1s ease-in forwards;
+    z-index: 1002;
+}
+
+@keyframes cardVetoToHand {
+    0%, 20%, 40% {
+        transform: translate(-50%, -50%) scale(1.6);
+        opacity: 1;
+        box-shadow: inherit;
+    }
+    30%, 50% {
+        transform: translate(-50%, -50%) scale(1.6);
+        opacity: 1;
+        box-shadow: 0 8px 25px #c62828;
+    }
+    100% {
+        transform: translate(-50%, 100%) scale(1);
+        opacity: 0;
+        box-shadow: 0 8px 25px #c62828;
+    }
+}
+
 /* Card serving animation */
 .game-card.selected.serving {
     animation: cardServing 1s ease-in forwards;

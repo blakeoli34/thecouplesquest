@@ -521,17 +521,33 @@ function getCardDisplayInfo(card, context = 'serve') {
         const timeLeft = expiresAt - now;
         
         if (timeLeft > 0) {
-            const days = Math.round(timeLeft / (1000 * 60 * 60 * 24));
-            const hours = Math.round((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-            const minutes = Math.round((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+            const totalMinutes = Math.floor(timeLeft / (1000 * 60));
+            const days = Math.floor(totalMinutes / (24 * 60));
+            const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+            const minutes = totalMinutes % 60;
             
             let timeText;
             if (days > 0) {
-                timeText = `${days}d`;
+                // If minutes >= 30, round up to next day or next hour
+                if (minutes >= 30) {
+                    if (hours === 23) {
+                        timeText = `${days + 1}d`;
+                    } else {
+                        timeText = `${days}d ${hours + 1}h`;
+                    }
+                } else {
+                    // Show detailed breakdown
+                    if (hours > 0) {
+                        timeText = `${days}d ${hours}h`;
+                    } else {
+                        timeText = `${days}d`;
+                    }
+                }
             } else if (hours > 0) {
                 timeText = `${hours}h`;
+                if (minutes > 0) timeText += ` ${minutes}m`;
             } else {
-                if(minutes == 0) {
+                if (minutes == 0) {
                     timeText = '<1m';
                 } else {
                     timeText = `${minutes}m`;
@@ -1219,7 +1235,11 @@ function vetoSelectedCard() {
     
     // Start discard animation
     if (selectedCardElement) {
-        selectedCardElement.classList.add('discarding');
+        if(selectedHandCard.card_type !== 'accepted_serve') {
+            selectedCardElement.classList.add('non-serve-veto');
+        } else {
+            selectedCardElement.classList.add('serve-veto');
+        }
         playSoundIfEnabled('/card-vetoed.m4r');
     }
     

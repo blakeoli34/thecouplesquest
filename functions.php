@@ -1282,7 +1282,7 @@ function addCardToHand($gameId, $playerId, $cardId, $cardType, $quantity = 1, $f
         }
         
         // Handle card duration (existing logic remains the same)
-        if ($cardType !== 'serve' && $cardType !== 'accepted_serve') {
+        if ($cardType !== 'serve') {
             $stmt = $pdo->prepare("SELECT card_duration FROM cards WHERE id = ?");
             $stmt->execute([$cardId]);
             $duration = $stmt->fetchColumn();
