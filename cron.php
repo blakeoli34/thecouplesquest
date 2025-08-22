@@ -164,7 +164,7 @@ function checkExpiredTimers($specificTimerId = null) {
         }
         
         $notificationsSent = 0;
-        
+
         foreach ($expiredTimers as $timer) {
             try {
                 // Check if this is a recurring timer (Clock Siphon)
@@ -208,33 +208,58 @@ function checkExpiredTimers($specificTimerId = null) {
                             error_log("Timer notification sent for timer {$timer['id']} to {$timer['first_name']}");
                         }
                     }
-                    // Check if this timer is linked to a chance effect that should auto-complete
+                    
+                    // NEW: Check if this timer is linked to a chance card that should auto-complete
                     $stmt = $pdo->prepare("SELECT * FROM active_chance_effects WHERE timer_id = ?");
                     $stmt->execute([$timer['id']]);
                     $linkedEffect = $stmt->fetch();
                     
-                    if ($linkedEffect && $linkedEffect['effect_type'] === 'challenge_modify') {
-                        // This is a timer-based challenge modifier - auto-complete it
-                        $stmt = $pdo->prepare("DELETE FROM player_cards WHERE game_id = ? AND player_id = ? AND card_id = ?");
-                        $stmt->execute([$timer['game_id'], $linkedEffect['player_id'], $linkedEffect['chance_card_id']]);
+                    if ($linkedEffect) {
+                        // Get the chance card details to determine if it should auto-complete
+                        $stmt = $pdo->prepare("SELECT * FROM cards WHERE id = ?");
+                        $stmt->execute([$linkedEffect['chance_card_id']]);
+                        $chanceCard = $stmt->fetch();
                         
+                        if ($chanceCard) {
+                            // Check if this card should auto-complete on timer expiration
+                            $shouldAutoComplete = false;
+                            
+                            // Auto-complete if it's a timer-only card (no other ongoing effects)
+                            if ($chanceCard['timer'] && 
+                                !$chanceCard['before_next_challenge'] &&
+                                !$chanceCard['challenge_modify'] &&
+                                !$chanceCard['opponent_challenge_modify'] &&
+                                $chanceCard['veto_modify'] === 'none' &&
+                                !$chanceCard['snap_modify'] &&
+                                !$chanceCard['dare_modify'] &&
+                                !$chanceCard['spicy_modify'] &&
+                                !$chanceCard['repeat_count']) {
+                                $shouldAutoComplete = true;
+                            }
+                            
+                            // Also auto-complete dice cards with timers
+                            if ($chanceCard['roll_dice'] && $chanceCard['timer']) {
+                                $shouldAutoComplete = true;
+                            }
+                            
+                            if ($shouldAutoComplete) {
+                                // Remove the chance card from player's hand
+                                $stmt = $pdo->prepare("DELETE FROM player_cards WHERE game_id = ? AND player_id = ? AND card_id = ?");
+                                $stmt->execute([$timer['game_id'], $linkedEffect['player_id'], $linkedEffect['chance_card_id']]);
+                                
+                                error_log("Auto-completed chance card {$chanceCard['card_name']} for player {$linkedEffect['player_id']} on timer expiration");
+                            }
+                        }
+                        
+                        // Clean up the active effect
                         $stmt = $pdo->prepare("DELETE FROM active_chance_effects WHERE id = ?");
                         $stmt->execute([$linkedEffect['id']]);
-                        
-                        error_log("Auto-completed timer-based challenge modifier for timer {$timer['id']}");
                     }
                 }
                 
                 // Delete the expired timer
                 $stmt = $pdo->prepare("DELETE FROM timers WHERE id = ?");
                 $stmt->execute([$timer['id']]);
-
-                // Clean up any orphaned chance effects for timers that were just deleted
-                $stmt = $pdo->prepare("
-                    DELETE FROM active_chance_effects 
-                    WHERE timer_id = ? AND game_id = ?
-                ");
-                $stmt->execute([$timer['id'], $timer['game_id']]);
                 
             } catch (Exception $e) {
                 error_log("Error processing expired timer {$timer['id']}: " . $e->getMessage());
