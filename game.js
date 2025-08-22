@@ -374,7 +374,7 @@ function formatCardDescription(card, isSelectable = false, isSelected = false) {
         // Handle [fillin] second
         while (description.includes('[fillin]')) {
             description = description.replace('[fillin]', 
-                `<input type="text" class="fillin-input" data-fillin="${counter++}" maxlength="100" placeholder="">`);
+                `<input type="text" class="fillin-input" data-fillin="${counter++}" maxlength="100" size="20" placeholder="" oninput="this.style.width = 'calc(' + this.value.length + 'ch + 10px)'">`);
         }
     }
     // Show blanks for serve cards that haven't been filled in

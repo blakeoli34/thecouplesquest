@@ -1489,19 +1489,26 @@ body.female .opponent-hand-popover .game-card.accepted_serve-card  {
 .fillin-input {
     display: inline-block;
     border: none;
-    border-bottom: 2px solid #333;
+    border-bottom: 1px solid #333;
     background: transparent;
+    width: 40px;
     min-width: 40px;
-    height: 1em;
-    padding: 2px 4px;
-    font: inherit;
+    height: calc(1em + 4px);
+    padding: 0 4px 4px;
+    font-family: 'Courier New';
+    font-size: 14px;
     color: inherit;
     outline: none;
+    text-align: center;
+}
+
+.fillin-input::placeholder {
+    font-family: 'Font Awesome 6 Pro';
 }
 
 .fillin-input:focus {
     border-bottom-color: var(--color-blue);
-    background: rgba(255,255,255,0.1);
+    background: rgba(0,0,0,0.1);
 }
 
 .fillin-textarea {
@@ -1521,7 +1528,7 @@ body.female .opponent-hand-popover .game-card.accepted_serve-card  {
 
 .fillin-textarea:focus {
     border-color: var(--color-blue);
-    background: rgba(255,255,255,0.2);
+    background: rgba(0,0,0,0.1);
 }
 
 .card-meta {
