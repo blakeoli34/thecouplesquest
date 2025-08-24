@@ -491,7 +491,7 @@ function getCardDisplayInfo(card, context = 'serve') {
             durationText = `${minutes}m`;
         }
         
-        badges.push(`<span class="card-badge duration"><i class="fa-solid fa-clock"></i> ${durationText}</span>`);
+        badges.push(`<span class="card-badge duration"><i class="fa-solid fa-timer"></i> ${durationText}</span>`);
     }
 
     // Add veto penalty badges for snap/dare cards
@@ -554,9 +554,9 @@ function getCardDisplayInfo(card, context = 'serve') {
                 }
             }
             
-            badges.push(`<span class="card-badge duration"><i class="fa-solid fa-clock"></i> ${timeText}</span>`);
+            badges.push(`<span class="card-badge duration counting"><i class="fa-solid fa-timer"></i> ${timeText}</span>`);
         } else {
-            badges.push(`<span class="card-badge penalty"><i class="fa-solid fa-clock"></i> Expired</span>`);
+            badges.push(`<span class="card-badge penalty"><i class="fa-solid fa-circle-exclamation"></i> Expired</span>`);
         }
     }
 
@@ -3396,6 +3396,8 @@ function populateWheel(prizes) {
 // Initialize everything when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Game page loaded');
+
+    document.addEventListener("touchstart", function() {}, true);
     
     // Store device ID and check auth
     storeDeviceId();

@@ -803,6 +803,7 @@ function showLoginForm($error = null) {
             border-radius: 15px;
             box-shadow: 0 5px 15px rgba(0,0,0,0.1);
             margin-bottom: 30px;
+            overflow-x: scroll;
         }
         
         .section h2 {
@@ -1045,13 +1046,28 @@ function showLoginForm($error = null) {
             align-items: center;
             margin-bottom: 20px;
         }
+
+        .cards-list,
+        .prizes-list {
+            display: flex;
+            flex-flow: row wrap;
+            align-items: stretch;
+            justify-content: space-between;
+        }
         
         .card-item {
             background: #f8f9fa;
             border-radius: 10px;
             padding: 20px;
-            margin-bottom: 15px;
+            margin-bottom: 16px;
             border-left: 4px solid <?= Config::COLOR_BLUE ?>;
+            width: calc(50% - 8px);
+        }
+
+        @media screen and (max-width: 1000px) {
+            .card-item {
+                width: 100%;
+            }
         }
         
         .card-item h4 {
