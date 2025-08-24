@@ -108,6 +108,14 @@ function loadCardData() {
                 return;
             }
 
+            setTimeout(() => {
+                fetch('game.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'action=activate_queued_effects'
+                }).catch(() => {}); // Silent activation
+            }, 1000);
+
             console.log('Active modifiers:', data.active_modifiers);
 
             updateHandBadge();
@@ -562,9 +570,13 @@ function getCardDisplayInfo(card, context = 'serve') {
 
     // Modifier badges (only for hand cards)
     if (context === 'hand' && cardData.active_modifiers) {
-        if (cardData.active_modifiers[card.card_type]) {
+        // Don't show challenge modifiers on cards that don't clear effects
+        if (card.card_type === 'accepted_serve' && card.clears_challenge_modify_effects == 0) {
+            // Skip challenge modifier badge for this card
+        } else if (cardData.active_modifiers[card.card_type]) {
             badges.push(`<span class="card-badge modifier">${cardData.active_modifiers[card.card_type]}</span>`);
         }
+        
         if (cardData.active_modifiers[card.card_type + '_veto']) {
             badges.push(`<span class="card-badge modifier">${cardData.active_modifiers[card.card_type + '_veto']}</span>`);
         }

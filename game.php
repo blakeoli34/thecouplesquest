@@ -643,6 +643,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             echo json_encode(['modifiers' => $modifiers]);
             exit;
 
+        case 'activate_queued_effects':
+            if ($gameMode !== 'digital') {
+                echo json_encode(['success' => false]);
+                exit;
+            }
+            
+            activateQueuedChanceEffects($player['game_id'], $player['id']);
+            echo json_encode(['success' => true]);
+            exit;
+
         case 'manual_draw':
             if ($gameMode !== 'digital') {
                 echo json_encode(['success' => false, 'message' => 'Not a digital game']);
