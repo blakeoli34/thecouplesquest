@@ -1674,23 +1674,29 @@ function enableNotificationsFromModal() {
 
 // Add token refresh monitoring
 function setupFirebaseMessaging() {
+    // Check if token refresh is needed
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'action=check_token_refresh_needed'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.needs_refresh) {
+            // Silently refresh token
+            const vapidKey = 'BAhDDY44EUfm9YKOElboy-2fb_6lzVhW4_TLMr4Ctiw6oA_ROcKZ09i5pKMQx3s7SoWgjuPbW-eGI7gFst6qjag';
+            firebaseMessaging.deleteToken().then(() => {
+                return firebaseMessaging.getToken({ vapidKey });
+            }).then((newToken) => {
+                if (newToken) {
+                    updateTokenOnServer(newToken);
+                }
+            }).catch(() => {});
+        }
+    });
     if (!firebaseMessaging) return;
     
     const vapidKey = 'BAhDDY44EUfm9YKOElboy-2fb_6lzVhW4_TLMr4Ctiw6oA_ROcKZ09i5pKMQx3s7SoWgjuPbW-eGI7gFst6qjag';
-
-    // Delete existing token first
-    firebaseMessaging.deleteToken().then(() => {
-        // Get fresh token
-        return firebaseMessaging.getToken({ vapidKey });
-    }).then((currentToken) => {
-        if (currentToken) {
-            console.log('Fresh FCM Token received, length:', currentToken.length);
-            updateTokenOnServer(currentToken);
-            localStorage.setItem('fcm_token', currentToken);
-        }
-    }).catch((err) => {
-        console.log('Error getting fresh FCM token:', err);
-    });
     
     // Get initial token
     firebaseMessaging.getToken({ vapidKey }).then((currentToken) => {

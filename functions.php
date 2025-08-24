@@ -370,17 +370,13 @@ function processExpiredTimers($gameId) {
     }
 }
 
-function sendPushNotification($fcmToken, $title, $body, $data = []) {
+function sendPushNotification($fcmToken, $title, $body, $data = [], $retryCount = 0) {
     if (!$fcmToken || empty($fcmToken)) {
         error_log("FCM: No token provided");
         return false;
     }
 
-    // Log token details for debugging
-    error_log("FCM: Token length: " . strlen($fcmToken));
-    error_log("FCM: Token preview: " . substr($fcmToken, 0, 20) . "...");
-    
-    // Basic token validation - just check it's not empty and has reasonable length
+    // Basic token validation
     if (strlen($fcmToken) < 50 || strlen($fcmToken) > 500) {
         error_log("FCM: Invalid token length");
         return false;
@@ -393,14 +389,13 @@ function sendPushNotification($fcmToken, $title, $body, $data = []) {
     
     $url = 'https://fcm.googleapis.com/v1/projects/' . Config::FCM_PROJECT_ID . '/messages:send';
     
-    // Enhanced message structure - use data-only to prevent duplicates
     $message = [
         'message' => [
             'token' => $fcmToken,
             'data' => $data,
             'webpush' => [
                 'headers' => [
-                    'TTL' => '3600' // 1 hour TTL
+                    'TTL' => '3600'
                 ]
             ]
         ]
@@ -411,9 +406,6 @@ function sendPushNotification($fcmToken, $title, $body, $data = []) {
         error_log("Failed to get FCM access token");
         return false;
     }
-
-    error_log("FCM: Using project ID: " . Config::FCM_PROJECT_ID);
-    error_log("FCM: Full URL: " . $url);
     
     $headers = [
         'Authorization: Bearer ' . $accessToken,
@@ -446,12 +438,23 @@ function sendPushNotification($fcmToken, $title, $body, $data = []) {
         if ($errorData && isset($errorData['error'])) {
             error_log("FCM error details: " . $errorData['error']['message']);
             
-            // Handle token errors - mark token as invalid
+            // Handle token errors with automatic refresh
             if (isset($errorData['error']['details'])) {
                 foreach ($errorData['error']['details'] as $detail) {
                     if (isset($detail['errorCode']) && 
                         in_array($detail['errorCode'], ['UNREGISTERED', 'INVALID_ARGUMENT'])) {
-                        error_log("FCM token invalid, clearing from database");
+                        
+                        // If this is first retry, attempt to refresh token
+                        if ($retryCount === 0) {
+                            error_log("FCM token invalid, attempting refresh and retry");
+                            $refreshed = refreshExpiredFcmToken($fcmToken);
+                            if ($refreshed) {
+                                // Retry with new token
+                                return sendPushNotification($refreshed, $title, $body, $data, 1);
+                            }
+                        }
+                        
+                        // Clear invalid token after retry fails
                         clearInvalidFcmToken($fcmToken);
                         return false;
                     }
@@ -463,6 +466,24 @@ function sendPushNotification($fcmToken, $title, $body, $data = []) {
     
     error_log("FCM notification sent successfully");
     return true;
+}
+
+function refreshExpiredFcmToken($oldToken) {
+    try {
+        // This would need to be called from client-side to get fresh token
+        // For now, we'll mark the token for refresh and return false
+        // The client will get a fresh token on next page load/interaction
+        
+        $pdo = Config::getDatabaseConnection();
+        $stmt = $pdo->prepare("UPDATE players SET fcm_token = NULL, needs_token_refresh = TRUE WHERE fcm_token = ?");
+        $stmt->execute([$oldToken]);
+        
+        error_log("Marked token for refresh on next client interaction");
+        return false;
+    } catch (Exception $e) {
+        error_log("Error marking token for refresh: " . $e->getMessage());
+        return false;
+    }
 }
 
 // Function to clear invalid tokens
@@ -480,12 +501,6 @@ function clearInvalidFcmToken($fcmToken) {
 // Enhanced token update with validation
 function updateFcmToken($deviceId, $fcmToken) {
     try {
-        // Basic token validation
-        if (strlen($fcmToken) < 50 || strlen($fcmToken) > 500) {
-            error_log("Invalid FCM token length provided");
-            return false;
-        }
-        
         $pdo = Config::getDatabaseConnection();
         $stmt = $pdo->prepare("UPDATE players SET fcm_token = ?, fcm_token_updated = NOW() WHERE device_id = ?");
         $stmt->execute([$fcmToken, $deviceId]);
@@ -496,30 +511,6 @@ function updateFcmToken($deviceId, $fcmToken) {
         error_log("Error updating FCM token: " . $e->getMessage());
         return false;
     }
-}
-
-// Add retry mechanism for critical notifications
-function sendCriticalNotification($fcmToken, $title, $body, $maxRetries = 3) {
-    $attempt = 1;
-    
-    while ($attempt <= $maxRetries) {
-        error_log("Sending critical notification (attempt $attempt/$maxRetries)");
-        
-        if (sendPushNotification($fcmToken, $title, $body)) {
-            return true;
-        }
-        
-        if ($attempt < $maxRetries) {
-            $delay = $attempt * 2; // Progressive delay
-            error_log("Notification failed, retrying in {$delay} seconds");
-            sleep($delay);
-        }
-        
-        $attempt++;
-    }
-    
-    error_log("Critical notification failed after $maxRetries attempts");
-    return false;
 }
 
 function getAccessToken() {
@@ -638,38 +629,6 @@ function getAccessToken() {
     }
     
     return $tokenData['access_token'];
-}
-
-// Add a new function to test FCM configuration
-function testFCMConfiguration() {
-    error_log("Testing FCM configuration...");
-    
-    // Check if constants are defined
-    if (!defined('Config::FCM_PROJECT_ID')) {
-        error_log("FCM_PROJECT_ID not defined");
-        return false;
-    }
-    
-    if (!defined('Config::FCM_SERVICE_ACCOUNT_PATH')) {
-        error_log("FCM_SERVICE_ACCOUNT_PATH not defined");
-        return false;
-    }
-    
-    // Check if service account file exists
-    if (!file_exists(Config::FCM_SERVICE_ACCOUNT_PATH)) {
-        error_log("Service account file not found: " . Config::FCM_SERVICE_ACCOUNT_PATH);
-        return false;
-    }
-    
-    // Try to get an access token
-    $token = getAccessToken();
-    if (!$token) {
-        error_log("Failed to get access token");
-        return false;
-    }
-    
-    error_log("FCM configuration test passed");
-    return true;
 }
 
 function sendBumpNotification($gameId, $senderPlayerId) {

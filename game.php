@@ -283,6 +283,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $result = updateFcmToken($deviceId, $token);
             echo json_encode(['success' => $result]);
             exit;
+
+        case 'check_token_refresh_needed':
+            try {
+                $pdo = Config::getDatabaseConnection();
+                $stmt = $pdo->prepare("SELECT needs_token_refresh FROM players WHERE device_id = ?");
+                $stmt->execute([$deviceId]);
+                $needsRefresh = $stmt->fetchColumn();
+                
+                if ($needsRefresh) {
+                    // Clear the flag
+                    $stmt = $pdo->prepare("UPDATE players SET needs_token_refresh = FALSE WHERE device_id = ?");
+                    $stmt->execute([$deviceId]);
+                }
+                
+                echo json_encode(['success' => true, 'needs_refresh' => (bool)$needsRefresh]);
+            } catch (Exception $e) {
+                echo json_encode(['success' => false]);
+            }
+            break;
             
         case 'get_game_data':
 
