@@ -896,19 +896,9 @@ function showCardDrawAnimation(cardData) {
     });
     
     // Set card content
-    document.getElementById('drawCardType').innerHTML = getCardType(cardData.card_type);
+    document.getElementById('drawCardType').innerHTML = getCardType(cardData.card_type) + (cardData.extra_spicy == 1 ? '+' : '');
     document.getElementById('drawCardName').textContent = cardData.card_name;
     document.getElementById('drawCardDescription').textContent = cardData.card_description;
-    
-    // Add points badge if applicable
-    const metaContainer = document.getElementById('drawCardMeta');
-    metaContainer.innerHTML = '';
-    if (cardData.card_points) {
-        const pointsBadge = document.createElement('span');
-        pointsBadge.className = 'card-badge points';
-        pointsBadge.textContent = `+${cardData.card_points}`;
-        metaContainer.appendChild(pointsBadge);
-    }
     
     // Reset states
     setOverlayActive(true);

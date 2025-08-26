@@ -22,27 +22,6 @@ body:not(.digital) .digital-only {
     display: none;
 }
 
-.largeScreen {
-    display: none;
-    color: #e1e1e1;
-    text-align: center;
-    flex-flow: column nowrap;
-    justify-content: center;
-    align-items: center;
-    height: 100dvh;
-}
-
-.largeScreenTitle {
-    font-size: 36px;
-    font-weight: 700;
-    margin-bottom: 28px;
-}
-
-.largeScreenMessage {
-    font-size: 20px;
-    font-weight: 300;
-}
-
 .container {
     min-height: 100vh;
     display: flex;
@@ -59,7 +38,7 @@ body:not(.digital) .digital-only {
     font-weight: 500;
     font-size: 12px;
     position: fixed;
-    z-index: 1;
+    z-index: 100;
     top: -38px;
     left: 50%;
     transform: translateX(-50%);
@@ -117,6 +96,14 @@ body:not(.digital) .digital-only {
     background: linear-gradient(to bottom, var(--color-pink) 0%, var(--color-pink-light) 35% 65%, var(--color-pink) 100%);
 }
 
+.nd-theme .player-score.male {
+    background: #0c2340;
+}
+
+.nd-theme .player-score.female {
+    background: #ae9142;
+}
+
 .player-name {
     position: absolute;
     bottom: 40px;
@@ -130,6 +117,7 @@ body:not(.digital) .digital-only {
     text-align: center;
     line-height: 96px;
     transition: all 0.3s;
+    pointer-events: none;
 }
 
 .player-name.long {
@@ -2322,6 +2310,7 @@ body.digital .hybrid-menu-item {
     flex-direction: column;
     gap: 5px;
     cursor: pointer;
+    border-radius: 8px;
 }
 
 .opponent-hand-popover {
@@ -3042,35 +3031,220 @@ body.digital .hybrid-menu-item {
     }
 }
 
-@media screen and (min-width: 801px) {
-    .container,
-    .modal,
-    div[class*="overlay"],
-    .wheel-button {
-        display: none;
+@media screen and (orientation: landscape) {
+     .scoreboard {
+        flex-flow: row nowrap;
+     }
+     .board-separator {
+        top: 0;
+        left: calc(50% - 3px);
+        height: 100%;
+        width: 6px;
+        transform: none;
+     }
+     .player-score .player-name {
+        top: 40px;
+        bottom: unset;
     }
-    .largeScreen {
-        display: flex;
-    }
-    .largeScreen .phone {
-        display: none;
-    }
-}
 
-@media screen and (min-width: 801px) and (orientation: landscape) and (-webkit-min-device-pixel-ratio: 3) {
-    .container,
-    .modal,
-    div[class*="overlay"],
-    .wheel-button {
-        display: none;
+    /* Arc positioning for top player */
+    .action-button.top1 { 
+        top: -100px; 
+        left: -100px;
+        transform: translate(-50%, -50%) scale(0);
     }
-    .largeScreen {
-        display: flex;
+
+    .action-button.top2 { 
+        top: 50%; 
+        left: -140px;
+        transform: translate(-50%, -50%) scale(0);
     }
-    .largeScreen .phone {
-        display: block;
+
+    .action-button.top3 { 
+        top: 100px; 
+        left: -100px;
+        transform: translate(-50%, -50%) scale(0);
     }
-    .largeScreen div:not(.phone) {
-        display: none;
+
+    /* Arc positioning for bottom player */
+    .action-button.bottom1 { 
+        top: -100px; 
+        left: 100px;
+        transform: translate(-50%, -50%) scale(0);
     }
+
+    .action-button.bottom2 { 
+        top: 50%; 
+        left: 140px;
+        transform: translate(-50%, -50%) scale(0);
+    }
+
+    .action-button.bottom3 { 
+        top: 100px; 
+        left: 100px;
+        transform: translate(-50%, -50%) scale(0);
+    }
+
+    .bottom-menu {
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 100;
+    }
+
+    .game-card {
+        width: calc(25% - 15px);
+        min-height: 275px;
+        max-width: 190px;
+    }
+
+    .player-score-animation {
+        bottom: unset;
+        top: calc(50% - 13px) !important;
+        right: 35px;
+        
+    }
+
+
+    .bottom .player-score-animation {
+        right: unset;
+        left: 35px;
+    }
+
+    .player-score-animation.animate {
+        animation: scoreAnimateLeft 1.4s;
+    }
+
+    .bottom .player-score-animation.animate {
+        animation: scoreAnimateRight 1.4s;
+    }
+
+    @keyframes scoreAnimateLeft {
+        0% {
+            opacity: 0;
+            transform: translateX(0)
+        }
+        35%,
+        85% {
+            opacity: 1;
+            transform: translateX(-65px);
+        }
+        100% {
+            opacity: 0;
+            transform: translateX(-100px);
+        }
+    }
+
+    @keyframes scoreAnimateRight {
+        0% {
+            opacity: 0;
+            transform: translateX(0)
+        }
+        35%,
+        85% {
+            opacity: 1;
+            transform: translateX(65px);
+        }
+        100% {
+            opacity: 0;
+            transform: translateX(100px);
+        }
+    }
+
+    .bottom-right-menu-flyout {
+        padding: 16px 20px;
+    }
+
+    .flyout-menu-item {
+        margin-bottom: 12px;
+    }
+
+    .game-card.selected {
+        left: 35%;
+        transform: translate(-50%, -50%) scale(1.2);
+    }
+
+    .card-selection-actions {
+        top: 50%;
+        left: 55%;
+        transform: translateY(-50%);
+    }
+
+    @keyframes cardServing {
+        0% {
+            transform: translate(-50%, -50%) scale(1.2);
+            opacity: 1;
+        }
+        50% {
+            transform: translate(-50%, -40%) scale(1.3);
+            opacity: 1;
+        }
+        55%, 65%, 75%, 85% {
+            transform: translate(-50%, -40%) scale(1.3) rotate(1deg);
+            opacity: 1;
+        }
+        60%, 70%, 80% {
+            transform: translate(-50%, -40%) scale(1.3) rotate(-1deg);
+            opacity: 1;
+        }
+        100% {
+            transform: translate(-50%, -100vh) scale(0.2);
+            opacity: 0;
+        }
+    }
+
+    @keyframes cardDiscard {
+        0% {
+            transform: translate(-50%, -50%) scale(1.2);
+            opacity: 1;
+        }
+        50% {
+            transform: translate(-50%, -50%) scale(1.4) rotate(-5deg);
+            opacity: 1;
+        }
+        100% {
+            transform: translate(-50%, -50%) scale(0.2) rotate(720deg);
+            opacity: 0;
+        }
+    }
+
+    @keyframes cardVeto {
+        0%, 20%, 40% {
+            transform: translate(-50%, -50%) scale(1.2);
+            opacity: 1;
+            box-shadow: inherit;
+        }
+        30%, 50% {
+            transform: translate(-50%, -50%) scale(1.2);
+            opacity: 1;
+            box-shadow: 0 8px 25px #c62828;
+        }
+        100% {
+            transform: translate(50%, -75%) scale(0.2) rotate(20deg);
+            opacity: 0;
+            box-shadow: 0 8px 25px #c62828;
+        }
+    }
+
+    @keyframes cardVetoToHand {
+        0%, 20%, 40% {
+            transform: translate(-50%, -50%) scale(1.2);
+            opacity: 1;
+            box-shadow: inherit;
+        }
+        30%, 50% {
+            transform: translate(-50%, -50%) scale(1.2);
+            opacity: 1;
+            box-shadow: 0 8px 25px #c62828;
+        }
+        100% {
+            transform: translate(-50%, 100%) scale(0.8);
+            opacity: 0;
+            box-shadow: 0 8px 25px #c62828;
+        }
+    }
+
+    .opponent-hand-popover .game-card {
+        min-height: 215px;
+    }
+
 }
