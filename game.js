@@ -353,7 +353,7 @@ function createCardElement(card, type) {
    
    div.innerHTML = `
        <div class="card-header">
-           <div class="card-type">${getCardType(card.card_type)}</div>
+           <div class="card-type">${getCardType(card.card_type)}${card.extra_spicy == 1 ? '+' : ''}</div>
            <div class="card-name">${card.card_name}</div>
            ${card.quantity > 1 ? `<div class="card-quantity">${card.quantity}x</div>` : ''}
        </div>
@@ -512,14 +512,10 @@ function getCardDisplayInfo(card, context = 'serve') {
         const penalty = card.extra_spicy == 1 ? '-2' : '-1';
         badges.push(`<span class="card-badge penalty">${penalty}</span>`);
     }
-
-    if (card.extra_spicy == 1) {
-        badges.push(`<span class="card-badge modifier">Spicy+</span>`);
-    }
     
     // Timer
     if (card.timer) {
-        badges.push(`<span class="card-badge timer">${card.timer}min</span>`);
+        badges.push(`<span class="card-badge timer"><i class="fa-solid fa-alarm-clock"></i> ${card.timer}min</span>`);
     }
 
     // Card Duration Badge
@@ -758,7 +754,12 @@ function serveSelectedCard() {
     if (inputs.length > 0) {
         filledDescription = selectedCard.card_description;
         filledValues.forEach(value => {
-            filledDescription = filledDescription.replace('[fillin]', value);
+            // Handle [fillin long] first, then [fillin]
+            if (filledDescription.includes('[fillin long]')) {
+                filledDescription = filledDescription.replace('[fillin long]', value);
+            } else if (filledDescription.includes('[fillin]')) {
+                filledDescription = filledDescription.replace('[fillin]', value);
+            }
         });
     }
     
