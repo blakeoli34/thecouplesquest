@@ -72,6 +72,26 @@ if ($timeRemaining) {
     $gameTimeText = 'Game Ended';
 }
 
+function getTodayTheme() {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        $timezone = new DateTimeZone('America/Indiana/Indianapolis');
+        $today = (new DateTime('now', $timezone))->format('Y-m-d');
+        
+        $stmt = $pdo->prepare("
+            SELECT theme_class FROM scheduled_themes 
+            WHERE theme_date = ? 
+            ORDER BY id ASC 
+            LIMIT 1
+        ");
+        $stmt->execute([$today]);
+        return $stmt->fetchColumn();
+    } catch (Exception $e) {
+        error_log("Error getting today's theme: " . $e->getMessage());
+        return null;
+    }
+}
+
 // Handle AJAX requests
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     header('Content-Type: application/json');
@@ -989,7 +1009,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     </style>
     <link rel="stylesheet" href="/game.css">
 </head>
-<body class="<?php if($player['gender'] === 'male') { echo 'male'; } else { echo 'female'; } ?>">
+<body class="<?php 
+    if($player['gender'] === 'male') { echo 'male'; } else { echo 'female'; } 
+    $todayTheme = getTodayTheme();
+    if ($todayTheme) { echo ' ' . $todayTheme; }
+?>">
     <div class="container">
         <?php if ($gameStatus === 'waiting' && count($players) < 2): ?>
             <!-- Waiting for other player -->
@@ -1154,6 +1178,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     <div class="player-timers" id="opponent-timers"></div>
                     <div class="player-name<?= strlen($opponentPlayer['first_name']) > 5 ? ' long' : '' ?>"><?= htmlspecialchars($opponentPlayer['first_name']) ?></div>
                     <div class="player-score-value"><?= $opponentPlayer['score'] ?></div>
+                    <div class="nd-theme img-inject"></div>
                 </div>
                 
                 <!-- Animated Menu System -->
@@ -1207,6 +1232,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     <div class="player-timers" id="current-timers"></div>
                     <div class="player-name<?= strlen($currentPlayer['first_name']) > 5 ? ' long' : '' ?>"><?= htmlspecialchars($currentPlayer['first_name']) ?></div>
                     <div class="player-score-value"><?= $currentPlayer['score'] ?></div>
+                    <div class="nd-theme img-inject"></div>
                 </div>
             </div>
             

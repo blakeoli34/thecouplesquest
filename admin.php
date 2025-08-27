@@ -129,6 +129,47 @@ if ($_POST && isset($_POST['action'])) {
                 echo json_encode(['success' => false, 'message' => 'Failed to delete prize']);
             }
             exit;
+
+        case 'save_scheduled_theme':
+            try {
+                $pdo = Config::getDatabaseConnection();
+                
+                $themeDate = $_POST['theme_date'];
+                $themeClass = trim($_POST['theme_class']);
+                $description = trim($_POST['description']);
+                
+                if (empty($themeDate) || empty($themeClass)) {
+                    echo json_encode(['success' => false, 'message' => 'Date and theme class are required']);
+                    exit;
+                }
+                
+                $stmt = $pdo->prepare("
+                    INSERT INTO scheduled_themes (theme_date, theme_class, description)
+                    VALUES (?, ?, ?)
+                    ON DUPLICATE KEY UPDATE theme_class = VALUES(theme_class), description = VALUES(description)
+                ");
+                $stmt->execute([$themeDate, $themeClass, $description]);
+                
+                echo json_encode(['success' => true]);
+                
+            } catch (Exception $e) {
+                error_log("Error saving scheduled theme: " . $e->getMessage());
+                echo json_encode(['success' => false, 'message' => 'Failed to save theme']);
+            }
+            exit;
+
+        case 'delete_scheduled_theme':
+            try {
+                $id = intval($_POST['id']);
+                $pdo = Config::getDatabaseConnection();
+                $stmt = $pdo->prepare("DELETE FROM scheduled_themes WHERE id = ?");
+                $stmt->execute([$id]);
+                echo json_encode(['success' => true]);
+            } catch (Exception $e) {
+                error_log("Error deleting scheduled theme: " . $e->getMessage());
+                echo json_encode(['success' => false, 'message' => 'Failed to delete theme']);
+            }
+            exit;
     }
 }
 
@@ -230,6 +271,18 @@ try {
     $rulesContent = $rules ? $rules['content'] : '';
 } catch (Exception $e) {
     error_log("Error loading rules: " . $e->getMessage());
+}
+
+// Get scheduled themes
+try {
+    $stmt = $pdo->query("
+        SELECT * FROM scheduled_themes 
+        ORDER BY theme_date DESC
+    ");
+    $scheduledThemes = $stmt->fetchAll();
+} catch (Exception $e) {
+    error_log("Error loading scheduled themes: " . $e->getMessage());
+    $scheduledThemes = [];
 }
 
 function getCardsByType($type) {
@@ -1418,6 +1471,39 @@ function showLoginForm($error = null) {
                 <button type="submit" name="save_rules" class="btn">Save Rules</button>
             </form>
         </div>
+
+        <!-- Scheduled Themes Management -->
+        <div class="section">
+            <h2>Scheduled Themes Management</h2>
+            
+            <div class="card-header">
+                <h3>Schedule Theme for Date</h3>
+                <button class="btn" onclick="openThemeModal()">Add Scheduled Theme</button>
+            </div>
+            
+            <?php if (empty($scheduledThemes)): ?>
+                <p style="color: #666; text-align: center; padding: 20px;">No scheduled themes</p>
+            <?php else: ?>
+                <?php foreach ($scheduledThemes as $theme): ?>
+                    <div class="code-item">
+                        <div class="code-details">
+                            <div class="code-value"><?= date('M j, Y', strtotime($theme['theme_date'])) ?></div>
+                            <div class="code-meta">
+                                Class: <strong><?= htmlspecialchars($theme['theme_class']) ?></strong>
+                                <?php if ($theme['description']): ?>
+                                    | <?= htmlspecialchars($theme['description']) ?>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <div class="actions">
+                            <button class="btn-small btn-danger" onclick="confirmDeleteTheme(<?= $theme['id'] ?>, '<?= htmlspecialchars($theme['theme_date']) ?>')">
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
     </div>
 
     <!-- Card Management Modal -->
@@ -1717,6 +1803,46 @@ function showLoginForm($error = null) {
             <div class="confirm-buttons">
                 <button class="btn btn-secondary" onclick="closeWheelPrizeModal()">Cancel</button>
                 <button class="btn" onclick="saveWheelPrize()">Save Prize</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Theme Management Modal -->
+    <div class="confirm-dialog" id="themeModal">
+        <div class="confirm-content" style="max-width: 500px;">
+            <h3>Schedule Theme</h3>
+            <form id="themeForm" class="modal-form">
+                <div class="form-group">
+                    <label for="themeDate">Date</label>
+                    <input type="date" id="themeDate" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="themeClass">Theme Class Name</label>
+                    <input type="text" id="themeClass" placeholder="e.g. valentine-theme, halloween-theme" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="themeDescription">Description (Optional)</label>
+                    <input type="text" id="themeDescription" placeholder="e.g. Valentine's Day Theme">
+                </div>
+            </form>
+            
+            <div class="confirm-buttons">
+                <button class="btn btn-secondary" onclick="closeThemeModal()">Cancel</button>
+                <button class="btn" onclick="saveScheduledTheme()">Save Theme</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirm Delete Theme Modal -->
+    <div class="confirm-dialog" id="confirmDeleteTheme">
+        <div class="confirm-content">
+            <h3>Delete Scheduled Theme</h3>
+            <p>Are you sure you want to delete the theme for <strong id="deleteThemeDate"></strong>?</p>
+            <div class="confirm-buttons">
+                <button class="btn btn-secondary" onclick="closeConfirmDialog()">Cancel</button>
+                <button class="btn" style="background: #dc3545;" onclick="deleteScheduledTheme()">Delete</button>
             </div>
         </div>
     </div>
@@ -2222,6 +2348,64 @@ function showLoginForm($error = null) {
                     }
                 });
             }
+        }
+
+        let selectedThemeId = null;
+
+        function openThemeModal() {
+            document.getElementById('themeForm').reset();
+            document.getElementById('themeModal').classList.add('active');
+        }
+
+        function closeThemeModal() {
+            document.getElementById('themeModal').classList.remove('active');
+        }
+
+        function saveScheduledTheme() {
+            const formData = new FormData();
+            formData.append('action', 'save_scheduled_theme');
+            formData.append('theme_date', document.getElementById('themeDate').value);
+            formData.append('theme_class', document.getElementById('themeClass').value);
+            formData.append('description', document.getElementById('themeDescription').value);
+            
+            fetch('admin.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    closeThemeModal();
+                    location.reload();
+                } else {
+                    alert('Error saving theme: ' + (data.message || 'Unknown error'));
+                }
+            });
+        }
+
+        function confirmDeleteTheme(themeId, themeDate) {
+            selectedThemeId = themeId;
+            document.getElementById('deleteThemeDate').textContent = new Date(themeDate).toLocaleDateString();
+            document.getElementById('confirmDeleteTheme').classList.add('active');
+        }
+
+        function deleteScheduledTheme() {
+            if (!selectedThemeId) return;
+            
+            fetch('admin.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `action=delete_scheduled_theme&id=${selectedThemeId}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Error deleting theme: ' + (data.message || 'Unknown error'));
+                }
+                closeConfirmDialog();
+            });
         }
 
         // Load wheel prizes when page loads

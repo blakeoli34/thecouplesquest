@@ -3300,6 +3300,17 @@ function toggleTheme() {
 }
 
 function loadThemePreference() {
+    // Check if body already has a scheduled theme class (other than male/female/gradient-theme)
+    const bodyClasses = document.body.className.split(' ');
+    const hasScheduledTheme = bodyClasses.some(cls => 
+        cls !== 'male' && cls !== 'female' && cls !== 'gradient-theme' && cls !== 'digital'
+    );
+    
+    if (hasScheduledTheme) {
+        // Don't apply user preference if scheduled theme is active
+        return;
+    }
+    
     const savedTheme = localStorage.getItem('couples_quest_theme');
     const toggleText = document.getElementById('themeToggleText');
     
@@ -3645,6 +3656,14 @@ document.addEventListener('DOMContentLoaded', function() {
         setInterval(() => {
             checkWheelAvailability();
         }, 60000); // Every minute
+    }
+
+    if ($('body').hasClass('nd-theme')) {
+        // Inject male player image
+        $('.player-score.male .img-inject').html('<img src="img/irish-wordmark.png" alt="Irish">');
+        
+        // Inject female player image
+        $('.player-score.female .img-inject').html('<img src="img/nd-leprechaun-football.png" alt="ND Football Leprechaun">');
     }
 
     // Clean up expired effects every 30 seconds for digital games

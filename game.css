@@ -80,6 +80,22 @@ body:not(.digital) .digital-only {
     font-weight: bold;
 }
 
+.player-score .img-inject {
+    position: absolute;
+    top: 50%;
+    width: 75%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 0;
+}
+
+.player-score .img-inject img {
+    display: block;
+    width: 100%;
+    filter:grayscale(1);
+    opacity: 0.1;
+}
+
 .player-score.male {
     background: var(--color-blue);
 }
@@ -102,6 +118,10 @@ body:not(.digital) .digital-only {
 
 .nd-theme .player-score.female {
     background: #ae9142;
+}
+
+.nd-theme .player-score-value {
+    color: white !important;
 }
 
 .player-name {
@@ -138,6 +158,7 @@ body:not(.digital) .digital-only {
     font-size: 112px;
     font-weight: 700;
     transition: transform 0.3s ease;
+    z-index: 1;
 }
 
 .gradient-theme .player-score.male .player-score-value {
@@ -1456,6 +1477,10 @@ body.female .opponent-hand-popover .game-card.accepted_serve-card  {
     background: linear-gradient(to bottom, #fff 50%, var(--color-pink) 100%);
 }
 
+body.nd-theme .game-card {
+    background: linear-gradient(to bottom, #fff 50%, #aaa 100%) !important;
+}
+
 .card-header {
     display: flex;
     flex-flow: column nowrap;
@@ -2354,7 +2379,7 @@ body.digital .hybrid-menu-item {
 
 .opponent-hand-popover .game-card {
     width: calc(50% - 10px);
-    min-height: 45vw;
+    min-height: 215px;
     padding: 15px;
     font-size: 14px;
 }
@@ -2743,7 +2768,7 @@ body.digital .hybrid-menu-item {
     }
 
     .board-separator {
-        background: #333;
+        background: rgb(25,25,25);
     }
 
     .gradient-theme .board-separator {
@@ -2753,7 +2778,8 @@ body.digital .hybrid-menu-item {
     .menu-button,
     .action-button,
     .point-button {
-        background: #333;
+        background: rgb(25,25,25);
+        border: solid 2px #222;
         color: #ccc;
     }
 
@@ -2762,7 +2788,7 @@ body.digital .hybrid-menu-item {
     .bottom-right-menu-flyout,
     .game-timer {
         background: rgba(25,25,25,0.7);
-        border-color: #111;
+        border-color: #222;
     }
 
     .game-timer {
@@ -2878,6 +2904,10 @@ body.digital .hybrid-menu-item {
     body.male .opponent-hand-popover .game-card,
     body.female .opponent-hand-popover .game-card.accepted_serve-card {
         background: linear-gradient(to bottom, #2a2a2a 50%, var(--color-pink) 100%);
+    }
+
+    body.nd-theme .game-card {
+        background: linear-gradient(to bottom, #2a2a2a 50%, #111 100%) !important;
     }
     
     .card-name {
@@ -3032,6 +3062,12 @@ body.digital .hybrid-menu-item {
 }
 
 @media screen and (orientation: landscape) {
+    .gradient-theme .player-score.male {
+        background: linear-gradient(to right, var(--color-blue) 0% , var(--color-blue-light) 35% 65%, var(--color-blue) 100%);
+    }
+    .gradient-theme .player-score.female {
+        background: linear-gradient(to right, var(--color-pink) 0%, var(--color-pink-light) 35% 65%, var(--color-pink) 100%);
+    }
      .scoreboard {
         flex-flow: row nowrap;
      }
@@ -3242,9 +3278,18 @@ body.digital .hybrid-menu-item {
             box-shadow: 0 8px 25px #c62828;
         }
     }
+}
 
-    .opponent-hand-popover .game-card {
-        min-height: 215px;
+@media screen and (orientation: landscape) and (prefers-color-scheme: dark) {
+    .gradient-theme .player-score.male {
+        background: linear-gradient(to right, var(--color-blue) 0%, var(--color-blue-dark) 2%, #000 45% 55%, var(--color-blue-dark) 98%, var(--color-blue) 100%);
     }
 
+    .gradient-theme .player-score.female {
+        background: linear-gradient(to right, var(--color-pink) 0%, var(--color-pink-dark) 2%, #000 45% 55%, var(--color-pink-dark) 98%, var(--color-pink) 100%);
+    }
+
+    .gradient-theme .player-name {
+        color: rgba(50,50,50,0.25);
+    }
 }
