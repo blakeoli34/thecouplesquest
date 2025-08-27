@@ -347,8 +347,16 @@ function createCardElement(card, type) {
     } else if (type === 'hand') {
         div.onclick = () => selectHandCard(card);
     } else if (type === 'opponent') {
-        // No onclick for opponent cards (read-only)
-        div.style.cursor = 'default';
+        // Check if card has expires_at before adding click handler
+        if (card.expires_at) {
+            div.onclick = (e) => {
+                e.stopPropagation(); // Prevent popover from closing
+                closeOpponentHandPopover();
+                showTimerExtensionModal(card);
+            };
+        } else {
+            div.style.cursor = 'default';
+        }
     }
    
    div.innerHTML = `
@@ -364,6 +372,57 @@ function createCardElement(card, type) {
    `;
    
    return div;
+}
+
+function showTimerExtensionModal(card) {
+    const modal = document.createElement('div');
+    modal.className = 'modal active';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-title">Extend Timer</div>
+            <div class="modal-subtitle">${card.card_name}</div>
+            <button class="btn" onclick="extendCardTimer(${card.id}, 1)">+1 Hour</button>
+            <button class="btn" onclick="extendCardTimer(${card.id}, 4)">+4 Hours</button>
+            <button class="btn" onclick="extendCardTimer(${card.id}, 12)">+12 Hours</button>
+            <button class="btn" onclick="extendCardTimer(${card.id}, 24)">+24 Hours</button>
+            <button class="btn btn-secondary" onclick="extendCardTimer(${card.id}, 'remove')">Remove Timer</button>
+            <button class="btn btn-secondary" onclick="closeTimerExtensionModal()">Cancel</button>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    setOverlayActive(true);
+}
+
+function extendCardTimer(playerCardId, hours) {
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `action=extend_card_timer&player_card_id=${playerCardId}&hours=${hours}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        closeTimerExtensionModal();
+        if (data.success) {
+            showInAppNotification('Timer Updated', data.message);
+            // Refresh opponent hand display
+            setTimeout(() => updateOpponentHandDisplay(), 500);
+        } else {
+            alert('Failed to extend timer: ' + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        closeTimerExtensionModal();
+        console.error('Error extending timer:', error);
+        alert('Failed to extend timer');
+    });
+}
+
+function closeTimerExtensionModal() {
+    const modal = document.querySelector('.modal.active');
+    if (modal) {
+        modal.remove();
+        setOverlayActive(false);
+    }
 }
 
 function formatCardDescription(card, isSelectable = false, isSelected = false) {
@@ -614,20 +673,28 @@ function showOpponentHandPopover(cards) {
     const popover = document.createElement('div');
     popover.className = 'opponent-hand-popover';
     
-    let popoverContent = `<div class="opponent-hand-popover-title">${gameData.opponentPlayerName || 'Opponent'}'s Hand</div>`;
+    const title = document.createElement('div');
+    title.className = 'opponent-hand-popover-title';
+    title.textContent = `${gameData.opponentPlayerName || 'Opponent'}'s Hand`;
+    popover.appendChild(title);
     
     if (cards.length === 0) {
-        popoverContent += '<p style="text-align: center; color: #666; margin: 20px 0;">No cards in hand</p>';
+        const emptyMsg = document.createElement('p');
+        emptyMsg.style.cssText = 'text-align: center; color: #666; margin: 20px 0;';
+        emptyMsg.textContent = 'No cards in hand';
+        popover.appendChild(emptyMsg);
     } else {
-        popoverContent += '<div class="popover-card-grid">';
+        const cardGrid = document.createElement('div');
+        cardGrid.className = 'popover-card-grid';
+        
         cards.forEach(card => {
             const cardElement = createCardElement(card, 'opponent');
-            popoverContent += cardElement.outerHTML;
+            cardGrid.appendChild(cardElement);
         });
-        popoverContent += '</div>';
+        
+        popover.appendChild(cardGrid);
     }
     
-    popover.innerHTML = popoverContent;
     container.appendChild(popover);
     
     // Show popover
@@ -3694,3 +3761,6 @@ window.closeWheelOverlay = closeWheelOverlay;
 window.handleWheelOverlayClick = handleWheelOverlayClick;
 window.formatCardDescription = formatCardDescription;
 window.openOpponentHandPopover = openOpponentHandPopover;
+window.showTimerExtensionModal = showTimerExtensionModal;
+window.extendCardTimer = extendCardTimer;
+window.closeTimerExtensionModal = closeTimerExtensionModal;

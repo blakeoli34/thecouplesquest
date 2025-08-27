@@ -491,6 +491,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             ]);
             exit;
 
+        case 'extend_card_timer':
+            if ($gameMode !== 'digital') {
+                echo json_encode(['success' => false, 'message' => 'Not a digital game']);
+                exit;
+            }
+            
+            $playerCardId = intval($_POST['player_card_id']);
+            $hours = $_POST['hours']; // Can be 1, 4, 12, 24, or 'remove'
+            
+            try {
+                $pdo = Config::getDatabaseConnection();
+                
+                // Verify card exists and has expires_at
+                $stmt = $pdo->prepare("SELECT expires_at FROM player_cards WHERE id = ? AND expires_at IS NOT NULL");
+                $stmt->execute([$playerCardId]);
+                $currentExpiry = $stmt->fetchColumn();
+                
+                if (!$currentExpiry) {
+                    echo json_encode(['success' => false, 'message' => 'Card has no timer or not found']);
+                    exit;
+                }
+                
+                if ($hours === 'remove') {
+                    $stmt = $pdo->prepare("UPDATE player_cards SET expires_at = NULL WHERE id = ?");
+                    $stmt->execute([$playerCardId]);
+                    $message = 'Timer removed';
+                } else {
+                    $hoursInt = intval($hours);
+                    $stmt = $pdo->prepare("UPDATE player_cards SET expires_at = DATE_ADD(expires_at, INTERVAL ? HOUR) WHERE id = ?");
+                    $stmt->execute([$hoursInt, $playerCardId]);
+                    $message = "Timer extended by {$hoursInt} hour" . ($hoursInt > 1 ? 's' : '');
+                }
+                
+                echo json_encode(['success' => true, 'message' => $message]);
+                
+            } catch (Exception $e) {
+                error_log("Error extending card timer: " . $e->getMessage());
+                echo json_encode(['success' => false, 'message' => 'Failed to extend timer']);
+            }
+            exit;
+
         case 'serve_card':
             if ($gameMode !== 'digital') {
                 echo json_encode(['success' => false, 'message' => 'Not a digital game']);
