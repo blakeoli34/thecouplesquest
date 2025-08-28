@@ -14,7 +14,7 @@ html {
 body {
     font-family: 'museo-sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background: #111;
-    height: 100dvh;
+    height: 100vh;
     overflow: hidden;
 }
 
@@ -39,10 +39,9 @@ body:not(.digital) .digital-only {
     font-size: 12px;
     position: fixed;
     z-index: 100;
-    top: -38px;
+    top: 0px;
     left: 50%;
-    transform: translateX(-50%);
-    opacity: 0;
+    transform: translateX(-50%) scale(0);
     width: max-content;
     max-width: 440px;
     transition: all 0.3s ease-out;
@@ -52,13 +51,13 @@ body:not(.digital) .digital-only {
 }
 
 .game-timer.visible {
-    top: 24px;
-    opacity: 1;
+    top: 72px;
+    transform: translateX(-50%) scale(1);
 }
 
 .overlay-active .game-timer {
-    top: -38px;
-    opacity: 0;
+    top: 0 !important;
+    transform: translateX(-50%) scale(0);
 }
 
 .scoreboard {
@@ -1381,6 +1380,18 @@ body:not(.digital) .digital-only {
     background: linear-gradient(to bottom, transparent 0%, black 100%);
 }
 
+.card-overlay:before {
+    content: '';
+    position: absolute;
+    top: -15vh;
+    left: 0;
+    height: 15vh;
+    width: 100%;
+    pointer-events: none;
+    transition: all 0.3s ease;
+    background: linear-gradient(to bottom, black 0%, transparent 100%);
+}
+
 .card-overlay.active {
     background: rgba(0,0,0,0.8);
     backdrop-filter: blur(8px);
@@ -1392,7 +1403,13 @@ body:not(.digital) .digital-only {
     z-index: 1;
 }
 
+.card-overlay.active:before {
+    top: 0;
+    z-index: 2;
+}
+
 .card-overlay.has-selection:after,
+.card-overlay.has-selection:before,
 .card-overlay.has-selection .card-overlay-close {
     opacity: 0 !important;
 } 
@@ -2329,13 +2346,20 @@ body.digital .hybrid-menu-item {
 
 .opponent-hand-counts {
     position: absolute;
-    top: 80px;
+    top: 100px;
     left: 20px;
     display: flex;
     flex-direction: column;
     gap: 5px;
     cursor: pointer;
     border-radius: 8px;
+    z-index: 1001;
+    transition: all 0.3s ease;
+}
+
+.overlay-active .opponent-hand-counts {
+    left: -40px;
+    opacity: 0;
 }
 
 .opponent-hand-popover {
@@ -2665,6 +2689,21 @@ body.digital .hybrid-menu-item {
         var(--color-pink) 240deg 300deg,
         var(--color-pink-light) 300deg 360deg
     );
+}
+
+.nd-theme .wheel-background {
+    background: conic-gradient(
+        #0c2340 0deg 60deg,
+        #ae9142 60deg 120deg,
+        #0c2340 120deg 180deg,
+        #ae9142 180deg 240deg,
+        #0c2340 240deg 300deg,
+        #ae9142 300deg 360deg
+    ) !important;
+}
+
+.nd-theme .wheel-text {
+    color: #fff !important;
 }
 
 .wheel-text {
@@ -3068,8 +3107,23 @@ body.digital .hybrid-menu-item {
     .gradient-theme .player-score.female {
         background: linear-gradient(to right, var(--color-pink) 0%, var(--color-pink-light) 35% 65%, var(--color-pink) 100%);
     }
+
+    .game-timer.visible {
+        top: 20px;
+    }
      .scoreboard {
         flex-flow: row nowrap;
+     }
+     .opponent-hand-counts {
+        top: 50%;
+        left: 65px;
+        transform: translateY(-50%);
+     }
+
+     .opponent-hand-popover {
+        top: calc(-50vh + 50% + 20px);
+        border-top-left-radius: 35px;
+        transform-origin: center left;
      }
      .board-separator {
         top: 0;
