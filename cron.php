@@ -26,6 +26,9 @@ switch ($action) {
     case 'timers':
         checkExpiredTimers();
         break;
+    case 'cards':
+        checkExpiringCards();
+        break;
     case 'daily':
         sendDailyNotifications();
         break;
@@ -35,6 +38,7 @@ switch ($action) {
     case 'all':
     default:
         checkExpiredTimers();
+        checkExpiringCards();
         
         // Only send daily notifications at 9 AM
         $currentTime = date('H:i');
@@ -132,6 +136,102 @@ function sendDailyNotifications() {
     } catch (Exception $e) {
         error_log("Error in sendDailyNotifications: " . $e->getMessage());
         echo "Error sending daily notifications: " . $e->getMessage() . "\n";
+    }
+}
+
+function checkExpiringCards() {
+    error_log("Checking for expiring cards");
+    
+    try {
+        $pdo = Config::getDatabaseConnection();
+        
+        // Get cards expiring in 12 hours, 1 hour, or 10 minutes (with 30 second tolerance)
+        $stmt = $pdo->prepare("
+            SELECT pc.*, p.fcm_token, p.first_name, c.card_name,
+                   TIMESTAMPDIFF(MINUTE, NOW(), pc.expires_at) as minutes_until_expiry
+            FROM player_cards pc
+            JOIN players p ON pc.player_id = p.id
+            JOIN cards c ON pc.card_id = c.id
+            WHERE pc.expires_at IS NOT NULL 
+            AND pc.expires_at > NOW()
+            AND p.fcm_token IS NOT NULL 
+            AND p.fcm_token != ''
+            AND (
+                (TIMESTAMPDIFF(MINUTE, NOW(), pc.expires_at) BETWEEN 719 AND 721) OR  -- 12 hours ±1 min
+                (TIMESTAMPDIFF(MINUTE, NOW(), pc.expires_at) BETWEEN 59 AND 61) OR    -- 1 hour ±1 min
+                (TIMESTAMPDIFF(MINUTE, NOW(), pc.expires_at) BETWEEN 9 AND 11)        -- 10 minutes ±1 min
+            )
+        ");
+        $stmt->execute();
+        $expiringCards = $stmt->fetchAll();
+        
+        $notificationsSent = 0;
+        
+        foreach ($expiringCards as $card) {
+            $minutesLeft = $card['minutes_until_expiry'];
+            
+            // Determine time description
+            if ($minutesLeft >= 719 && $minutesLeft <= 721) {
+                $timeText = "12 hours";
+            } elseif ($minutesLeft >= 59 && $minutesLeft <= 61) {
+                $timeText = "1 hour";
+            } else {
+                $timeText = "10 minutes";
+            }
+            
+            $message = "Your {$card['card_name']} card expires in {$timeText}. Make sure you complete it soon!";
+            
+            $result = sendPushNotification(
+                $card['fcm_token'],
+                'Card Expiring Soon',
+                $message
+            );
+            
+            if ($result) {
+                $notificationsSent++;
+                error_log("Card expiry notification sent for card {$card['id']} to {$card['first_name']}");
+            }
+        }
+        
+        // Check for newly expired cards (expired within last minute)
+        $stmt = $pdo->prepare("
+            SELECT pc.*, p.fcm_token, p.first_name, c.card_name
+            FROM player_cards pc
+            JOIN players p ON pc.player_id = p.id
+            JOIN cards c ON pc.card_id = c.id
+            WHERE pc.expires_at IS NOT NULL 
+            AND pc.expires_at <= NOW()
+            AND pc.expires_at > DATE_SUB(NOW(), INTERVAL 1 MINUTE)
+            AND p.fcm_token IS NOT NULL 
+            AND p.fcm_token != ''
+        ");
+        $stmt->execute();
+        $expiredCards = $stmt->fetchAll();
+        
+        foreach ($expiredCards as $card) {
+            $message = "Your {$card['card_name']} card has expired! You can veto it or ask your opponent to extend the card.";
+            
+            $result = sendPushNotification(
+                $card['fcm_token'],
+                'Card Expired',
+                $message
+            );
+            
+            if ($result) {
+                $notificationsSent++;
+                error_log("Card expired notification sent for card {$card['id']} to {$card['first_name']}");
+            }
+        }
+        
+        if ($notificationsSent > 0) {
+            error_log("Card expiry notifications completed: {$notificationsSent} sent");
+        }
+        
+        return $notificationsSent;
+        
+    } catch (Exception $e) {
+        error_log("Error checking expiring cards: " . $e->getMessage());
+        return 0;
     }
 }
 
