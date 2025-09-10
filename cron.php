@@ -19,9 +19,6 @@ if (isset($argv[1]) && strpos($argv[1], 'timer_') === 0) {
     exit;
 }
 
-// Log cron execution
-error_log("Cron job started with action: $action at " . date('Y-m-d H:i:s'));
-
 switch ($action) {
     case 'timers':
         checkExpiredTimers();
@@ -140,8 +137,6 @@ function sendDailyNotifications() {
 }
 
 function checkExpiringCards() {
-    error_log("Checking for expiring cards");
-    
     try {
         $pdo = Config::getDatabaseConnection();
         
@@ -157,9 +152,10 @@ function checkExpiringCards() {
             AND p.fcm_token IS NOT NULL 
             AND p.fcm_token != ''
             AND (
-                (TIMESTAMPDIFF(MINUTE, NOW(), pc.expires_at) BETWEEN 719 AND 721) OR  -- 12 hours ±1 min
-                (TIMESTAMPDIFF(MINUTE, NOW(), pc.expires_at) BETWEEN 59 AND 61) OR    -- 1 hour ±1 min
-                (TIMESTAMPDIFF(MINUTE, NOW(), pc.expires_at) BETWEEN 9 AND 11)        -- 10 minutes ±1 min
+                (TIMESTAMPDIFF(MINUTE, NOW(), pc.expires_at) = 1441) OR  -- 1 day
+                (TIMESTAMPDIFF(MINUTE, NOW(), pc.expires_at) = 720) OR  -- 12 hours
+                (TIMESTAMPDIFF(MINUTE, NOW(), pc.expires_at) = 60) OR   -- 1 hour
+                (TIMESTAMPDIFF(MINUTE, NOW(), pc.expires_at) = 10)      -- 10 minute
             )
         ");
         $stmt->execute();
@@ -173,6 +169,8 @@ function checkExpiringCards() {
             // Determine time description
             if ($minutesLeft >= 719 && $minutesLeft <= 721) {
                 $timeText = "12 hours";
+            } elseif($minutesLeft > 1440) {
+                $timeText = "1 day";
             } elseif ($minutesLeft >= 59 && $minutesLeft <= 61) {
                 $timeText = "1 hour";
             } else {
@@ -189,7 +187,7 @@ function checkExpiringCards() {
             
             if ($result) {
                 $notificationsSent++;
-                error_log("Card expiry notification sent for card {$card['id']} to {$card['first_name']}");
+                echo "Card expiry notification sent for card {$card['id']} to {$card['first_name']}\n";
             }
         }
         
@@ -219,12 +217,12 @@ function checkExpiringCards() {
             
             if ($result) {
                 $notificationsSent++;
-                error_log("Card expired notification sent for card {$card['id']} to {$card['first_name']}");
+                echo "Card expired notification sent for card {$card['id']} to {$card['first_name']}\n";
             }
         }
         
         if ($notificationsSent > 0) {
-            error_log("Card expiry notifications completed: {$notificationsSent} sent");
+            echo "Card expiry notifications completed: {$notificationsSent} sent\n";
         }
         
         return $notificationsSent;
@@ -396,16 +394,14 @@ function cleanupExpiredGames() {
         ");
         $stmt->execute();
         $deletedTimers = $stmt->rowCount();
+        $date = date('Y-m-d H:i:s');
         
-        error_log("Cleanup completed: {$updatedGames} games marked as completed, {$deletedTimers} old timers deleted");
-        echo "Cleanup completed: {$updatedGames} games marked as completed, {$deletedTimers} old timers deleted\n";
+        error_log("Cleanup completed at {$date}: {$updatedGames} games marked as completed, {$deletedTimers} old timers deleted");
+        echo "Cleanup completed at {$date}: {$updatedGames} games marked as completed, {$deletedTimers} old timers deleted\n";
         
     } catch (Exception $e) {
         error_log("Error during cleanup: " . $e->getMessage());
         echo "Error during cleanup: " . $e->getMessage() . "\n";
     }
 }
-
-echo "Cron job completed at " . date('Y-m-d H:i:s') . "\n";
-error_log("Cron job completed at " . date('Y-m-d H:i:s'));
 ?>
