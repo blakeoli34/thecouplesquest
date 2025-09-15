@@ -2346,7 +2346,7 @@ body.digital .hybrid-menu-item {
 
 .opponent-hand-counts {
     position: absolute;
-    top: 100px;
+    top: 120px;
     left: 20px;
     display: flex;
     flex-direction: column;

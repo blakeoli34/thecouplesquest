@@ -1284,7 +1284,7 @@ function showLoginForm($error = null) {
                         <div class="player-details">
                             <div class="player-name">
                                 <?= htmlspecialchars($player['first_name']) ?> 
-                                (<?= ucfirst($player['gender']) ?>) - Score: <?= $player['score'] ?>
+                                (<?= ucfirst($player['gender']) . ' ' . htmlspecialchars($player['id']) ?>) - Score: <?= $player['score'] ?>
                             </div>
                             <div class="player-meta">
                                 Game: <strong><?= htmlspecialchars($player['invite_code']) ?></strong> 
