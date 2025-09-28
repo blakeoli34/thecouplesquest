@@ -20,6 +20,9 @@ if (isset($argv[1]) && strpos($argv[1], 'timer_') === 0) {
 }
 
 switch ($action) {
+    case 'warnings':
+        checkGameEndingWarnings();
+        break;
     case 'timers':
         checkExpiredTimers();
         break;
@@ -133,6 +136,59 @@ function sendDailyNotifications() {
     } catch (Exception $e) {
         error_log("Error in sendDailyNotifications: " . $e->getMessage());
         echo "Error sending daily notifications: " . $e->getMessage() . "\n";
+    }
+}
+
+function checkGameEndingWarnings() {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        
+        // Check for games ending in 12 hours or 1 hour
+        $stmt = $pdo->query("
+            SELECT g.id as game_id, g.end_date,
+                   p.id, p.first_name, p.gender, p.fcm_token,
+                   opponent.first_name as opponent_name
+            FROM games g
+            JOIN players p ON g.id = p.game_id
+            JOIN players opponent ON g.id = opponent.game_id AND opponent.id != p.id
+            WHERE g.status = 'active' AND p.fcm_token IS NOT NULL AND p.fcm_token != ''
+            AND (
+                TIMESTAMPDIFF(MINUTE, NOW(), g.end_date) = 720 OR
+                TIMESTAMPDIFF(MINUTE, NOW(), g.end_date) = 60
+            )
+        ");
+
+        $endingGames = $stmt->fetchAll();
+
+        foreach ($endingGames as $player) {
+            try {
+                $minutesLeft = round((strtotime($player['end_date']) - time()) / 60);
+                
+                if ($minutesLeft >= 719 && $minutesLeft <= 721) {
+                    $title = "12 Hour Warning";
+                    $message = "Your game with {$player['opponent_name']} ends in 12 hours. Be sure to play your hand before then!";
+                } else {
+                    $title = "1 Hour Warning";
+                    $message = "Complete or veto your hand cards! Each incomplete card incurs a 5pt penalty at the end of the game!";
+                }
+                
+                $result = sendPushNotification(
+                    $player['fcm_token'],
+                    $title,
+                    $message
+                );
+                
+                if ($result) {
+                    error_log("Game ending notification sent to player {$player['id']} ({$player['first_name']})");
+                }
+                
+            } catch (Exception $e) {
+                error_log("Error sending game ending notification to player {$player['id']}: " . $e->getMessage());
+            }
+        }
+        
+    } catch (Exception $e) {
+        error_log("Error in checkGameEndingWarnings: " . $e->getMessage());
     }
 }
 

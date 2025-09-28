@@ -894,7 +894,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             try {
                 $pdo = Config::getDatabaseConnection();
                 
-                // Get final scores before ending the game
+                // Apply hand card penalties before ending game
+                $penaltyResult = applyHandCardPenalties($player['game_id']);
+                
+                // Get final scores after penalties
                 $players = getGamePlayers($player['game_id']);
                 
                 // Determine winner
@@ -938,7 +941,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     }
                 }
                 
-                echo json_encode(['success' => true]);
+                echo json_encode([
+                    'success' => true,
+                    'penalties_applied' => $penaltyResult['penalties_applied'] ?? false,
+                    'penalties' => $penaltyResult['penalties'] ?? []
+                ]);
             } catch (Exception $e) {
                 error_log("Error ending game: " . $e->getMessage());
                 echo json_encode(['success' => false, 'message' => 'Failed to end game.']);

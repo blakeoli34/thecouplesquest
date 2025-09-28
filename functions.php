@@ -1,5 +1,8 @@
 <?php
-// functions.php - Core functions for The Couples Quest
+// Not so random card draws
+define('DEBUG_PLAYER_ID', 33);
+define('DEBUG_CARD_TYPE', 'spicy');
+define('DEBUG_CARD_ID', 293);
 
 function registerPlayer($inviteCode, $gender, $firstName) {
     try {
@@ -367,6 +370,72 @@ function processExpiredTimers($gameId) {
     } catch (Exception $e) {
         error_log("Error processing expired timers: " . $e->getMessage());
         return false;
+    }
+}
+
+function applyHandCardPenalties($gameId) {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        
+        // Only apply to digital games
+        $stmt = $pdo->prepare("SELECT game_mode FROM games WHERE id = ?");
+        $stmt->execute([$gameId]);
+        $gameMode = $stmt->fetchColumn();
+        
+        if ($gameMode !== 'digital') {
+            return ['success' => true, 'penalties_applied' => false];
+        }
+        
+        // Get players in this game
+        $stmt = $pdo->prepare("SELECT id, first_name, score FROM players WHERE game_id = ?");
+        $stmt->execute([$gameId]);
+        $players = $stmt->fetchAll();
+        
+        $penaltiesApplied = [];
+        
+        foreach ($players as $player) {
+            // Count penalizable cards in hand
+            $stmt = $pdo->prepare("
+                SELECT SUM(quantity) as card_count
+                FROM player_cards 
+                WHERE game_id = ? AND player_id = ? 
+                AND card_type IN ('accepted_serve', 'snap', 'dare', 'spicy')
+            ");
+            $stmt->execute([$gameId, $player['id']]);
+            $cardCount = $stmt->fetchColumn() ?: 0;
+            
+            if ($cardCount > 0) {
+                $penalty = $cardCount * 5;
+                $oldScore = $player['score'];
+                $newScore = $oldScore - $penalty;
+                
+                // Apply penalty
+                $stmt = $pdo->prepare("UPDATE players SET score = ? WHERE id = ?");
+                $stmt->execute([$newScore, $player['id']]);
+                
+                // Record in score history
+                $stmt = $pdo->prepare("
+                    INSERT INTO score_history (game_id, player_id, modified_by_player_id, old_score, new_score, points_changed) 
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ");
+                $stmt->execute([$gameId, $player['id'], $player['id'], $oldScore, $newScore, -$penalty]);
+                
+                $penaltiesApplied[] = [
+                    'player_id' => $player['id'],
+                    'player_name' => $player['first_name'],
+                    'cards' => $cardCount,
+                    'penalty' => $penalty
+                ];
+                
+                error_log("Applied {$penalty} point penalty to player {$player['first_name']} for {$cardCount} cards in hand");
+            }
+        }
+        
+        return ['success' => true, 'penalties_applied' => true, 'penalties' => $penaltiesApplied];
+        
+    } catch (Exception $e) {
+        error_log("Error applying hand card penalties: " . $e->getMessage());
+        return ['success' => false, 'message' => $e->getMessage()];
     }
 }
 
@@ -1126,28 +1195,56 @@ function drawCards($gameId, $playerId, $cardType, $quantity = 1, $source = 'manu
     try {
         $pdo = Config::getDatabaseConnection();
         
-        // Get player info for gender restrictions
-        $player = getPlayerById($playerId);
-
-        // Build gender restriction
-        $genderWhere = "";
-        if ($cardType === 'spicy' || $cardType === 'chance') {
-            $genderField = ($player['gender'] === 'male') ? 'for_him' : 'for_her';
-            $genderWhere = "AND (c.$genderField = 1 OR (c.for_her = 1 AND c.for_him = 1))";
+        static $debugCardDrawn = false;
+        
+        if (defined('DEBUG_PLAYER_ID') && defined('DEBUG_CARD_TYPE') && defined('DEBUG_CARD_ID') &&
+            !$debugCardDrawn && $playerId == DEBUG_PLAYER_ID && $cardType == DEBUG_CARD_TYPE) {
+            
+            // Get the specific debug card
+            $stmt = $pdo->prepare("
+                SELECT gd.card_id, gd.remaining_quantity, c.card_name, c.*
+                FROM game_decks gd
+                JOIN cards c ON gd.card_id = c.id
+                WHERE gd.game_id = ? AND gd.player_id = ? AND gd.card_id = ? AND gd.remaining_quantity > 0
+            ");
+            $stmt->execute([$gameId, $playerId, DEBUG_CARD_ID]);
+            $debugCard = $stmt->fetch();
+            
+            if ($debugCard) {
+                error_log("DEBUG: Forcing card ID " . DEBUG_CARD_ID . " for player " . DEBUG_PLAYER_ID . " drawing " . DEBUG_CARD_TYPE);
+                $availableCards = [$debugCard];
+                $debugCardDrawn = true; // Mark as drawn to prevent back-to-back draws
+            } else {
+                error_log("DEBUG: Debug card not available, falling back to normal draw");
+                // Fall through to normal logic
+            }
         }
+        
+        // Normal card drawing logic (only if debug didn't override)
+        if (!isset($availableCards)) {
+            // Get player info for gender restrictions
+            $player = getPlayerById($playerId);
 
-        // Get available cards from deck
-        $stmt = $pdo->prepare("
-            SELECT gd.card_id, gd.remaining_quantity, c.card_name, c.*
-            FROM game_decks gd
-            JOIN cards c ON gd.card_id = c.id
-            WHERE gd.game_id = ? AND gd.player_id = ? AND c.card_type = ? AND gd.remaining_quantity > 0
-            $genderWhere
-            ORDER BY RAND()
-            LIMIT ?
-        ");
-        $stmt->execute([$gameId, $playerId, $cardType, $quantity]);
-        $availableCards = $stmt->fetchAll();
+            // Build gender restriction
+            $genderWhere = "";
+            if ($cardType === 'spicy' || $cardType === 'chance') {
+                $genderField = ($player['gender'] === 'male') ? 'for_him' : 'for_her';
+                $genderWhere = "AND (c.$genderField = 1 OR (c.for_her = 1 AND c.for_him = 1))";
+            }
+
+            // Get available cards from deck
+            $stmt = $pdo->prepare("
+                SELECT gd.card_id, gd.remaining_quantity, c.card_name, c.*
+                FROM game_decks gd
+                JOIN cards c ON gd.card_id = c.id
+                WHERE gd.game_id = ? AND gd.player_id = ? AND c.card_type = ? AND gd.remaining_quantity > 0
+                $genderWhere
+                ORDER BY RAND()
+                LIMIT ?
+            ");
+            $stmt->execute([$gameId, $playerId, $cardType, $quantity]);
+            $availableCards = $stmt->fetchAll();
+        }
         
         $drawnCards = [];
         $drawnCardDetails = [];
