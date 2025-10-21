@@ -158,6 +158,13 @@ function setGameDuration($gameId, $durationDays) {
         $endDate = clone $startDate;
         $endDate->add(new DateInterval('P' . $durationDays . 'D'));
         
+        // Convert to UTC for storage
+        $startDateUTC = clone $startDate;
+        $startDateUTC->setTimezone(new DateTimeZone('UTC'));
+        
+        $endDateUTC = clone $endDate;
+        $endDateUTC->setTimezone(new DateTimeZone('UTC'));
+        
         $stmt = $pdo->prepare("
             UPDATE games 
             SET duration_days = ?, start_date = ?, end_date = ?, status = 'active' 
@@ -165,8 +172,8 @@ function setGameDuration($gameId, $durationDays) {
         ");
         $stmt->execute([
             $durationDays, 
-            $startDate->format('Y-m-d H:i:s'), 
-            $endDate->format('Y-m-d H:i:s'), 
+            $startDateUTC->format('Y-m-d H:i:s'), 
+            $endDateUTC->format('Y-m-d H:i:s'), 
             $gameId
         ]);
         
@@ -1263,9 +1270,9 @@ function drawCards($gameId, $playerId, $cardType, $quantity = 1, $source = 'manu
             $cardPoints = 0;
             if ($source === 'manual') {
                 if ($cardType === 'snap' || $cardType === 'dare') {
-                    $cardPoints = 2;
+                    $cardPoints = 5;
                 } elseif ($cardType === 'spicy') {
-                    $cardPoints = $card['extra_spicy'] ? 4 : 2;
+                    $cardPoints = $card['extra_spicy'] ? 10 : 5;
                 }
             }
             // For veto_penalty source, cardPoints remains 0
@@ -1349,7 +1356,7 @@ function addCardToHand($gameId, $playerId, $cardId, $cardType, $quantity = 1, $f
             }
         }
         
-        // Handle card duration (existing logic remains the same)
+        // Handle card duration
         if ($cardType !== 'serve') {
             $stmt = $pdo->prepare("SELECT card_duration FROM cards WHERE id = ?");
             $stmt->execute([$cardId]);
@@ -1358,11 +1365,38 @@ function addCardToHand($gameId, $playerId, $cardId, $cardType, $quantity = 1, $f
             if ($duration) {
                 $timezone = new DateTimeZone('America/Indiana/Indianapolis');
                 $now = new DateTime('now', $timezone);
-                $expiresAt = clone $now;
-                $expiresAt->add(new DateInterval('PT' . $duration . 'M'));
                 
-                $stmt = $pdo->prepare("UPDATE player_cards SET expires_at = ? WHERE game_id = ? AND player_id = ? AND card_id = ? AND card_type = ?");
-                $stmt->execute([$expiresAt->format('Y-m-d H:i:s'), $gameId, $playerId, $cardId, $cardType]);
+                // Get game end date
+                $stmt = $pdo->prepare("SELECT end_date FROM games WHERE id = ?");
+                $stmt->execute([$gameId]);
+                $gameEndDate = $stmt->fetchColumn();
+                
+                if ($gameEndDate) {
+                    $gameEnd = new DateTime($gameEndDate, $timezone);
+                    $timeUntilGameEnd = $now->diff($gameEnd);
+                    $hoursUntilEnd = ($timeUntilGameEnd->days * 24) + $timeUntilGameEnd->h;
+                    
+                    // Only set expires_at if game has more than 24 hours remaining
+                    if ($hoursUntilEnd > 24) {
+                        // Calculate expiry time: 30 minutes before game ends
+                        $expiresAt = clone $gameEnd;
+                        $expiresAt->sub(new DateInterval('PT30M'));
+                        
+                        // If calculated expiry is before now + card duration, use the calculated expiry
+                        // Otherwise use standard card duration
+                        $standardExpiry = clone $now;
+                        $standardExpiry->add(new DateInterval('PT' . $duration . 'M'));
+                        
+                        if ($expiresAt < $standardExpiry) {
+                            $finalExpiry = $expiresAt;
+                        } else {
+                            $finalExpiry = $standardExpiry;
+                        }
+                        
+                        $stmt = $pdo->prepare("UPDATE player_cards SET expires_at = ? WHERE game_id = ? AND player_id = ? AND card_id = ? AND card_type = ?");
+                        $stmt->execute([$finalExpiry->format('Y-m-d H:i:s'), $gameId, $playerId, $cardId, $cardType]);
+                    }
+                }
             }
         }
         
@@ -1909,7 +1943,7 @@ function vetoHandCard($gameId, $playerId, $cardId, $playerCardId) {
             case 'spicy':
             case 'chance':
                 if (!$vetoSkipped && $playerCard['card_type'] === 'spicy') {
-                    $penaltyPoints = $playerCard['extra_spicy'] ? 2 : 1;
+                    $penaltyPoints = $playerCard['extra_spicy'] ? 5 : 2;
                     $response['score_changes'][] = ['player_id' => $playerId, 'points' => -$penaltyPoints];
                     $penalties[] = "Lost {$penaltyPoints} points";
                 }

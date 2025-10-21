@@ -1538,8 +1538,8 @@ function showLoginForm($error = null) {
                 <div id="serveFields" style="display: none;">
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="cardPoints">Points (1-5)</label>
-                            <input type="number" id="cardPoints" min="1" max="5">
+                            <label for="cardPoints">Points</label>
+                            <input type="number" id="cardPoints" min="1" max="25">
                         </div>
                     </div>
                     
@@ -1951,7 +1951,7 @@ function showLoginForm($error = null) {
                     </div>
                     <div class="card-actions">
                         <button class="btn-small btn-warning" onclick="editCard(${card.id})">Edit</button>
-                        <button class="btn-small btn-danger" onclick="confirmDeleteCard(${card.id}, '${card.card_name}')">Delete</button>
+                        <button class="btn-small btn-danger" onclick="confirmDeleteCard(${card.id}, '${card.card_name.replace(/'/g, "\\'")}')">Delete</button>
                     </div>
                 `;
                 container.appendChild(cardElement);

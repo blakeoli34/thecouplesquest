@@ -143,18 +143,19 @@ function checkGameEndingWarnings() {
     try {
         $pdo = Config::getDatabaseConnection();
         
-        // Check for games ending in 12 hours or 1 hour
+        // Check for games ending in 12 hours or 1 hour (using Indianapolis timezone)
         $stmt = $pdo->query("
             SELECT g.id as game_id, g.end_date,
                    p.id, p.first_name, p.gender, p.fcm_token,
-                   opponent.first_name as opponent_name
+                   opponent.first_name as opponent_name,
+                   TIMESTAMPDIFF(MINUTE, CONVERT_TZ(NOW(), '+00:00', '-05:00'), CONVERT_TZ(g.end_date, '+00:00', '-05:00')) as minutes_left
             FROM games g
             JOIN players p ON g.id = p.game_id
             JOIN players opponent ON g.id = opponent.game_id AND opponent.id != p.id
             WHERE g.status = 'active' AND p.fcm_token IS NOT NULL AND p.fcm_token != ''
-            AND (
-                TIMESTAMPDIFF(MINUTE, NOW(), g.end_date) = 720 OR
-                TIMESTAMPDIFF(MINUTE, NOW(), g.end_date) = 60
+            HAVING (
+                minutes_left BETWEEN 719 AND 721 OR
+                minutes_left BETWEEN 59 AND 61
             )
         ");
 
@@ -162,7 +163,7 @@ function checkGameEndingWarnings() {
 
         foreach ($endingGames as $player) {
             try {
-                $minutesLeft = round((strtotime($player['end_date']) - time()) / 60);
+                $minutesLeft = $player['minutes_left'];
                 
                 if ($minutesLeft >= 719 && $minutesLeft <= 721) {
                     $title = "12 Hour Warning";
@@ -179,7 +180,7 @@ function checkGameEndingWarnings() {
                 );
                 
                 if ($result) {
-                    error_log("Game ending notification sent to player {$player['id']} ({$player['first_name']})");
+                    error_log("Game ending notification sent to player {$player['id']} ({$player['first_name']}) - {$minutesLeft} minutes left");
                 }
                 
             } catch (Exception $e) {
@@ -434,11 +435,12 @@ function cleanupExpiredGames() {
     try {
         $pdo = Config::getDatabaseConnection();
         
-        // Mark games as completed if they've passed their end date
+        // Mark games as completed if they've passed their end date (using Indianapolis timezone)
         $stmt = $pdo->prepare("
             UPDATE games 
             SET status = 'completed' 
-            WHERE status = 'active' AND end_date < NOW()
+            WHERE status = 'active' 
+            AND CONVERT_TZ(end_date, '+00:00', '-05:00') < CONVERT_TZ(NOW(), '+00:00', '-05:00')
         ");
         $stmt->execute();
         $updatedGames = $stmt->rowCount();

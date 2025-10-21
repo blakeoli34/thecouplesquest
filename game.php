@@ -324,20 +324,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             break;
             
         case 'get_game_data':
-
             processExpiredTimers($player['game_id']);
             clearExpiredChanceEffects($player['game_id']);
             
             $updatedPlayers = getGamePlayers($player['game_id']);
             $timers = getActiveTimers($player['game_id']);
             $history = getScoreHistory($player['game_id']);
-            $updatedPlayers = getGamePlayers($player['game_id']);
-            $timers = getActiveTimers($player['game_id']);
-            $history = getScoreHistory($player['game_id']);
 
-            // Check if game has expired
-            $now = new DateTime();
-            $endDate = new DateTime($player['end_date']);
+            // Check if game has expired using Indianapolis timezone
+            $timezone = new DateTimeZone('America/Indiana/Indianapolis');
+            $now = new DateTime('now', $timezone);
+            $endDate = new DateTime($player['end_date'], $timezone);
             $gameExpired = ($now >= $endDate && $player['status'] === 'active');
             
             echo json_encode([

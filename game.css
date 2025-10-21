@@ -2948,6 +2948,10 @@ body.digital .hybrid-menu-item {
     body.nd-theme .game-card {
         background: linear-gradient(to bottom, #2a2a2a 50%, #111 100%) !important;
     }
+
+    body.nd-theme .card-badge.duration {
+        color: #fff;
+    }
     
     .card-name {
         color: #e6e6e6;
