@@ -750,7 +750,7 @@ function sendBumpNotification($gameId, $senderPlayerId) {
         $result = sendPushNotification(
             $recipient['fcm_token'],
             'Bump!',
-            $senderName . ' wants to play. Serve them a card.'
+            $senderName . ' wants to play. Play your hand cards or serve them a card.'
         );
         
         return [

@@ -29,6 +29,9 @@ let isCardSelected = false;
 let wheelPrizes = [];
 let isWheelSpinning = false;
 
+let notificationQueue = [];
+let isNotificationShowing = false;
+
 let actionSound = new Audio('data:audio/mpeg;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsuY29tIC8gTGFTb25vdGhlcXVlLm9yZwBURU5DAAAAHQAAA1N3aXRjaCBQbHVzIMKpIE5DSCBTb2Z0d2FyZQBUSVQyAAAABgAAAzIyMzUAVFNTRQAAAA8AAANMYXZmNTcuODMuMTAwAAAAAAAAAAAAAAD/80DEAAAAA0gAAAAATEFNRTMuMTAwVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQsRbAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQMSkAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV');
 
 $(document).ready(function() {
@@ -482,6 +485,10 @@ function getCardType(type) {
 
 function getCardDisplayInfo(card, context = 'serve') {
     let badges = [];
+
+    if(card.win_loss) {
+        badges.push('<span class="card-badge timer"><i class="fa-solid fa-swords"></i> BATTLE</span>')
+    }
     
     // Points
     if (card.card_points) {
@@ -1942,9 +1949,27 @@ function showNotification(payload) {
     }
 }
 
-// Show in-app notification
 function showInAppNotification(title, body) {
-    console.log('Showing notification:', title, body); // Debug log
+    console.log('Queueing notification:', title, body);
+    
+    // Add notification to queue
+    notificationQueue.push({ title, body });
+    
+    // Process queue if no notification is currently showing
+    processNotificationQueue();
+}
+
+function processNotificationQueue() {
+    // If already showing a notification or queue is empty, return
+    if (isNotificationShowing || notificationQueue.length === 0) {
+        return;
+    }
+    
+    // Get next notification from queue
+    const notification = notificationQueue.shift();
+    isNotificationShowing = true;
+    
+    console.log('Showing notification:', notification.title, notification.body);
     
     const $notification = $('.iAN');
     const $title = $notification.find('.iAN-title');
@@ -1953,13 +1978,16 @@ function showInAppNotification(title, body) {
     // Bail if elements don't exist
     if ($notification.length === 0) {
         console.error('Notification elements not found');
+        isNotificationShowing = false;
+        // Try to process next notification in queue
+        setTimeout(() => processNotificationQueue(), 100);
         return;
     }
     
     // Clear any existing content/classes
     $notification.removeClass('show');
-    $title.text(title);
-    $body.text(body);
+    $title.text(notification.title);
+    $body.text(notification.body);
     loadCardData(); //Refresh cards in case a card was served
     
     // Force reflow then show
@@ -1969,15 +1997,19 @@ function showInAppNotification(title, body) {
     
     playSoundIfEnabled('/tritone.m4r');
     
-    // Remove after 5 seconds
+    // Remove after 7 seconds
     setTimeout(() => {
         $notification.removeClass('show');
-    }, 5000);
+    }, 7000);
 
     setTimeout(() => {
         $title.empty();
         $body.empty();
-    }, 5500);
+        
+        // Mark notification as no longer showing and process next in queue
+        isNotificationShowing = false;
+        processNotificationQueue();
+    }, 7500);
 
     // Refresh card data to update badge
     if (document.body.classList.contains('digital')) {

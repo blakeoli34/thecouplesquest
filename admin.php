@@ -417,7 +417,7 @@ function saveCard($data) {
         } else {
             // Insert new card
             if ($cardType === 'serve') {
-                $sql = "INSERT INTO cards (card_type, card_name, card_description, quantity, card_duration, card_points, serve_to_her, serve_to_him, veto_subtract, veto_steal, veto_draw_chance, veto_draw_snap_dare, veto_draw_spicy, win_loss, clears_challenge_modify_effects) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                $sql = "INSERT INTO cards (card_type, card_name, card_description, quantity, card_duration, card_points, serve_to_her, serve_to_him, veto_subtract, veto_steal, veto_draw_chance, veto_draw_snap_dare, veto_draw_spicy, win_loss, clears_challenge_modify_effects) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                 $params = [
                     $cardType, $cardName, $cardDescription, intval($data['quantity']) ?: 1,
                     !empty($data['card_duration']) ? intval($data['card_duration']) : null,

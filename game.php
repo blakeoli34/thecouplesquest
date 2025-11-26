@@ -48,7 +48,8 @@ $gameMode = $gameData['game_mode']; // Get current mode
 
 $timezone = new DateTimeZone('America/Indiana/Indianapolis');
 $now = new DateTime('now', $timezone);
-$endDate = new DateTime($player['end_date'], $timezone);
+$endDate = new DateTime($player['end_date'], new DateTimeZone('UTC'));
+$endDate->setTimeZone($timezone);
 $timeRemaining = $now < $endDate ? $endDate->diff($now) : null;
 
 $gameTimeText = '';
