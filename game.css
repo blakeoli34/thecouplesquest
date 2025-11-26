@@ -751,7 +751,7 @@ body:not(.digital) .digital-only {
     width: 100%;
     max-width: 400px;
     max-height: 80vh;
-    overflow-y: hidden;
+    overflow-y: scroll;
     transform: scale(0);
     transition: all 0.3s var(--animation-spring);
 }
@@ -1021,7 +1021,7 @@ body:not(.digital) .digital-only {
     width: 125px;
     height: 37px;
     max-width: 400px;
-    padding: 0 18px 12px;
+    padding: 0;
     flex-flow: column nowrap;
     justify-content: flex-end;
     position: fixed;
@@ -1043,6 +1043,7 @@ body:not(.digital) .digital-only {
     height: 120px;
     border-color: #222;
     color: #fff;
+    padding: 0 18px 12px;
 }
 
 .iAN-title {
@@ -3121,6 +3122,24 @@ body.digital .hybrid-menu-item {
     }
     .gradient-theme .player-score.female {
         background: linear-gradient(to right, var(--color-pink) 0%, var(--color-pink-light) 35% 65%, var(--color-pink) 100%);
+    }
+
+    .iAN {
+        left: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        height: 125px;
+        width: 37px;
+        justify-content: center;
+        text-align: left;
+    }
+
+    .iAN.show {
+        left: 12px;
+        top: 50%;
+        height: 200px;
+        width: 400px;
+        padding: 0 0 0 50px;
     }
 
     .game-timer.visible {
