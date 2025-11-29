@@ -1814,6 +1814,7 @@ function vetoHandCard($gameId, $playerId, $cardId, $playerCardId) {
         $vetoEffects = getActiveChanceEffects($gameId, 'veto_modify');
         $vetoMultiplier = 1;
         $vetoSkipped = false;
+        $usedEffect = null; // Track which effect was actually used
 
         // First check active effects
         foreach ($vetoEffects as $effect) {
@@ -1826,6 +1827,7 @@ function vetoHandCard($gameId, $playerId, $cardId, $playerCardId) {
             }
             
             if ($appliesToThisPlayer) {
+                $usedEffect = $effect; // Store the effect that was used
                 switch ($effect['effect_value']) {
                     case 'double':
                     case 'opponent_double':
@@ -1998,17 +2000,17 @@ function vetoHandCard($gameId, $playerId, $cardId, $playerCardId) {
 
         $pdo->commit();
 
-        // Handle veto modifier completion and activation of next modifier
-        foreach ($vetoEffects as $effect) {
+        // Handle veto modifier completion and activation of next modifier - only for the effect that was actually used
+        if ($usedEffect) {
             // Check if this is a timer-based effect
             $stmt = $pdo->prepare("SELECT timer FROM cards WHERE id = ?");
-            $stmt->execute([$effect['chance_card_id']]);
+            $stmt->execute([$usedEffect['chance_card_id']]);
             $hasTimer = $stmt->fetchColumn();
             
-            if (!$hasTimer && !$effect['timer_id']) {
+            if (!$hasTimer && !$usedEffect['timer_id']) {
                 // Non-timer veto effect - remove the chance card from hand
                 $stmt = $pdo->prepare("DELETE FROM player_cards WHERE game_id = ? AND player_id = ? AND card_id = ?");
-                $stmt->execute([$gameId, $effect['player_id'], $effect['chance_card_id']]);
+                $stmt->execute([$gameId, $usedEffect['player_id'], $usedEffect['chance_card_id']]);
                 
                 // Check for next veto modifier card in hand and activate it
                 $stmt = $pdo->prepare("
@@ -2017,13 +2019,13 @@ function vetoHandCard($gameId, $playerId, $cardId, $playerCardId) {
                     WHERE pc.game_id = ? AND pc.player_id = ? AND c.card_type = 'chance' AND c.veto_modify != 'none'
                     ORDER BY pc.id ASC LIMIT 1
                 ");
-                $stmt->execute([$gameId, $effect['player_id']]);
+                $stmt->execute([$gameId, $usedEffect['player_id']]);
                 $nextModifier = $stmt->fetch();
                 
                 if ($nextModifier) {
                     $targetId = (strpos($nextModifier['veto_modify'], 'opponent') !== false) ? 
-                            getOpponentPlayerId($gameId, $effect['player_id']) : $effect['player_id'];
-                    addActiveChanceEffect($gameId, $effect['player_id'], $nextModifier['card_id'], 'veto_modify', 
+                            getOpponentPlayerId($gameId, $usedEffect['player_id']) : $usedEffect['player_id'];
+                    addActiveChanceEffect($gameId, $usedEffect['player_id'], $nextModifier['card_id'], 'veto_modify', 
                                         $nextModifier['veto_modify'], $targetId);
                 }
             }
