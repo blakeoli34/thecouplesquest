@@ -1044,13 +1044,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 <div class="mode-options">
                     <div class="mode-btn" data-mode="hybrid">
                         <div class="mode-icon">🃏📱</div>
-                        <div class="mode-title">Hybrid</div>
-                        <div class="mode-description">Physical cards + app for scoring</div>
+                        <div class="mode-title">Classic</div>
+                        <div class="mode-description">Use app for scoring with your boxed game</div>
                     </div>
                     <div class="mode-btn" data-mode="digital">
                         <div class="mode-icon">📱✨</div>
-                        <div class="mode-title">Digital</div>
-                        <div class="mode-description">Play entirely within the app</div>
+                        <div class="mode-title">Ultimate</div>
+                        <div class="mode-description">Play the expanded experience entirely in the app</div>
                     </div>
                 </div>
             </div>

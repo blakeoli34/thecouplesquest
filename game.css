@@ -1020,7 +1020,7 @@ body:not(.digital) .digital-only {
     display: flex;
     width: 125px;
     height: 37px;
-    max-width: 400px;
+    max-width: 500px;
     padding: 0;
     flex-flow: column nowrap;
     justify-content: flex-end;
@@ -1038,10 +1038,9 @@ body:not(.digital) .digital-only {
 }
 
 .iAN.show {
-    width: 90vw;
-    top: 12px;
+    width: 100vw;
+    top: 0px;
     height: 120px;
-    border-color: #222;
     color: #fff;
     padding: 0 18px 12px;
 }

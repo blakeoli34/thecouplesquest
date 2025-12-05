@@ -575,7 +575,7 @@ function getCardDisplayInfo(card, context = 'serve') {
 
     // Add veto penalty for spicy cards
     if (card.card_type === 'spicy') {
-        const penalty = card.extra_spicy == 1 ? '-2' : '-1';
+        const penalty = card.extra_spicy == 1 ? '-5' : '-2';
         badges.push(`<span class="card-badge penalty">${penalty}</span>`);
     }
     

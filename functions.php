@@ -1,8 +1,8 @@
 <?php
 // Not so random card draws
 define('DEBUG_PLAYER_ID', 33);
-define('DEBUG_CARD_TYPE', 'spicy');
-define('DEBUG_CARD_ID', 293);
+define('DEBUG_CARD_TYPE', 'chance');
+define('DEBUG_CARD_ID', 125);
 
 function registerPlayer($inviteCode, $gender, $firstName) {
     try {
