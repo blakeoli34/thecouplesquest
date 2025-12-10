@@ -32,6 +32,8 @@ let isWheelSpinning = false;
 let notificationQueue = [];
 let isNotificationShowing = false;
 
+let isShowingReceivedCards = false;
+
 let actionSound = new Audio('data:audio/mpeg;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsuY29tIC8gTGFTb25vdGhlcXVlLm9yZwBURU5DAAAAHQAAA1N3aXRjaCBQbHVzIMKpIE5DSCBTb2Z0d2FyZQBUSVQyAAAABgAAAzIyMzUAVFNTRQAAAA8AAANMYXZmNTcuODMuMTAwAAAAAAAAAAAAAAD/80DEAAAAA0gAAAAATEFNRTMuMTAwVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQsRbAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQMSkAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV');
 
 $(document).ready(function() {
@@ -124,6 +126,7 @@ function loadCardData() {
             updateHandBadge();
             updateOpponentHandDisplay();
             updateBlockingStatus(data);
+            checkForReceivedCards();
         }
     })
     .catch(error => {
@@ -1992,6 +1995,7 @@ function processNotificationQueue() {
     
     // Force reflow then show
     setTimeout(() => {
+        $('body').addClass('notification');
         $notification.addClass('show');
     }, 10);
     
@@ -2000,6 +2004,7 @@ function processNotificationQueue() {
     // Remove after 7 seconds
     setTimeout(() => {
         $notification.removeClass('show');
+        $('body').removeClass('notification');
     }, 7000);
 
     setTimeout(() => {
@@ -3510,6 +3515,101 @@ function populateWheel(prizes) {
     if (wheelBackground) {
         wheelBackground.style.transform = 'rotate(0deg)';
     }
+}
+
+// Check for unseen received cards and show animation
+function checkForReceivedCards() {
+    if (!cardData || !cardData.hand_cards || !cardData.hand_cards.accepted_serve) return;
+    if (isShowingReceivedCards) return; // Don't trigger if already showing
+    
+    const unseenCards = cardData.hand_cards.accepted_serve.filter(card => card.animation_shown === 0);
+    
+    if (unseenCards.length > 0) {
+        showReceivedCardsAnimation(unseenCards);
+    }
+}
+
+function showReceivedCardsAnimation(cards) {
+    const overlay = document.getElementById('cardReceptionOverlay');
+    const container = document.getElementById('receivedCardContainer');
+    
+    if (!overlay || !container) return;
+    
+    // Set flag to prevent re-triggering
+    isShowingReceivedCards = true;
+    
+    // Immediately mark cards as seen in local data to prevent race condition
+    const cardIds = cards.map(c => c.id);
+    if (cardData.hand_cards.accepted_serve) {
+        cardData.hand_cards.accepted_serve.forEach(card => {
+            if (cardIds.includes(card.id)) {
+                card.animation_shown = 1;
+            }
+        });
+    }
+    
+    // Clear any existing cards
+    container.innerHTML = '';
+    
+    // Show overlay and container
+    overlay.classList.add('active');
+    container.classList.add('active');
+    // Mark cards as seen in database
+    markCardsAsSeen(cardIds);
+
+    // Create card elements
+    setTimeout(() => {
+        cards.forEach((card, index) => {
+            const cardElement = createCardElement(card, 'hand');
+            cardElement.classList.add('received-card');
+            container.appendChild(cardElement);
+        });
+    }, 1200);
+    
+    
+    // After 5 seconds, animate cards to hand
+    setTimeout(() => {
+        const receivedCards = container.querySelectorAll('.received-card');
+        
+        receivedCards.forEach((cardElement, index) => {
+            setTimeout(() => {
+                cardElement.classList.add('exit');
+            }, index * 150);
+        });
+        
+        // Hide overlay after all animations complete
+        setTimeout(() => {
+            overlay.classList.remove('active');
+            container.classList.remove('active');
+            container.innerHTML = '';
+            
+            // Reset flag
+            isShowingReceivedCards = false;
+            
+            // Reload card data to update badge
+            loadCardData();
+        }, 800 + (receivedCards.length * 150));
+        
+    }, 6200);
+}
+
+function markCardsAsSeen(cardIds) {
+    const formData = new URLSearchParams();
+    formData.append('action', 'mark_cards_seen');
+    formData.append('card_ids', JSON.stringify(cardIds));
+    
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('Cards marked as seen:', data);
+    })
+    .catch(error => {
+        console.error('Error marking cards as seen:', error);
+    });
 }
 
 // Initialize everything when DOM is loaded

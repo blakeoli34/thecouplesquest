@@ -373,6 +373,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
             exit;
 
+        case 'mark_cards_seen':
+            $cardIds = json_decode($_POST['card_ids'] ?? '[]', true);
+            
+            if (!empty($cardIds)) {
+                $placeholders = implode(',', array_fill(0, count($cardIds), '?'));
+                $stmt = $pdo->prepare("
+                    UPDATE player_cards 
+                    SET animation_shown = 1 
+                    WHERE game_id = ? AND player_id = ? AND id IN ($placeholders) AND card_type = 'accepted_serve'
+                ");
+                $params = array_merge([$player['game_id'], $player['id']], $cardIds);
+                $stmt->execute($params);
+            }
+            
+            echo json_encode(['success' => true]);
+            exit;
+
         case 'get_card_data':
             if ($gameMode !== 'digital') {
                 echo json_encode(['success' => false, 'message' => 'Not a digital game']);
@@ -1626,6 +1643,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             <!-- Rules will be loaded here -->
         </div>
     </div>
+
+    <!-- Card Reception Overlay -->
+    <div class="card-reception-overlay" id="cardReceptionOverlay">
+        <div class="card-reception-message">Receiving a card from <?php echo $opponentPlayer['first_name']; ?>...</div>
+    </div>
+    <div class="received-card-container" id="receivedCardContainer"></div>
     
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js"></script>

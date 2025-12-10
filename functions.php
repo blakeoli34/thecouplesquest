@@ -1060,7 +1060,7 @@ function getPlayerCards($gameId, $playerId, $cardType = null) {
         
         $sql = "
             SELECT pc.*, c.card_name, c.card_description, c.card_points as original_points, 
-                COALESCE(pc.card_points, c.card_points) as card_points, c.card_duration, pc.expires_at, pc.filled_values,
+                COALESCE(pc.card_points, c.card_points) as card_points, c.card_duration, pc.expires_at, pc.filled_values, pc.animation_shown,
             c.serve_to_her, c.serve_to_him, c.for_her, c.for_him,
             c.extra_spicy, c.veto_subtract, c.veto_steal,
             c.veto_draw_chance, c.veto_draw_snap_dare, c.veto_draw_spicy,
@@ -1343,14 +1343,14 @@ function addCardToHand($gameId, $playerId, $cardId, $cardType, $quantity = 1, $f
             // Insert new
             if ($overridePoints !== null) {
                 $stmt = $pdo->prepare("
-                    INSERT INTO player_cards (game_id, player_id, card_id, card_type, quantity, card_points)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    INSERT INTO player_cards (game_id, player_id, card_id, card_type, quantity, card_points, animation_shown)
+                    VALUES (?, ?, ?, ?, ?, ?, 0)
                 ");
                 $stmt->execute([$gameId, $playerId, $cardId, $cardType, $addQuantity, $overridePoints]);
             } else {
                 $stmt = $pdo->prepare("
-                    INSERT INTO player_cards (game_id, player_id, card_id, card_type, quantity)
-                    VALUES (?, ?, ?, ?, ?)
+                    INSERT INTO player_cards (game_id, player_id, card_id, card_type, quantity, animation_shown)
+                    VALUES (?, ?, ?, ?, ?, 0)
                 ");
                 $stmt->execute([$gameId, $playerId, $cardId, $cardType, $addQuantity]);
             }
@@ -2911,7 +2911,7 @@ function canPlayerSpinWheel($playerId) {
         $stmt = $pdo->prepare("
             SELECT spun_at FROM wheel_spins 
             WHERE player_id = ? 
-            AND DATE(CONVERT_TZ(spun_at, '+00:00', '-05:00')) = ?
+            AND DATE(spun_at) = ?
             ORDER BY spun_at DESC 
             LIMIT 1
         ");
