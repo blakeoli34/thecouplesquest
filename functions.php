@@ -1809,6 +1809,7 @@ function vetoHandCard($gameId, $playerId, $cardId, $playerCardId) {
         
         $penalties = [];
         $drawnCards = [];
+        $response = ['success' => true, 'score_changes' => []];
         
         // Apply veto modifiers - check both active effects and new cards
         $vetoEffects = getActiveChanceEffects($gameId, 'veto_modify');
@@ -2031,7 +2032,9 @@ function vetoHandCard($gameId, $playerId, $cardId, $playerCardId) {
             }
             // Timer-based veto effects stay active until timer expires
         }
-        $response = ['success' => true, 'penalties' => $penalties];
+        
+        $response['success'] = true;
+        $response['penalties'] = $penalties;
 
         // Track score changes and card draws for frontend animation
         $scoreChanges = [];
@@ -2068,10 +2071,6 @@ function vetoHandCard($gameId, $playerId, $cardId, $playerCardId) {
                     }
                 }
             }
-        }
-
-        if (!empty($scoreChanges)) {
-            $response['score_changes'] = $scoreChanges;
         }
 
         if (!empty($drawnCards)) {
