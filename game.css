@@ -13,7 +13,7 @@ html {
 
 body {
     font-family: 'museo-sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: #111;
+    background: #000;
     height: 100vh;
     margin-top: 0;
     position: relative;
@@ -28,8 +28,8 @@ body:not(.digital) .digital-only {
 }
 
 body.notification {
-    height: 90vh;
-    margin-top: 10vh;
+    height: 85vh;
+    margin-top: 15vh;
     border-top-left-radius: 60px;
     border-top-right-radius: 60px;
 }
@@ -580,6 +580,7 @@ body.notification {
     max-width: 450px;
     border-radius: 50px;
     transition: all 0.3s ease;
+    z-index: 1;
 }
 
 .overlay-active .bottom-menu {
