@@ -485,10 +485,10 @@ function offerDailyChallenges() {
     foreach ($players as $player) {
         // Get random daily card
         $cardStmt = $pdo->prepare("
-            SELECT id, card_name, card_description,card_points, veto_subtract, veto_steal
+            SELECT id, card_name, card_description, card_points, veto_subtract, veto_steal
             FROM cards
             WHERE card_type = 'daily'
-            ORDER BY RAND()
+            ORDER BY RAND() * quantity DESC
             LIMIT 1
         ");
         $cardStmt->execute();

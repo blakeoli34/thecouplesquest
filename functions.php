@@ -1186,7 +1186,7 @@ function serveCard($gameId, $fromPlayerId, $toPlayerId, $cardId, $filledDescript
             sendPushNotification(
                 $recipientToken,
                 "You've been served!",
-                "$senderName has served you the $cardName card, check it out in your hand."
+                "$senderName has served you a card, tap to check it out."
             );
         }
         
