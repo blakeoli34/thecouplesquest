@@ -409,6 +409,13 @@ function saveCard($data) {
                     intval($data['for_him']),
                     intval($data['extra_spicy'])
                 ]);
+            } elseif ($cardType === 'daily') {
+                $sql .= ", card_points = ?, veto_subtract = ?, veto_steal = ?";
+                $params = array_merge($params, [
+                    !empty($data['card_points']) ? intval($data['card_points']) : null,
+                    !empty($data['veto_subtract']) ? intval($data['veto_subtract']) : null,
+                    !empty($data['veto_steal']) ? intval($data['veto_steal']) : null
+                ]);
             }
             
             $sql .= " WHERE id = ?";
@@ -458,6 +465,14 @@ function saveCard($data) {
                     !empty($data['dice_condition']) ? $data['dice_condition'] : null,
                     !empty($data['dice_threshold']) ? intval($data['dice_threshold']) : null,
                     intval($data['double_it'])
+                ];
+            } elseif ($cardType === 'daily') {
+                $sql = "INSERT INTO cards (card_type, card_name, card_description, quantity, card_points, veto_subtract, veto_steal) VALUES (?, ?, ?, ?, ?, ?, ?)";
+                $params = [
+                    $cardType, $cardName, $cardDescription, intval($data['quantity']) ?: 1,
+                    !empty($data['card_points']) ? intval($data['card_points']) : null,
+                    !empty($data['veto_subtract']) ? intval($data['veto_subtract']) : null,
+                    !empty($data['veto_steal']) ? intval($data['veto_steal']) : null
                 ];
             } else {
                 // snap, dare, or spicy (simple cards)
@@ -1153,6 +1168,10 @@ function showLoginForm($error = null) {
             max-height: 60vh;
             overflow-y: auto;
         }
+
+        .modal-form.daily .no-daily {
+            display: none !important;
+        }
         
         .form-row {
             display: flex;
@@ -1389,6 +1408,7 @@ function showLoginForm($error = null) {
             <!-- Card Type Tabs -->
             <div class="card-tabs">
                 <button class="card-tab active" onclick="showCardType('serve')">Serve Cards</button>
+                <button class="card-tab" onclick="showCardType('daily')">Daily Cards</button>
                 <button class="card-tab" onclick="showCardType('chance')">Chance Cards</button>
                 <button class="card-tab" onclick="showCardType('snap')">Snap Cards</button>
                 <button class="card-tab" onclick="showCardType('dare')">Dare Cards</button>
@@ -1401,6 +1421,16 @@ function showLoginForm($error = null) {
                     <button class="btn" onclick="openCardModal('serve')">Add New Serve Card</button>
                 </div>
                 <div class="cards-list" id="serve-cards-list">
+                    <!-- Cards will be loaded here -->
+                </div>
+            </div>
+
+            <div class="card-type-content" id="daily-cards" style="display: none;">
+                <div class="card-header">
+                    <h3>Daily Cards</h3>
+                    <button class="btn" onclick="openCardModal('daily')">Add New Daily Card</button>
+                </div>
+                <div class="cards-list" id="daily-cards-list">
                     <!-- Cards will be loaded here -->
                 </div>
             </div>
@@ -1529,7 +1559,7 @@ function showLoginForm($error = null) {
                     <input type="number" id="cardQuantity" min="1" value="1" required>
                 </div>
 
-                <div class="form-group">
+                <div class="form-group no-daily">
                     <label for="cardDuration">Card Duration (minutes, optional)</label>
                     <input type="number" id="cardDuration" min="0" placeholder="Leave empty for no expiration">
                 </div>
@@ -1586,6 +1616,28 @@ function showLoginForm($error = null) {
                     <div class="form-group">
                         <label for="vetoDrawSpicy">Veto Draw Spicy</label>
                         <input type="number" id="vetoDrawSpicy" min="0">
+                    </div>
+                </div>
+
+                <!-- Daily Card Fields -->
+                <div id="dailyFields" style="display: none;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="cardPointsDaily">Points</label>
+                            <input type="number" id="cardPointsDaily" min="1" max="25">
+                        </div>
+                    </div>
+                    
+                    <h4 style="margin-top: 20px;">Veto Options</h4>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="vetoSubtractDaily">Veto Subtract</label>
+                            <input type="number" id="vetoSubtractDaily" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="vetoStealDaily">Veto Steal</label>
+                            <input type="number" id="vetoStealDaily" min="0">
+                        </div>
                     </div>
                 </div>
                 
@@ -1966,6 +2018,8 @@ function showLoginForm($error = null) {
                 if (card.serve_to_her && card.serve_to_him) meta.push('Both genders');
                 else if (card.serve_to_her) meta.push('For her');
                 else if (card.serve_to_him) meta.push('For him');
+            } else if (card.card_type === 'daily') {
+                if (card.card_points) meta.push(`${card.card_points} points`);
             } else if (card.card_type === 'chance') {
                 if (card.for_her && card.for_him) meta.push('Both genders');
                 else if (card.for_her) meta.push('For her');
@@ -1987,6 +2041,12 @@ function showLoginForm($error = null) {
             currentCardType = type;
             const modal = document.getElementById('cardModal');
             const title = document.getElementById('cardModalTitle');
+
+            if(type === 'daily') {
+                document.getElementById('cardForm').classList.add('daily');
+            } else {
+                document.getElementById('cardForm').classList.remove('daily');
+            }
             
             // Reset form
             document.getElementById('cardForm').reset();
@@ -1995,6 +2055,7 @@ function showLoginForm($error = null) {
             
             // Show/hide field groups
             document.getElementById('serveFields').style.display = type === 'serve' ? 'block' : 'none';
+            document.getElementById('dailyFields').style.display = type === 'daily' ? 'block' : 'none';
             document.getElementById('chanceFields').style.display = type === 'chance' ? 'block' : 'none';
             document.getElementById('spicyFields').style.display = type === 'spicy' ? 'block' : 'none';
             
@@ -2038,6 +2099,10 @@ function showLoginForm($error = null) {
                 if (card.veto_draw_spicy) document.getElementById('vetoDrawSpicy').value = card.veto_draw_spicy;
                 if (card.win_loss) document.getElementById('winLoss').checked = card.win_loss;
                 document.getElementById('clearsChallenge').checked = card.clears_challenge_modify_effects;
+            } else if (card.card_type === 'daily') {
+                if (card.card_points) document.getElementById('cardPointsDaily').value = card.card_points;
+                if (card.veto_subtract) document.getElementById('vetoSubtractDaily').value = card.veto_subtract;
+                if (card.veto_steal) document.getElementById('vetoStealDaily').value = card.veto_steal;
             } else if (card.card_type === 'chance') {
                 document.getElementById('notification_text').value = card.notification_text;
                 document.getElementById('forHer').checked = card.for_her;
@@ -2098,6 +2163,10 @@ function showLoginForm($error = null) {
                 formData.append('veto_draw_spicy', document.getElementById('vetoDrawSpicy').value || '');
                 formData.append('win_loss', document.getElementById('winLoss').checked ? '1' : '0');
                 formData.append('clears_challenge_modify_effects', document.getElementById('clearsChallenge').checked ? '1' : '0');
+            } else if (cardType === 'daily') {
+                formData.append('card_points', document.getElementById('cardPointsDaily').value || '');
+                formData.append('veto_subtract', document.getElementById('vetoSubtractDaily').value || '');
+                formData.append('veto_steal', document.getElementById('vetoStealDaily').value || '');
             } else if (cardType === 'chance') {
                 formData.append('notification_text', document.getElementById('notification_text').value);
                 formData.append('for_her', document.getElementById('forHer').checked ? '1' : '0');

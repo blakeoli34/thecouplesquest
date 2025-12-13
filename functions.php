@@ -1300,6 +1300,132 @@ function drawCards($gameId, $playerId, $cardType, $quantity = 1, $source = 'manu
     }
 }
 
+function acceptDailyCard($playerId) {
+    $pdo = Config::getDatabaseConnection();
+
+    $stmt = $pdo->prepare("
+        SELECT daily_card_id, daily_offered_at, game_id
+        FROM players
+        WHERE id = ?
+    ");
+    $stmt->execute([$playerId]);
+    $player = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$player || !$player['daily_card_id']) {
+        return ['error' => 'No daily challenge available'];
+    }
+
+    $cardStmt = $pdo->prepare("
+        SELECT * FROM cards WHERE id = ?
+    ");
+    $cardStmt->execute([$player['daily_card_id']]);
+    $card = $cardStmt->fetch(PDO::FETCH_ASSOC);
+    
+    if (!$card) {
+        return ['error' => 'Card not found'];
+    }
+
+    $addedToHand = addCardToHand($player['game_id'], $playerId, $player['daily_card_id'], 'daily', 1, true);
+
+    if($addedToHand) {
+        // Mark as accepted and clear offer
+        $updateStmt = $pdo->prepare("
+            UPDATE players
+            SET daily_accepted = 1,
+                daily_offered_at = NULL,
+                daily_card_id = NULL
+            WHERE id = ?
+        ");
+        $updateStmt->execute([$playerId]);
+        
+        return [
+            'success' => true,
+            'message' => 'Daily challenge accepted',
+            'card' => $card
+        ];
+    } else {
+        return [
+            'success' => false,
+            'message' => 'Card was not added to hand due to an error'
+        ];
+    }
+}
+
+function declineDailyCard($playerId) {
+    $pdo = Config::getDatabaseConnection();
+
+    // Clear the offer
+    $stmt = $pdo->prepare("
+        UPDATE players
+        SET daily_offered_at = NULL,
+            daily_card_id = NULL,
+            daily_accepted = 0
+        WHERE id = ?
+    ");
+    $stmt->execute([$playerId]);
+    
+    return [
+        'success' => true,
+        'message' => 'Daily challenge declined'
+    ];
+}
+
+function isDailyCardAvailable($playerId) {
+    $pdo = Config::getDatabaseConnection();
+
+    $stmt = $pdo->prepare("
+        SELECT daily_card_id, daily_offered_at
+        FROM players
+        WHERE id = ?
+    ");
+    $stmt->execute([$playerId]);
+    $player = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if(!$player['daily_card_id'] || !$player['daily_offered_at']) {
+        return false;
+    }
+
+    return true;
+}
+
+function getDailyCardData($playerId) {
+    $pdo = Config::getDatabaseConnection();
+
+    $stmt = $pdo->prepare("
+        SELECT 
+            p.daily_offered_at,
+            p.daily_card_id,
+            p.daily_accepted,
+            c.id,
+            c.card_name,
+            c.card_description,
+            c.card_points,
+            c.veto_subtract,
+            c.veto_steal
+        FROM players p
+        LEFT JOIN cards c ON p.daily_card_id = c.id
+        WHERE p.id = ?
+    ");
+    $stmt->execute([$playerId]);
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$result || !$result['daily_card_id']) {
+        return null;
+    }
+
+    return [
+        'success' => true,
+        'card' => [
+            'id' => $result['id'],
+            'card_name' => $result['card_name'],
+            'card_description' => $result['card_description'],
+            'card_points' => $result['card_points'],
+            'veto_subtract' => $result['veto_subtract'],
+            'veto_steal' => $result['veto_steal']
+        ]
+    ];
+}
+
 function addCardToHand($gameId, $playerId, $cardId, $cardType, $quantity = 1, $forceAdd = false, $overridePoints = null) {
     try {
         $pdo = Config::getDatabaseConnection();
@@ -1361,6 +1487,15 @@ function addCardToHand($gameId, $playerId, $cardId, $cardType, $quantity = 1, $f
             $stmt = $pdo->prepare("SELECT card_duration FROM cards WHERE id = ?");
             $stmt->execute([$cardId]);
             $duration = $stmt->fetchColumn();
+
+            if($cardType === 'daily') {
+                $timezone = new DateTimeZone('America/Indiana/Indianapolis');
+                $now = new DateTime('now', $timezone);
+                $midnight = new DateTime('tomorrow', $timezone);
+                $midnight->setTime(0, 0, 0);
+                
+                $duration = floor(($midnight->getTimestamp() - $now->getTimestamp()) / 60);
+            }
             
             if ($duration) {
                 $timezone = new DateTimeZone('America/Indiana/Indianapolis');
@@ -1661,7 +1796,7 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
             }
 
             // Handle snap, dare, spicy cards with completion rewards
-            if (in_array($playerCard['card_type'], ['snap', 'dare', 'spicy']) && $playerCard['effective_points']) {
+            if (in_array($playerCard['card_type'], ['snap', 'dare', 'spicy', 'daily']) && $playerCard['effective_points']) {
                 $pointsAwarded = $playerCard['effective_points'];
             }
 
@@ -1752,6 +1887,27 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
                             $opponentToken,
                             "Card Completed!",
                             "$playerName completed the {$playerCard['card_name']} card you served them!"
+                        );
+                    }
+                }
+            }
+
+            if($playerCard['card_type'] === 'daily') {
+                $opponentId = getOpponentPlayerId($gameId, $playerId);
+                if($opponentId) {
+                    $stmt = $pdo->prepare("SELECT first_name FROM players WHERE id = ?");
+                    $stmt->execute([$playerId]);
+                    $playerName = $stmt->fetchColumn();
+                    
+                    $stmt = $pdo->prepare("SELECT fcm_token FROM players WHERE id = ?");
+                    $stmt->execute([$opponentId]);
+                    $opponentToken = $stmt->fetchColumn();
+                    
+                    if ($opponentToken) {
+                        sendPushNotification(
+                            $opponentToken,
+                            "Card Completed!",
+                            "$playerName completed their Daily Challenge card!"
                         );
                     }
                 }

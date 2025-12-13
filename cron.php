@@ -35,6 +35,12 @@ switch ($action) {
     case 'cleanup':
         cleanupExpiredGames();
         break;
+    case 'offer':
+        offerDailyChallenges();
+        break;
+    case 'auto_decline':
+        autoDeclineChallenges();
+        break;
     case 'all':
     default:
         checkExpiredTimers();
@@ -461,5 +467,87 @@ function cleanupExpiredGames() {
         error_log("Error during cleanup: " . $e->getMessage());
         echo "Error during cleanup: " . $e->getMessage() . "\n";
     }
+}
+
+function offerDailyChallenges() {
+    $pdo = Config::getDatabaseConnection();
+    
+    // Get all active players
+    $stmt = $pdo->prepare("
+        SELECT p.id, p.game_id, p.fcm_token
+        FROM players p
+        JOIN games g ON p.game_id = g.id
+        WHERE g.status = 'active' AND g.game_mode = 'digital'
+    ");
+    $stmt->execute();
+    $players = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    foreach ($players as $player) {
+        // Get random daily card
+        $cardStmt = $pdo->prepare("
+            SELECT id, card_name, card_description,card_points, veto_subtract, veto_steal
+            FROM cards
+            WHERE card_type = 'daily'
+            ORDER BY RAND()
+            LIMIT 1
+        ");
+        $cardStmt->execute();
+        $card = $cardStmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$card) {
+            continue; // No daily cards available
+        }
+        
+        // Offer the card to the player
+        $updateStmt = $pdo->prepare("
+            UPDATE players
+            SET daily_offered_at = NOW(),
+                daily_card_id = ?,
+                daily_accepted = 0
+            WHERE id = ?
+        ");
+        $updateStmt->execute([$card['id'], $player['id']]);
+        
+        // Send notification
+        sendPushNotification($player['fcm_token'], 'Daily Challenge Offer', 'Your daily challenge is available until noon!');
+    }
+    
+    echo "Daily challenges offered to " . count($players) . " players\n";
+}
+
+function autoDeclineChallenges() {
+    $pdo = Config::getDatabaseConnection();
+    
+    $selectStmt = $pdo->prepare("
+        SELECT p.id, p.fcm_token
+        FROM players p
+        WHERE p.daily_offered_at IS NOT NULL
+        AND p.daily_accepted = 0
+    ");
+    $selectStmt->execute();
+    $players = $selectStmt->fetchAll(PDO::FETCH_ASSOC);
+
+
+    if (count($players) > 0) {
+        // Auto-decline the challenges
+        $updateStmt = $pdo->prepare("
+            UPDATE players
+            SET daily_offered_at = NULL,
+                daily_card_id = NULL,
+                daily_accepted = 0
+            WHERE daily_offered_at IS NOT NULL
+            AND daily_accepted = 0
+        ");
+        $updateStmt->execute();
+        
+        // Send notifications to each player
+        foreach ($players as $player) {
+            if (!empty($player['fcm_token'])) {
+                sendPushNotification($player['fcm_token'], 'Offer Expired', 'Your daily challenge offer has expired. Check back tomorrow!');
+            }
+        }
+    }
+    
+    echo "Auto-declined " . count($players) . " pending challenges\n";
 }
 ?>

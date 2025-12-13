@@ -161,6 +161,7 @@ function updateHandBadge() {
                      (cardData.hand_cards.snap?.length || 0) +
                      (cardData.hand_cards.dare?.length || 0) +
                      (cardData.hand_cards.spicy?.length || 0) +
+                     (cardData.hand_cards.daily?.length || 0) +
                      (cardData.hand_cards.chance?.length || 0);
     
     const handMenuItem = document.querySelector('.menu-item[onclick="openHandCards()"]');
@@ -318,6 +319,7 @@ function openHandCards() {
         ...(cardData.hand_cards.snap || []),
         ...(cardData.hand_cards.dare || []), 
         ...(cardData.hand_cards.spicy || []),
+        ...(cardData.hand_cards.daily || []),
         ...(cardData.hand_cards.chance || [])
     ];
     populateCardGrid('handCardsGrid', allHandCards, 'hand');
@@ -477,6 +479,10 @@ function getCardType(type) {
     if(type === 'dare') {
         iconDisplay = '<i class="fa-solid fa-hand-point-right"></i>';
         typeDisplay = 'Dare';
+    }
+    if(type === 'daily') {
+        iconDisplay = '<i class="fa-solid fa-flag-checkered"></i>';
+        typeDisplay = 'Daily';
     }
     if(type === 'spicy') {
         iconDisplay = '<i class="fa-solid fa-pepper-hot"></i>';
@@ -3378,6 +3384,24 @@ function checkWheelAvailability() {
     });
 }
 
+function checkDailyCardAvailability() {
+    if (!document.body.classList.contains('digital')) return;
+
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'action=check_for_daily_card_offer'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.daily_available) {
+            document.getElementById('dailyButton').classList.add('available');
+        } else {
+            document.getElementById('dailyButton').classList.remove('available');
+        }
+    });
+}
+
 function handleWheelButtonState(bool) {
     var $wheelButton = $('.wheel-button');
     if($wheelButton.hasClass('available')) {
@@ -3514,6 +3538,146 @@ function populateWheel(prizes) {
     const wheelBackground = document.querySelector('.wheel-background');
     if (wheelBackground) {
         wheelBackground.style.transform = 'rotate(0deg)';
+    }
+}
+
+function showDailyOffer() {
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'action=get_daily_card_data'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            populateDailyCardOverlay(data);
+            document.getElementById('dailyOverlay').classList.add('active');
+            setOverlayActive(true);
+        } else {
+            alert('Failed to get daily card data: ' + (data.message || 'Unknown error'));
+        }
+    });
+}
+
+function populateDailyCardOverlay(data) {
+    const overlay = document.getElementById('dailyOverlay');
+    const container = document.getElementById('dailyCardsGrid');
+    
+    if (!container || !data.card) return;
+    
+    container.innerHTML = '';
+    
+    const card = data.card;
+    
+    // Create card element
+    const div = document.createElement('div');
+    div.className = 'game-card daily-card';
+    
+    // Build card HTML
+    div.innerHTML = `
+        <div class="card-header">
+            <div class="card-type"><i class="fa-solid fa-flag-checkered"></i> Daily</div>
+            <div class="card-name">${card.card_name}</div>
+        </div>
+        <div class="card-description">${card.card_description}</div>
+        <div class="card-meta">
+            ${card.card_points ? `<span class="card-badge points">+${card.card_points}</span>` : ''}
+            ${buildVetoPenaltyBadge(card)}
+        </div>
+    `;
+    
+    container.appendChild(div);
+    
+    // Add action buttons
+    const actions = document.getElementById('dailyCardActions');
+    if (actions) {
+        actions.innerHTML = `
+            <button class="btn btn-accept" onclick="acceptDailyCard()">Accept</button>
+            <button class="btn" onclick="declineDailyCard()">Decline</button>
+        `;
+    }
+}
+
+function buildVetoPenaltyBadge(card) {
+    if (!card.veto_subtract && !card.veto_steal) return '';
+    
+    let penalties = [];
+    if (card.veto_subtract) penalties.push(`-${card.veto_subtract}`);
+    if (card.veto_steal) penalties.push(`<i class="fa-solid fa-hand-paper"></i> ${card.veto_steal}`);
+    
+    if (penalties.length > 0) {
+        return `<span class="card-badge penalty">${penalties.join('&nbsp;&nbsp;|&nbsp;&nbsp;')}</span>`;
+    }
+    return '';
+}
+
+function acceptDailyCard() {
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'action=accept_daily_card'
+    })
+    .then(response => {
+        return response.text().then(text => {
+            console.log('Raw response:', text);
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                console.error('JSON parse error:', e);
+                throw new Error('Invalid JSON response: ' + text);
+            }
+        });
+    })
+    .then(data => {
+        if (data.success) {
+            closeDailyOverlay();
+            loadCardData();
+            checkDailyCardAvailability();
+            if (data.message) {
+                showInAppNotification('Daily Challenge', data.message);
+            }
+        } else {
+            alert('Failed to accept card: ' + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error accepting daily card:', error);
+        alert('Failed to accept card');
+    });
+}
+
+function declineDailyCard() {
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'action=decline_daily_card'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            closeDailyOverlay();
+            checkDailyCardAvailability();
+            if (data.message) {
+                showInAppNotification('Daily Challenge', data.message);
+            }
+        } else {
+            alert('Failed to decline card: ' + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error declining daily card:', error);
+        alert('Failed to decline card');
+    });
+}
+
+function closeDailyOverlay() {
+    document.getElementById('dailyOverlay').classList.remove('active');
+    setOverlayActive(false);
+}
+
+function handleDailyOverlayClick(event) {
+    if (event.target.classList.contains('card-overlay')) {
+        closeDailyOverlay();
     }
 }
 
@@ -3782,11 +3946,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Check wheel availability for digital games
     if (document.body.classList.contains('digital')) {
-        setTimeout(() => checkWheelAvailability(), 1000);
+        setTimeout(() => {
+            checkWheelAvailability();
+            checkDailyCardAvailability();
+        }, 1000);
         
         // Check periodically for wheel availability
         setInterval(() => {
             checkWheelAvailability();
+            checkDailyCardAvailability();
         }, 60000); // Every minute
     }
 
@@ -3915,3 +4083,8 @@ window.openOpponentHandPopover = openOpponentHandPopover;
 window.showTimerExtensionModal = showTimerExtensionModal;
 window.extendCardTimer = extendCardTimer;
 window.closeTimerExtensionModal = closeTimerExtensionModal;
+window.closeDailyOverlay = closeDailyOverlay;
+window.handleDailyOverlayClick = handleDailyOverlayClick;
+window.acceptDailyCard = acceptDailyCard;
+window.declineDailyCard = declineDailyCard;
+window.showDailyOffer = showDailyOffer;

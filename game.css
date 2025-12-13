@@ -35,7 +35,7 @@ body.notification {
 }
 
 .container {
-    min-height: 100vh;
+    min-height: 100%;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -1445,6 +1445,42 @@ body.notification {
     top: 100vh;
 }
 
+.daily-card-grid {
+    display: flex;
+    flex-flow: row nowrap;
+    justify-content: center;
+    width: 100%;
+}
+
+.card-overlay-content {
+    position: relative;
+    top: 100vh;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    padding-top: 30vh;
+    transition: all 0.3s ease;
+}
+
+.card-overlay-content .card-overlay-header {
+    color: #fff;
+    margin-bottom: 36px;
+    text-align: center;
+}
+
+.card-overlay-content .card-overlay-header p {
+    font-style: oblique;
+    font-weight: 400;
+    font-size: 12px;
+    margin-top: 8px;
+}
+
+.card-overlay.active .card-overlay-content {
+    top: 0;
+    pointer-events: auto;
+}
+
 .card-overlay.active .card-grid {
     top: 0;
 }
@@ -1489,6 +1525,13 @@ body.notification {
 .card-grid.has-selection .serve-count-display {
     opacity: 0 !important;
     pointer-events: none;
+}
+
+.game-card.daily-card,
+.opponent-hand-popover .game-card.daily-card,
+body.male .game-card.daily-card,
+body.female .game-card.daily-card {
+    background: linear-gradient(to bottom, #fff 50%, #F39237 100%);
 }
 
 body.male .game-card,
@@ -1742,7 +1785,8 @@ body.nd-theme .game-card {
     transition: all 0.3s ease;
 }
 
-.card-selection-actions.show {
+.card-selection-actions.show,
+#dailyOverlay.active .card-selection-actions {
     opacity: 1;
     pointer-events: auto;
 }
@@ -1785,6 +1829,17 @@ body.nd-theme .game-card {
 .card-selection-actions .btn-veto:hover,
 .card-selection-actions .btn-veto:active {
     background: #b71c1c;
+    color: #fff;
+}
+
+.card-selection-actions .btn-accept {
+    color: #68B684;
+    border-color: #68B684;
+}
+
+.card-selection-actions .btn-accept:hover,
+.card-selection-actions .btn-accept:active {
+    background: #579D70;
     color: #fff;
 }
 
@@ -2560,7 +2615,7 @@ body.digital .hybrid-menu-item {
     padding-left: 20px;
 }
 
-.wheel-button {
+.wheel-button, .daily-button {
     position: fixed;
     bottom: 120px;
     right: 18px;
@@ -2583,7 +2638,13 @@ body.digital .hybrid-menu-item {
     pointer-events: none;
 }
 
-.wheel-button.available {
+.daily-button {
+    left: 18px;
+    right: unset;
+}
+
+.wheel-button.available,
+.daily-button.available {
     transform: scale(1);
     pointer-events: auto;
 }
@@ -2592,19 +2653,40 @@ body.digital .hybrid-menu-item {
     animation: wheelSpin 5s linear infinite;
 }
 
+.daily-button i {
+    animation: shakey 5s ease-out infinite;
+    transform-origin: bottom left;
+}
+
+@keyframes shakey {
+    0%, 80%, 100% {
+        transform: rotate(0deg);
+    }
+    82.5%, 87.5%, 92.5%, 97.5% {
+        transform: rotate(-5deg);
+    }
+    85%, 90%, 95% {
+        transform: rotate(5deg);
+    }
+}
+
 @keyframes wheelSpin {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
 }
 
-.wheel-button:hover {
+.wheel-button:hover,
+.daily-button:hover {
     transform: scale(1.1);
 }
 
 .overlay-active .wheel-button,
-.wheel-button.hide {
+.wheel-button.hide,
+.overlay-active .daily-button,
+.daily-button.hide {
     transform: scale(0);
     pointer-events: none;
+    animation: none;
 }
 
 .wheel-overlay {
@@ -2967,6 +3049,13 @@ body.digital .hybrid-menu-item {
         background: linear-gradient(to bottom, #2a2a2a 50%, var(--color-pink) 100%);
     }
 
+    .game-card.daily-card,
+    .opponent-hand-popover .game-card.daily-card,
+    body.male .game-card.daily-card,
+    body.female .game-card.daily-card {
+        background: linear-gradient(to bottom, #2a2a2a 50%, #F39237 100%);
+    }
+
     body.nd-theme .game-card {
         background: linear-gradient(to bottom, #2a2a2a 50%, #111 100%) !important;
     }
@@ -3071,9 +3160,10 @@ body.digital .hybrid-menu-item {
         color: #e6e6e6;
     }
 
-    .wheel-button {
+    .wheel-button,
+    .daily-button {
         background: rgba(25,25,25,0.7);
-        border-color: #111;
+        border-color: #222;
         color: #ccc;
     }
 
@@ -3132,24 +3222,6 @@ body.digital .hybrid-menu-item {
     }
     .gradient-theme .player-score.female {
         background: linear-gradient(to right, var(--color-pink) 0%, var(--color-pink-light) 35% 65%, var(--color-pink) 100%);
-    }
-
-    .iAN {
-        left: 14px;
-        top: 50%;
-        transform: translateY(-50%);
-        height: 125px;
-        width: 37px;
-        justify-content: center;
-        text-align: left;
-    }
-
-    .iAN.show {
-        left: 12px;
-        top: 50%;
-        height: 200px;
-        width: 400px;
-        padding: 0 0 0 50px;
     }
 
     .game-timer.visible {

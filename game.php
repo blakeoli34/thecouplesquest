@@ -404,7 +404,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 'snap' => [],
                 'dare' => [],
                 'spicy' => [],
-                'chance' => []
+                'chance' => [],
+                'daily' => []
             ];
             
             // Get all non-serve cards in hand and organize by type
@@ -682,6 +683,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 error_log("Error completing chance card: " . $e->getMessage());
                 echo json_encode(['success' => false, 'message' => $e->getMessage()]);
             }
+            exit;
+
+        case 'accept_daily_card':
+            $response = acceptDailyCard($player['id']);
+            echo json_encode($response);
+            exit;
+
+        case 'decline_daily_card':
+            $response = declineDailyCard($player['id']);
+            echo json_encode($response);
+            exit;
+
+        case 'check_for_daily_card_offer':
+            $response = isDailyCardAvailable($player['id']);
+            echo json_encode(['success' => true, 'daily_available' => $response]);
+            exit;
+
+        case 'get_daily_card_data':
+            $response = getDailyCardData($player['id']);
+            if(!$response) {
+                echo json_encode(['success' => false, 'message' => 'no card data returned']);
+            }
+            echo json_encode($response);
             exit;
 
         case 'get_active_effects':
@@ -1615,6 +1639,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         <i class="fa-solid fa-arrows-spin"></i>
     </div>
 
+    <!-- Daily Button (only shows when available) -->
+    <div class="daily-button" id="dailyButton" onclick="showDailyOffer()">
+        <i class="fa-solid fa-flag-checkered"></i>
+    </div>
+
     <!-- Wheel Overlay -->
     <div class="wheel-overlay" id="wheelOverlay" onclick="handleWheelOverlayClick(event)">
         <div class="wheel-container">
@@ -1631,6 +1660,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 <div class="wheel-pointer"></div>
                 <div class="wheel-center" onclick="event.stopPropagation(); spinWheelAction()">SPIN</div>
             </div>
+        </div>
+    </div>
+
+    <div id="dailyOverlay" class="card-overlay" onclick="handleDailyOverlayClick(event)">
+        <div class="card-overlay-content">
+            <div class="card-overlay-header">
+                <h2><?php echo $player['first_name']; ?>'s Daily Challenge Offer</h2>
+                <p>Expires at noon. Challenge must be completed today.</p>
+            </div>
+            <div id="dailyCardsGrid" class="daily-card-grid"></div>
+            <div id="dailyCardActions" class="card-selection-actions"></div>
+            <button class="card-overlay-close" onclick="closeDailyOverlay()">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
         </div>
     </div>
 
