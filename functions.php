@@ -1340,7 +1340,7 @@ function acceptDailyCard($playerId) {
         
         return [
             'success' => true,
-            'message' => 'Daily challenge accepted',
+            'message' => 'Offer accepted! Your card is in your hand.',
             'card' => $card
         ];
     } else {
@@ -1366,7 +1366,7 @@ function declineDailyCard($playerId) {
     
     return [
         'success' => true,
-        'message' => 'Daily challenge declined'
+        'message' => 'Offer declined! Check back tomorrow.'
     ];
 }
 
@@ -1488,11 +1488,21 @@ function addCardToHand($gameId, $playerId, $cardId, $cardType, $quantity = 1, $f
             $stmt->execute([$cardId]);
             $duration = $stmt->fetchColumn();
 
-            if($cardType === 'daily') {
+            if($cardType === 'daily' || $duration === -1) {
                 $timezone = new DateTimeZone('America/Indiana/Indianapolis');
                 $now = new DateTime('now', $timezone);
-                $midnight = new DateTime('tomorrow', $timezone);
-                $midnight->setTime(0, 0, 0);
+                
+                // Determine target midnight based on current time
+                if ($now->format('H') >= 16) {
+                    // After 4pm - use day after tomorrow's midnight (end of next gameday)
+                    $midnight = new DateTime('tomorrow', $timezone);
+                    $midnight->modify('+1 day');
+                    $midnight->setTime(0, 0, 0);
+                } else {
+                    // Before 4pm - use tomorrow's midnight (end of current gameday)
+                    $midnight = new DateTime('tomorrow', $timezone);
+                    $midnight->setTime(0, 0, 0);
+                }
                 
                 $duration = floor(($midnight->getTimestamp() - $now->getTimestamp()) / 60);
             }

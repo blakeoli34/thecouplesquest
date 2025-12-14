@@ -488,7 +488,7 @@ function offerDailyChallenges() {
             SELECT id, card_name, card_description, card_points, veto_subtract, veto_steal
             FROM cards
             WHERE card_type = 'daily'
-            ORDER BY RAND() * quantity DESC
+            ORDER BY RAND()
             LIMIT 1
         ");
         $cardStmt->execute();

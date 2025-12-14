@@ -558,20 +558,29 @@ function getCardDisplayInfo(card, context = 'serve') {
     // Show Card Duration in Serve Context
     if (context === 'serve' && card.card_duration) {
         const totalMinutes = card.card_duration;
-        const days = Math.floor(totalMinutes / (24 * 60));
-        const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
-        const minutes = totalMinutes % 60;
         
         let durationText;
-        if (days > 0) {
-            durationText = `${days}d`;
-            if (hours > 0) durationText += ` ${hours}h`;
-            if (minutes > 0) durationText += ` ${minutes}m`;
-        } else if (hours > 0) {
-            durationText = `${hours}h`;
-            if (minutes > 0) durationText += ` ${minutes}m`;
+        if (totalMinutes === -1) {
+            // Check current time in Indianapolis timezone
+            const now = new Date();
+            const indianapolisTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Indiana/Indianapolis' }));
+            const currentHour = indianapolisTime.getHours();
+            durationText = currentHour >= 16 ? 'EOT' : 'EOD';
         } else {
-            durationText = `${minutes}m`;
+            const days = Math.floor(totalMinutes / (24 * 60));
+            const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+            const minutes = totalMinutes % 60;
+            
+            if (days > 0) {
+                durationText = `${days}d`;
+                if (hours > 0) durationText += ` ${hours}h`;
+                if (minutes > 0) durationText += ` ${minutes}m`;
+            } else if (hours > 0) {
+                durationText = `${hours}h`;
+                if (minutes > 0) durationText += ` ${minutes}m`;
+            } else {
+                durationText = `${minutes}m`;
+            }
         }
         
         badges.push(`<span class="card-badge duration"><i class="fa-solid fa-timer"></i> ${durationText}</span>`);
