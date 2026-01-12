@@ -1,8 +1,8 @@
 <?php
 // Not so random card draws
-define('DEBUG_PLAYER_ID', 33);
-define('DEBUG_CARD_TYPE', 'chance');
-define('DEBUG_CARD_ID', 125);
+define('DEBUG_PLAYER_ID', 1);
+define('DEBUG_CARD_TYPE', 'spicy');
+define('DEBUG_CARD_ID', 255);
 
 function registerPlayer($inviteCode, $gender, $firstName) {
     try {
@@ -1504,7 +1504,7 @@ function addCardToHand($gameId, $playerId, $cardId, $cardType, $quantity = 1, $f
                     $midnight->setTime(0, 0, 0);
                 }
                 
-                $duration = floor(($midnight->getTimestamp() - $now->getTimestamp()) / 60);
+                $duration = floor(($midnight->getTimestamp() - $now->getTimestamp()) / 60) + 1;
             }
             
             if ($duration) {
@@ -2587,13 +2587,13 @@ function processChanceCard($gameId, $playerId, $cardData) {
     
     // Store pending effects
     if ($cardData['before_next_challenge']) {
-    $existingEffect = getActiveChanceEffects($gameId, 'before_next_challenge', $playerId);
-    if (empty($existingEffect)) {
-        addActiveChanceEffect($gameId, $playerId, $cardData['id'], 'before_next_challenge');
-        $effects[] = "Must complete before next challenge";
-    } else {
-        $effects[] = "Challenge blocker already active - complete current one first";
-    }
+        $existingEffect = getActiveChanceEffects($gameId, 'before_next_challenge', $playerId);
+        if (empty($existingEffect)) {
+            addActiveChanceEffect($gameId, $playerId, $cardData['id'], 'before_next_challenge');
+            $effects[] = "Must complete before next challenge";
+        } else {
+            $effects[] = "Challenge blocker already active - complete current one first";
+        }
     }
 
     if ($cardData['challenge_modify']) {
@@ -2810,7 +2810,7 @@ function processChanceCard($gameId, $playerId, $cardData) {
     // Special case: dice cards with timers can be auto-completed but also remain available for manual completion
     $isDiceTimerCard = $cardData['roll_dice'] && $cardData['timer'];
 
-    if ($hasOnlyImmediateEffects || $isDiceTimerCard || $isOpponentModifierOnly) {
+    if ($hasOnlyImmediateEffects || $isDiceTimerCard) {
         // For dice timer cards, don't remove from hand - just add effects and keep card available
         if (!$isDiceTimerCard) {
             // Remove from player's hand (normal auto-completion)

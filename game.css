@@ -127,12 +127,24 @@ body.notification {
     background: #0c2340;
 }
 
+.christmas .player-score.male {
+    background: #1d351d;
+}
+
 .nd-theme .player-score.female {
     background: #ae9142;
 }
 
+.christmas .player-score.female {
+    background: #6f0f11;
+}
+
 .nd-theme .player-score-value {
     color: white !important;
+}
+
+.christmas .player-score-value {
+    color: rgba(255,255,255,0.6) !important;
 }
 
 .player-name {
@@ -1527,6 +1539,20 @@ body.notification {
     pointer-events: none;
 }
 
+body.male .game-card,
+body.female .game-card.accepted_serve-card,
+body.female .opponent-hand-popover .game-card,
+body.male .opponent-hand-popover .game-card.accepted_serve-card {
+    background: linear-gradient(to bottom, #fff 50%, var(--color-blue) 100%);
+}
+
+body.female .game-card,
+body.male .game-card.accepted_serve-card,
+body.male .opponent-hand-popover .game-card,
+body.female .opponent-hand-popover .game-card.accepted_serve-card  {
+    background: linear-gradient(to bottom, #fff 50%, var(--color-pink) 100%);
+}
+
 .game-card.daily-card,
 .opponent-hand-popover .game-card.daily-card,
 body.male .game-card.daily-card,
@@ -1534,29 +1560,31 @@ body.female .game-card.daily-card {
     background: linear-gradient(to bottom, #fff 50%, #F39237 100%);
 }
 
-body.male .game-card,
-body.female .game-card.accepted_serve-card {
-    background: linear-gradient(to bottom, #fff 50%, var(--color-blue) 100%);
-}
-
-body.female .game-card,
-body.male .game-card.accepted_serve-card {
-    background: linear-gradient(to bottom, #fff 50%, var(--color-pink) 100%);
-}
-
-body.female .opponent-hand-popover .game-card,
-body.male .opponent-hand-popover .game-card.accepted_serve-card {
-    background: linear-gradient(to bottom, #fff 50%, var(--color-blue) 100%);
-}
-
-body.male .opponent-hand-popover .game-card,
-body.female .opponent-hand-popover .game-card.accepted_serve-card  {
-    background: linear-gradient(to bottom, #fff 50%, var(--color-pink) 100%);
-}
-
 body.nd-theme .game-card {
     background: linear-gradient(to bottom, #fff 50%, #aaa 100%) !important;
 }
+
+body.christmas.male .game-card,
+body.christmas.female .game-card.accepted_serve-card,
+body.christmas.female .opponent-hand-popover .game-card,
+body.christmas.male .opponent-hand-popover .game-card.accepted_serve-card {
+    background: linear-gradient(to bottom, #fff 50%, #325632 100%);
+}
+
+body.christmas.female .game-card,
+body.christmas.male .game-card.accepted_serve-card,
+body.christmas.male .opponent-hand-popover .game-card,
+body.christmas.female .opponent-hand-popover .game-card.accepted_serve-card {
+    background: linear-gradient(to bottom, #fff 50%, #8b181d 100%);
+}
+
+body.christmas .game-card.daily-card,
+body.christmas .opponent-hand-popover .game-card.daily-card,
+body.christmas.male .game-card.daily-card,
+body.christmas.female .game-card.daily-card {
+    background: linear-gradient(to bottom, #fff 50%, #e6be9a 100%);
+}
+
 
 .card-header {
     display: flex;
@@ -2807,7 +2835,19 @@ body.digital .hybrid-menu-item {
     ) !important;
 }
 
-.nd-theme .wheel-text {
+.christmas .wheel-background {
+    background: conic-gradient(
+        #325632 0deg 60deg,
+        #8b181d 60deg 120deg,
+        #325632 120deg 180deg,
+        #8b181d 180deg 240deg,
+        #325632 240deg 300deg,
+        #8b181d 300deg 360deg
+    ) !important;
+}
+
+.nd-theme .wheel-text,
+.christmas .wheel-text {
     color: #fff !important;
 }
 
@@ -3060,7 +3100,29 @@ body.digital .hybrid-menu-item {
         background: linear-gradient(to bottom, #2a2a2a 50%, #111 100%) !important;
     }
 
-    body.nd-theme .card-badge.duration {
+    body.christmas.male .game-card,
+    body.christmas.female .game-card.accepted_serve-card,
+    body.christmas.female .opponent-hand-popover .game-card,
+    body.christmas.male .opponent-hand-popover .game-card.accepted_serve-card {
+        background: linear-gradient(to bottom, #2a2a2a 50%, #325632 100%);
+    }
+
+    body.christmas.female .game-card,
+    body.christmas.male .game-card.accepted_serve-card,
+    body.christmas.male .opponent-hand-popover .game-card,
+    body.christmas.female .opponent-hand-popover .game-card.accepted_serve-card {
+        background: linear-gradient(to bottom, #2a2a2a 50%, #8b181d 100%);
+    }
+
+    body.christmas .game-card.daily-card,
+    body.christmas .opponent-hand-popover .game-card.daily-card,
+    body.christmas.male .game-card.daily-card,
+    body.christmas.female .game-card.daily-card {
+        background: linear-gradient(to bottom, #2a2a2a 50%, #e6be9a 100%);
+    }
+
+    body.nd-theme .card-badge.duration,
+    body.christmas .card-badge.duration {
         color: #fff;
     }
     
@@ -3375,6 +3437,22 @@ body.digital .hybrid-menu-item {
         transform: translateY(-50%);
     }
 
+    .card-overlay-content {
+        padding-top: 5vh;
+    }
+
+    .card-overlay-content .card-selection-actions {
+        top: calc(50% + 5vh);
+    }
+
+    .daily-card-grid {
+        margin-left: -17.5%;
+    }
+
+    .daily-button {
+        bottom: 18px;
+    }
+
     @keyframes cardServing {
         0% {
             transform: translate(-50%, -50%) scale(1.2);
@@ -3586,4 +3664,22 @@ body.digital .hybrid-menu-item {
             opacity: 0;
         }
     }
+}
+
+#snow {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    z-index: 2000;
+}
+
+.snowflake {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: linear-gradient(white, white);
+  /* Workaround for Chromium's selective color inversion */
+  border-radius: 50%;
+  filter: drop-shadow(0 0 10px white);
 }

@@ -209,7 +209,8 @@ function updateOpponentHandDisplay() {
                     'snap': 'fa-camera-retro', 
                     'dare': 'fa-hand-point-right',
                     'spicy': 'fa-pepper-hot',
-                    'chance': 'fa-circle-question'
+                    'chance': 'fa-circle-question',
+                    'daily': 'fa-flag-checkered'
                 };
                 
                 Object.entries(data.counts).forEach(([type, count]) => {
@@ -654,11 +655,11 @@ function getCardDisplayInfo(card, context = 'serve') {
         if (card.card_type === 'accepted_serve' && card.clears_challenge_modify_effects == 0) {
             // Skip challenge modifier badge for this card
         } else if (cardData.active_modifiers[card.card_type]) {
-            badges.push(`<span class="card-badge modifier">${cardData.active_modifiers[card.card_type]}</span>`);
+            badges.push(`<span class="card-badge modifier"><i class="fa-solid fa-circle-question"></i> ${cardData.active_modifiers[card.card_type]}</span>`);
         }
         
         if (cardData.active_modifiers[card.card_type + '_veto']) {
-            badges.push(`<span class="card-badge modifier">${cardData.active_modifiers[card.card_type + '_veto']}</span>`);
+            badges.push(`<span class="card-badge modifier"><i class="fa-solid fa-circle-question"></i> ${cardData.active_modifiers[card.card_type + '_veto']}</span>`);
         }
     }
     
@@ -3973,6 +3974,10 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Inject female player image
         $('.player-score.female .img-inject').html('<img src="img/nd-leprechaun-football.png" alt="ND Football Leprechaun">');
+    }
+
+    if($('body').hasClass('christmas')) {
+        $('body').prepend('<div id="snow" data-count="50"></div>');
     }
 
     // Clean up expired effects every 30 seconds for digital games

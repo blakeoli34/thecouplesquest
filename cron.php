@@ -38,6 +38,9 @@ switch ($action) {
     case 'offer':
         offerDailyChallenges();
         break;
+    case 'reminder':
+        offerReminder();
+        break;
     case 'auto_decline':
         autoDeclineChallenges();
         break;
@@ -513,6 +516,31 @@ function offerDailyChallenges() {
     }
     
     echo "Daily challenges offered to " . count($players) . " players\n";
+}
+
+function offerReminder() {
+    $pdo = Config::getDatabaseConnection();
+    
+    $selectStmt = $pdo->prepare("
+        SELECT p.id, p.fcm_token
+        FROM players p
+        WHERE p.daily_offered_at IS NOT NULL
+        AND p.daily_accepted = 0
+    ");
+    $selectStmt->execute();
+    $players = $selectStmt->fetchAll(PDO::FETCH_ASSOC);
+
+
+    if (count($players) > 0) {
+        // Send reminder notifications to each player
+        foreach ($players as $player) {
+            if (!empty($player['fcm_token'])) {
+                sendPushNotification($player['fcm_token'], 'Offer Reminder', 'Your daily challenge offer will expire in 30 minutes!');
+            }
+        }
+    }
+    
+    echo "Reminded " . count($players) . " players of expiring offers\n";
 }
 
 function autoDeclineChallenges() {
