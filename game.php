@@ -929,6 +929,118 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             echo json_encode(['success' => true]);
             exit;
 
+        case 'serve_custom_card':
+            session_start();
+            $pdo = Config::getDatabaseConnection();
+            
+            $player_id = $currentPlayer['id'];
+            $game_id = $currentPlayer['game_id'];
+            
+            // Get form data
+            $card_name = trim($_POST['card_name'] ?? '');
+            $card_description = trim($_POST['card_description'] ?? '');
+            $card_points = intval($_POST['card_points'] ?? 0);
+            $card_expiration = $_POST['card_expiration'] ?? null;
+            $veto_subtract = intval($_POST['veto_subtract'] ?? 0);
+            $veto_steal = intval($_POST['veto_steal'] ?? 0);
+            $veto_draw_chance = intval($_POST['veto_draw_chance'] ?? 0);
+            $veto_draw_snap_dare = intval($_POST['veto_draw_snap_dare'] ?? 0);
+            $veto_draw_spicy = intval($_POST['veto_draw_spicy'] ?? 0);
+            $win_loss = isset($_POST['win_loss']) ? 1 : 0;
+            
+            // Validate required fields
+            if (empty($card_name) || empty($card_description)) {
+                echo json_encode(['success' => false, 'error' => 'Card name and description are required']);
+                exit;
+            }
+            
+            // Validate points range
+            if ($card_points < 0 || $card_points > 25) {
+                echo json_encode(['success' => false, 'error' => 'Card points must be between 0 and 25']);
+                exit;
+            }
+            
+            // Calculate card_duration and expires_at if expiration is set
+            $card_duration = null;
+            $expires_at = null;
+            if (!empty($card_expiration)) {
+                // Create DateTime object in Indianapolis timezone
+                $indianapolis_tz = new DateTimeZone('America/Indiana/Indianapolis');
+                $expiration_dt = new DateTime($card_expiration, $indianapolis_tz);
+                
+                // Get current time in Indianapolis timezone
+                $current_dt = new DateTime('now', $indianapolis_tz);
+                
+                if ($expiration_dt > $current_dt) {
+                    $diff_seconds = $expiration_dt->getTimestamp() - $current_dt->getTimestamp();
+                    $card_duration = round($diff_seconds / 60); // Convert to minutes
+                    
+                    // Keep in Indianapolis timezone for database storage
+                    $expires_at = $expiration_dt->format('Y-m-d H:i:s');
+                }
+            }
+            
+            // Get opponent player ID
+            $stmt = $pdo->prepare("SELECT id FROM players WHERE game_id = ? AND id != ?");
+            $stmt->execute([$game_id, $player_id]);
+            $opponent = $stmt->fetch();
+            
+            if (!$opponent) {
+                echo json_encode(['success' => false, 'error' => 'Opponent not found']);
+                exit;
+            }
+            
+            $opponent_id = $opponent['id'];
+            
+            // Insert custom card
+            $stmt = $pdo->prepare("
+                INSERT INTO custom_cards 
+                (game_id, created_by_player_id, card_name, card_description, card_points, card_duration, 
+                veto_subtract, veto_steal, veto_draw_chance, veto_draw_snap_dare, veto_draw_spicy, win_loss) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+            
+            if (!$stmt->execute([
+                $game_id, $player_id, $card_name, $card_description, $card_points, $card_duration,
+                $veto_subtract, $veto_steal, $veto_draw_chance, $veto_draw_snap_dare, $veto_draw_spicy, $win_loss
+            ])) {
+                echo json_encode(['success' => false, 'error' => 'Failed to create custom card']);
+                exit;
+            }
+            
+            $custom_card_id = $pdo->lastInsertId();
+            
+            // Add to opponent's hand as served card
+            $stmt = $pdo->prepare("
+                INSERT INTO player_cards (player_id, game_id, card_id, card_type, is_custom, created_at, expires_at) 
+                VALUES (?, ?, ?, 'accepted_serve', 1, NOW(), ?)
+            ");
+
+            if ($stmt->execute([$opponent_id, $game_id, $custom_card_id, $expires_at])) {
+                // Get opponent's FCM token for notification
+                $stmt = $pdo->prepare("SELECT fcm_token FROM players WHERE id = ?");
+                $stmt->execute([$opponent_id]);
+                $opponent_data = $stmt->fetch();
+                
+                // Get sender's name
+                $stmt = $pdo->prepare("SELECT first_name FROM players WHERE id = ?");
+                $stmt->execute([$player_id]);
+                $sender_data = $stmt->fetch();
+                
+                if ($opponent_data && $opponent_data['fcm_token'] && $sender_data) {
+                    sendPushNotification(
+                        $opponent_data['fcm_token'],
+                        "You've been served!",
+                        "{$sender_data['first_name']} has served you a card, tap to check it out."
+                    );
+                }
+                
+                echo json_encode(['success' => true]);
+            } else {
+                echo json_encode(['success' => false, 'error' => 'Failed to serve custom card']);
+            }
+            exit;
+
         case 'end_game':
             try {
                 $pdo = Config::getDatabaseConnection();
@@ -1696,6 +1808,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js"></script>
     <script src="/game.js"></script>
-    <script src="/pure-snow.js"></script>
+    <?php if($todayTheme === 'christmas') {
+        echo '<script src="/pure-snow.js"></script>';
+    } ?>
 </body>
 </html>

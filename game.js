@@ -337,6 +337,10 @@ function populateCardGrid(gridId, cards, type) {
         grid.innerHTML = '<p style="color: white; text-align: center; width: 100%;">No cards available</p>';
         return;
     }
+
+    if(type === 'serve') {
+        grid.innerHTML = `<!-- Custom Card --><div class="game-card serve-card custom-serve-card" onclick="showCustomCardForm()"><div class="card-header"><div class="card-type"><i class="fa-solid fa-circle-arrow-up"></i> Serve</div><div class="card-name">Custom Serve</div></div><div class="card-description">Create a custom card to serve to ${gameData.opponentPlayerName}.</div></div>`;
+    }
     
     cards.forEach(card => {
         const cardElement = createCardElement(card, type);
@@ -1497,6 +1501,7 @@ function loseSelectedCard() {
 function closeCardOverlay(overlayId) {
     if (overlayId === 'serveCardsOverlay') {
         clearServeSelection();
+        hideCustomCardForm();
     } else {
         clearCardSelection();
     }
@@ -3786,6 +3791,129 @@ function markCardsAsSeen(cardIds) {
     });
 }
 
+function showCustomCardForm() {
+    const cardGrid = document.querySelector('.card-grid');
+    const formHTML = `
+        <div class="custom-card-form-container">
+            <h2>Create Custom Card</h2>
+            <form id="custom-card-form">
+                <div class="form-group">
+                    <input type="text" id="card-name" name="card_name" required maxlength="255" placeholder="Card Name *">
+                </div>
+                
+                <div class="form-group">
+                    <textarea id="card-description" name="card_description" placeholder="Card Description *" required></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="card-points">Card Points (0-25)</label>
+                    <input type="number" id="card-points" name="card_points" min="0" max="25" placeholder="0">
+                </div>
+                
+                <div class="form-group">
+                    <label for="card-expiration">Card Expiration</label>
+                    <input type="datetime-local" id="card-expiration" name="card_expiration">
+                </div>
+                
+                <div class="form-group">
+                    <label>Veto Penalties</label>
+                    <div class="veto-penalties-grid">
+                        <div class="veto-penalty-item">
+                            <label for="veto-points">Points:</label>
+                            <input type="number" id="veto-points" name="veto_subtract" min="0" placeholder="0">
+                        </div>
+                        <div class="veto-penalty-item">
+                            <label for="veto-steal">Steal:</label>
+                            <input type="number" id="veto-steal" name="veto_steal" min="0" placeholder="0">
+                        </div>
+                        <div class="veto-penalty-item">
+                            <label for="veto-chance">Chance:</label>
+                            <input type="number" id="veto-chance" name="veto_draw_chance" min="0" placeholder="0">
+                        </div>
+                        <div class="veto-penalty-item">
+                            <label for="veto-snap-dare">Snap/Dare:</label>
+                            <input type="number" id="veto-snap-dare" name="veto_draw_snap_dare" min="0" placeholder="0">
+                        </div>
+                        <div class="veto-penalty-item">
+                            <label for="veto-spicy">Spicy:</label>
+                            <input type="number" id="veto-spicy" name="veto_draw_spicy" min="0" placeholder="0">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <div class="battle-checkbox-group">
+                        <input type="checkbox" id="win-loss" name="win_loss" value="1">
+                        <label for="win-loss">
+                            <i class="fa-solid fa-swords"></i>
+                            Battle
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn-back" onclick="hideCustomCardForm()">
+                        <i class="fa-solid fa-arrow-left"></i> Back
+                    </button>
+                    <button type="submit" class="serve-button">
+                        Serve to ${gameData.opponentPlayerName}
+                    </button>
+                </div>
+            </form>
+        </div>
+    `;
+    
+    cardGrid.style.display = 'none';
+    cardGrid.insertAdjacentHTML('afterend', formHTML);
+    
+    // Handle form submission
+    document.getElementById('custom-card-form').addEventListener('submit', handleCustomCardSubmit);
+}
+
+function hideCustomCardForm() {
+    const formContainer = document.querySelector('.custom-card-form-container');
+    const cardGrid = document.querySelector('.card-grid');
+    
+    if (formContainer) {
+        formContainer.remove();
+    }
+    cardGrid.style.display = '';
+}
+
+async function handleCustomCardSubmit(e) {
+    e.preventDefault();
+    
+    const form = e.target;
+    const formData = new FormData(form);
+    formData.append('action', 'serve_custom_card');
+    
+    try {
+        const response = await fetch('game.php', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const responseText = await response.text();
+        console.log('Raw response:', responseText); // Debug log
+        
+        let result;
+        try {
+            result = JSON.parse(responseText);
+        } catch (parseError) {
+            console.error('JSON parse error:', parseError);
+            console.error('Response text:', responseText);
+            return;
+        }
+        
+        if (result.success) {
+            closeCardOverlay('serveCardsOverlay');
+            showInAppNotification('Card Served', 'Custom card served successfully!');
+        }
+    } catch (error) {
+        console.error('Error serving custom card:', error);
+    }
+}
+
 // Initialize everything when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Game page loaded');
@@ -4102,3 +4230,4 @@ window.handleDailyOverlayClick = handleDailyOverlayClick;
 window.acceptDailyCard = acceptDailyCard;
 window.declineDailyCard = declineDailyCard;
 window.showDailyOffer = showDailyOffer;
+window.showCustomCardForm = showCustomCardForm;

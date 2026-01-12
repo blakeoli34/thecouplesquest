@@ -898,6 +898,10 @@ function resetGameForNewRound($gameId) {
         // Clear score history
         $stmt = $pdo->prepare("DELETE FROM score_history WHERE game_id = ?");
         $stmt->execute([$gameId]);
+
+        // Clear any remaining custom card data
+        $stmt = $pdo->prepare("DELETE FROM custom_cards WHERE game_id = ?");
+        $stmt->execute([$gameId]);
         
         // Clear digital game data - THIS WAS MISSING
         $stmt = $pdo->prepare("DELETE FROM game_decks WHERE game_id = ?");
@@ -1059,19 +1063,47 @@ function getPlayerCards($gameId, $playerId, $cardType = null) {
         $pdo = Config::getDatabaseConnection();
         
         $sql = "
-            SELECT pc.*, c.card_name, c.card_description, c.card_points as original_points, 
-                COALESCE(pc.card_points, c.card_points) as card_points, c.card_duration, pc.expires_at, pc.filled_values, pc.animation_shown,
-            c.serve_to_her, c.serve_to_him, c.for_her, c.for_him,
-            c.extra_spicy, c.veto_subtract, c.veto_steal,
-            c.veto_draw_chance, c.veto_draw_snap_dare, c.veto_draw_spicy,
-            c.timer, c.challenge_modify, c.snap_modify, c.dare_modify, c.spicy_modify,
-            c.before_next_challenge, c.veto_modify, c.score_modify,
-            c.roll_dice, c.dice_condition, c.dice_threshold, c.double_it,
-            c.opponent_challenge_modify, c.draw_snap_dare, c.draw_spicy,
-            c.score_add, c.score_subtract, c.score_steal, c.repeat_count, c.win_loss,
-            c.clears_challenge_modify_effects
+            SELECT pc.*, 
+                CASE WHEN pc.is_custom = 1 THEN cc.card_name ELSE c.card_name END as card_name,
+                CASE WHEN pc.is_custom = 1 THEN cc.card_description ELSE c.card_description END as card_description,
+                CASE WHEN pc.is_custom = 1 THEN cc.card_points ELSE c.card_points END as original_points,
+                CASE WHEN pc.is_custom = 1 THEN COALESCE(pc.card_points, cc.card_points) ELSE COALESCE(pc.card_points, c.card_points) END as card_points,
+                CASE WHEN pc.is_custom = 1 THEN cc.card_duration ELSE c.card_duration END as card_duration,
+                pc.expires_at, pc.filled_values, pc.animation_shown,
+                CASE WHEN pc.is_custom = 1 THEN NULL ELSE c.serve_to_her END as serve_to_her,
+                CASE WHEN pc.is_custom = 1 THEN NULL ELSE c.serve_to_him END as serve_to_him,
+                CASE WHEN pc.is_custom = 1 THEN NULL ELSE c.for_her END as for_her,
+                CASE WHEN pc.is_custom = 1 THEN NULL ELSE c.for_him END as for_him,
+                CASE WHEN pc.is_custom = 1 THEN 0 ELSE c.extra_spicy END as extra_spicy,
+                CASE WHEN pc.is_custom = 1 THEN cc.veto_subtract ELSE c.veto_subtract END as veto_subtract,
+                CASE WHEN pc.is_custom = 1 THEN cc.veto_steal ELSE c.veto_steal END as veto_steal,
+                CASE WHEN pc.is_custom = 1 THEN cc.veto_draw_chance ELSE c.veto_draw_chance END as veto_draw_chance,
+                CASE WHEN pc.is_custom = 1 THEN cc.veto_draw_snap_dare ELSE c.veto_draw_snap_dare END as veto_draw_snap_dare,
+                CASE WHEN pc.is_custom = 1 THEN cc.veto_draw_spicy ELSE c.veto_draw_spicy END as veto_draw_spicy,
+                CASE WHEN pc.is_custom = 1 THEN 0 ELSE c.timer END as timer,
+                CASE WHEN pc.is_custom = 1 THEN 0 ELSE c.challenge_modify END as challenge_modify,
+                CASE WHEN pc.is_custom = 1 THEN 0 ELSE c.snap_modify END as snap_modify,
+                CASE WHEN pc.is_custom = 1 THEN 0 ELSE c.dare_modify END as dare_modify,
+                CASE WHEN pc.is_custom = 1 THEN 0 ELSE c.spicy_modify END as spicy_modify,
+                CASE WHEN pc.is_custom = 1 THEN 0 ELSE c.before_next_challenge END as before_next_challenge,
+                CASE WHEN pc.is_custom = 1 THEN 0 ELSE c.veto_modify END as veto_modify,
+                CASE WHEN pc.is_custom = 1 THEN 0 ELSE c.score_modify END as score_modify,
+                CASE WHEN pc.is_custom = 1 THEN 0 ELSE c.roll_dice END as roll_dice,
+                CASE WHEN pc.is_custom = 1 THEN NULL ELSE c.dice_condition END as dice_condition,
+                CASE WHEN pc.is_custom = 1 THEN 0 ELSE c.dice_threshold END as dice_threshold,
+                CASE WHEN pc.is_custom = 1 THEN 0 ELSE c.double_it END as double_it,
+                CASE WHEN pc.is_custom = 1 THEN 0 ELSE c.opponent_challenge_modify END as opponent_challenge_modify,
+                CASE WHEN pc.is_custom = 1 THEN 0 ELSE c.draw_snap_dare END as draw_snap_dare,
+                CASE WHEN pc.is_custom = 1 THEN 0 ELSE c.draw_spicy END as draw_spicy,
+                CASE WHEN pc.is_custom = 1 THEN 0 ELSE c.score_add END as score_add,
+                CASE WHEN pc.is_custom = 1 THEN 0 ELSE c.score_subtract END as score_subtract,
+                CASE WHEN pc.is_custom = 1 THEN 0 ELSE c.score_steal END as score_steal,
+                CASE WHEN pc.is_custom = 1 THEN 0 ELSE c.repeat_count END as repeat_count,
+                CASE WHEN pc.is_custom = 1 THEN cc.win_loss ELSE c.win_loss END as win_loss,
+                CASE WHEN pc.is_custom = 1 THEN 0 ELSE c.clears_challenge_modify_effects END as clears_challenge_modify_effects
             FROM player_cards pc
-            JOIN cards c ON pc.card_id = c.id
+            LEFT JOIN cards c ON pc.card_id = c.id AND pc.is_custom = 0
+            LEFT JOIN custom_cards cc ON pc.card_id = cc.id AND pc.is_custom = 1
             WHERE pc.game_id = ? AND pc.player_id = ?
         ";
         
@@ -1082,7 +1114,7 @@ function getPlayerCards($gameId, $playerId, $cardType = null) {
             $params[] = $cardType;
         }
         
-        $sql .= " ORDER BY c.card_name";
+        $sql .= " ORDER BY CASE WHEN pc.is_custom = 1 THEN cc.card_name ELSE c.card_name END";
         
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);

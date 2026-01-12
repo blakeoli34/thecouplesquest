@@ -1503,7 +1503,7 @@ body.notification {
 
 .game-card {
     width: calc(50% - 10px);
-    background: linear-gradient(to bottom, #fff 50%, #ccc 100%);
+    background: linear-gradient(to bottom, #fff 0%, #fff 50%, #ccc 100%);
     border-radius: 15px;
     padding: 20px;
     box-shadow: 0 8px 25px rgba(0,0,0,0.2);
@@ -1539,50 +1539,178 @@ body.notification {
     pointer-events: none;
 }
 
+.custom-serve-card {
+    opacity: 1;
+    border-style: dashed;
+    background: transparent !important;
+    cursor: pointer;
+}
+
+.custom-serve-card:hover {
+    opacity: 0.9;
+    transform: translateY(-4px);
+}
+
+/* Custom card form */
+.custom-card-form-container {
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.custom-card-form-container h2 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    color: #fff;
+}
+
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: #fff;
+    font-weight: 500;
+}
+
+.form-group input[type="text"],
+.form-group input[type="number"],
+.form-group input[type="datetime-local"],
+.form-group textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #fff;
+    border-radius: 8px;
+    background: transparent;
+    color: #fff;
+    font-size: 16px;
+    box-sizing: border-box;
+    outline: none !important;
+}
+
+.form-group input[type="datetime-local"] {
+    min-height: 40px;
+}
+
+.form-group textarea {
+    min-height: 80px;
+    resize: vertical;
+}
+
+.form-group input[type="number"] {
+    width: 80px;
+}
+
+.veto-penalties-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+    margin-top: 10px;
+}
+
+.veto-penalty-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.veto-penalty-item label {
+    margin: 0;
+    flex: 1;
+}
+
+.battle-checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.battle-checkbox-group input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+}
+
+.battle-checkbox-group label {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.form-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 30px;
+}
+
+.form-actions button {
+    flex: 1;
+    padding: 15px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-back {
+    background: var(--veto-color);
+    color: white;
+}
+
+.btn-back:hover {
+    opacity: 0.9;
+}
+
 body.male .game-card,
 body.female .game-card.accepted_serve-card,
 body.female .opponent-hand-popover .game-card,
 body.male .opponent-hand-popover .game-card.accepted_serve-card {
-    background: linear-gradient(to bottom, #fff 50%, var(--color-blue) 100%);
+    background: linear-gradient(to bottom, #fff 0%, #fff 50%, var(--color-blue) 100%);
 }
 
 body.female .game-card,
 body.male .game-card.accepted_serve-card,
 body.male .opponent-hand-popover .game-card,
 body.female .opponent-hand-popover .game-card.accepted_serve-card  {
-    background: linear-gradient(to bottom, #fff 50%, var(--color-pink) 100%);
+    background: linear-gradient(to bottom, #fff 0%, #fff 50%, var(--color-pink) 100%);
 }
 
 .game-card.daily-card,
 .opponent-hand-popover .game-card.daily-card,
 body.male .game-card.daily-card,
 body.female .game-card.daily-card {
-    background: linear-gradient(to bottom, #fff 50%, #F39237 100%);
+    background: linear-gradient(to bottom, #fff 0%, #fff 50%, #F39237 100%);
 }
 
 body.nd-theme .game-card {
-    background: linear-gradient(to bottom, #fff 50%, #aaa 100%) !important;
+    background: linear-gradient(to bottom, #fff 0%, #fff 50%, #aaa 100%) !important;
 }
 
 body.christmas.male .game-card,
 body.christmas.female .game-card.accepted_serve-card,
 body.christmas.female .opponent-hand-popover .game-card,
 body.christmas.male .opponent-hand-popover .game-card.accepted_serve-card {
-    background: linear-gradient(to bottom, #fff 50%, #325632 100%);
+    background: linear-gradient(to bottom, #fff 0%, #fff 50%, #325632 100%);
 }
 
 body.christmas.female .game-card,
 body.christmas.male .game-card.accepted_serve-card,
 body.christmas.male .opponent-hand-popover .game-card,
 body.christmas.female .opponent-hand-popover .game-card.accepted_serve-card {
-    background: linear-gradient(to bottom, #fff 50%, #8b181d 100%);
+    background: linear-gradient(to bottom, #fff 0%, #fff 50%, #8b181d 100%);
 }
 
 body.christmas .game-card.daily-card,
 body.christmas .opponent-hand-popover .game-card.daily-card,
 body.christmas.male .game-card.daily-card,
 body.christmas.female .game-card.daily-card {
-    background: linear-gradient(to bottom, #fff 50%, #e6be9a 100%);
+    background: linear-gradient(to bottom, #fff 0%, #fff 50%, #e6be9a 100%);
 }
 
 
@@ -3070,55 +3198,55 @@ body.digital .hybrid-menu-item {
     body.male .game-card,
     body.male .drawn-card,
     body.female .game-card.accepted_serve-card {
-        background: linear-gradient(to bottom, #2a2a2a 50%, var(--color-blue) 100%);
+        background: linear-gradient(to bottom, #2a2a2a 0%, #2a2a2a 50%, var(--color-blue) 100%);
     }
 
     body.female .game-card,
     body.female .drawn-card,
     body.male .game-card.accepted_serve-card {
-        background: linear-gradient(to bottom, #2a2a2a 50%, var(--color-pink) 100%);
+        background: linear-gradient(to bottom, #2a2a2a 0%, #2a2a2a 50%, var(--color-pink) 100%);
     }
 
     body.female .opponent-hand-popover .game-card,
     body.male .opponent-hand-popover .game-card.accepted_serve-card {
-        background: linear-gradient(to bottom, #2a2a2a 50%, var(--color-blue) 100%);
+        background: linear-gradient(to bottom, #2a2a2a 0%, #2a2a2a 50%, var(--color-blue) 100%);
     }
 
     body.male .opponent-hand-popover .game-card,
     body.female .opponent-hand-popover .game-card.accepted_serve-card {
-        background: linear-gradient(to bottom, #2a2a2a 50%, var(--color-pink) 100%);
+        background: linear-gradient(to bottom, #2a2a2a 0%, #2a2a2a 50%, var(--color-pink) 100%);
     }
 
     .game-card.daily-card,
     .opponent-hand-popover .game-card.daily-card,
     body.male .game-card.daily-card,
     body.female .game-card.daily-card {
-        background: linear-gradient(to bottom, #2a2a2a 50%, #F39237 100%);
+        background: linear-gradient(to bottom, #2a2a2a 0%, #2a2a2a 50%, #F39237 100%);
     }
 
     body.nd-theme .game-card {
-        background: linear-gradient(to bottom, #2a2a2a 50%, #111 100%) !important;
+        background: linear-gradient(to bottom, #2a2a2a 0%, #2a2a2a 50%, #111 100%) !important;
     }
 
     body.christmas.male .game-card,
     body.christmas.female .game-card.accepted_serve-card,
     body.christmas.female .opponent-hand-popover .game-card,
     body.christmas.male .opponent-hand-popover .game-card.accepted_serve-card {
-        background: linear-gradient(to bottom, #2a2a2a 50%, #325632 100%);
+        background: linear-gradient(to bottom, #2a2a2a 0%, #2a2a2a 50%, #325632 100%);
     }
 
     body.christmas.female .game-card,
     body.christmas.male .game-card.accepted_serve-card,
     body.christmas.male .opponent-hand-popover .game-card,
     body.christmas.female .opponent-hand-popover .game-card.accepted_serve-card {
-        background: linear-gradient(to bottom, #2a2a2a 50%, #8b181d 100%);
+        background: linear-gradient(to bottom, #2a2a2a 0%, #2a2a2a 50%, #8b181d 100%);
     }
 
     body.christmas .game-card.daily-card,
     body.christmas .opponent-hand-popover .game-card.daily-card,
     body.christmas.male .game-card.daily-card,
     body.christmas.female .game-card.daily-card {
-        background: linear-gradient(to bottom, #2a2a2a 50%, #e6be9a 100%);
+        background: linear-gradient(to bottom, #2a2a2a 0%, #2a2a2a 50%, #e6be9a 100%);
     }
 
     body.nd-theme .card-badge.duration,
