@@ -1595,9 +1595,21 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
             
             // Get card details
             $stmt = $pdo->prepare("
-                SELECT pc.*, c.*, COALESCE(pc.card_points, c.card_points) as effective_points
+                SELECT pc.*,
+                    CASE WHEN pc.is_custom = 1 THEN cc.card_name ELSE c.card_name END as card_name,
+                    CASE WHEN pc.is_custom = 1 THEN cc.card_description ELSE c.card_description END as card_description,
+                    CASE WHEN pc.is_custom = 1 THEN cc.card_points ELSE c.card_points END as card_points,
+                    CASE WHEN pc.is_custom = 1 THEN COALESCE(pc.card_points, cc.card_points) ELSE COALESCE(pc.card_points, c.card_points) END as effective_points,
+                    CASE WHEN pc.is_custom = 1 THEN 0 ELSE c.clears_challenge_modify_effects END as clears_challenge_modify_effects,
+                    CASE WHEN pc.is_custom = 1 THEN cc.veto_subtract ELSE c.veto_subtract END as veto_subtract,
+                    CASE WHEN pc.is_custom = 1 THEN cc.veto_steal ELSE c.veto_steal END as veto_steal,
+                    CASE WHEN pc.is_custom = 1 THEN cc.veto_draw_chance ELSE c.veto_draw_chance END as veto_draw_chance,
+                    CASE WHEN pc.is_custom = 1 THEN cc.veto_draw_snap_dare ELSE c.veto_draw_snap_dare END as veto_draw_snap_dare,
+                    CASE WHEN pc.is_custom = 1 THEN cc.veto_draw_spicy ELSE c.veto_draw_spicy END as veto_draw_spicy,
+                    CASE WHEN pc.is_custom = 1 THEN cc.win_loss ELSE c.win_loss END as win_loss
                 FROM player_cards pc
-                JOIN cards c ON pc.card_id = c.id
+                LEFT JOIN cards c ON pc.card_id = c.id AND pc.is_custom = 0
+                LEFT JOIN custom_cards cc ON pc.card_id = cc.id AND pc.is_custom = 1
                 WHERE pc.id = ? AND pc.player_id = ? AND pc.game_id = ?
             ");
             $stmt->execute([$playerCardId, $playerId, $gameId]);
@@ -1993,9 +2005,21 @@ function vetoHandCard($gameId, $playerId, $cardId, $playerCardId) {
         
         // Get card details
         $stmt = $pdo->prepare("
-            SELECT pc.*, c.*, COALESCE(pc.card_points, c.card_points) as effective_points
+            SELECT pc.*,
+                CASE WHEN pc.is_custom = 1 THEN cc.card_name ELSE c.card_name END as card_name,
+                CASE WHEN pc.is_custom = 1 THEN cc.card_description ELSE c.card_description END as card_description,
+                CASE WHEN pc.is_custom = 1 THEN cc.card_points ELSE c.card_points END as card_points,
+                CASE WHEN pc.is_custom = 1 THEN COALESCE(pc.card_points, cc.card_points) ELSE COALESCE(pc.card_points, c.card_points) END as effective_points,
+                CASE WHEN pc.is_custom = 1 THEN cc.veto_subtract ELSE c.veto_subtract END as veto_subtract,
+                CASE WHEN pc.is_custom = 1 THEN cc.veto_steal ELSE c.veto_steal END as veto_steal,
+                CASE WHEN pc.is_custom = 1 THEN cc.veto_draw_chance ELSE c.veto_draw_chance END as veto_draw_chance,
+                CASE WHEN pc.is_custom = 1 THEN cc.veto_draw_snap_dare ELSE c.veto_draw_snap_dare END as veto_draw_snap_dare,
+                CASE WHEN pc.is_custom = 1 THEN cc.veto_draw_spicy ELSE c.veto_draw_spicy END as veto_draw_spicy,
+                CASE WHEN pc.is_custom = 1 THEN 0 ELSE COALESCE(c.extra_spicy, 0) END as extra_spicy,
+                CASE WHEN pc.is_custom = 1 THEN cc.win_loss ELSE c.win_loss END as win_loss
             FROM player_cards pc
-            JOIN cards c ON pc.card_id = c.id
+            LEFT JOIN cards c ON pc.card_id = c.id AND pc.is_custom = 0
+            LEFT JOIN custom_cards cc ON pc.card_id = cc.id AND pc.is_custom = 1
             WHERE pc.id = ? AND pc.player_id = ? AND pc.game_id = ?
         ");
         $stmt->execute([$playerCardId, $playerId, $gameId]);
@@ -2339,9 +2363,19 @@ function processWinLossCard($gameId, $playerId, $cardId, $playerCardId, $isWin) 
         
         // Get card details
         $stmt = $pdo->prepare("
-            SELECT pc.*, c.*
+            SELECT pc.*,
+                CASE WHEN pc.is_custom = 1 THEN cc.card_name ELSE c.card_name END as card_name,
+                CASE WHEN pc.is_custom = 1 THEN cc.card_description ELSE c.card_description END as card_description,
+                CASE WHEN pc.is_custom = 1 THEN cc.card_points ELSE c.card_points END as card_points,
+                CASE WHEN pc.is_custom = 1 THEN cc.veto_subtract ELSE c.veto_subtract END as veto_subtract,
+                CASE WHEN pc.is_custom = 1 THEN cc.veto_steal ELSE c.veto_steal END as veto_steal,
+                CASE WHEN pc.is_custom = 1 THEN cc.veto_draw_chance ELSE c.veto_draw_chance END as veto_draw_chance,
+                CASE WHEN pc.is_custom = 1 THEN cc.veto_draw_snap_dare ELSE c.veto_draw_snap_dare END as veto_draw_snap_dare,
+                CASE WHEN pc.is_custom = 1 THEN cc.veto_draw_spicy ELSE c.veto_draw_spicy END as veto_draw_spicy,
+                CASE WHEN pc.is_custom = 1 THEN cc.win_loss ELSE c.win_loss END as win_loss
             FROM player_cards pc
-            JOIN cards c ON pc.card_id = c.id
+            LEFT JOIN cards c ON pc.card_id = c.id AND pc.is_custom = 0
+            LEFT JOIN custom_cards cc ON pc.card_id = cc.id AND pc.is_custom = 1
             WHERE pc.id = ? AND pc.player_id = ? AND pc.game_id = ?
         ");
         $stmt->execute([$playerCardId, $playerId, $gameId]);
