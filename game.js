@@ -659,11 +659,11 @@ function getCardDisplayInfo(card, context = 'serve') {
         if (card.card_type === 'accepted_serve' && card.clears_challenge_modify_effects == 0) {
             // Skip challenge modifier badge for this card
         } else if (cardData.active_modifiers[card.card_type]) {
-            badges.push(`<span class="card-badge modifier"><i class="fa-solid fa-circle-question"></i> ${cardData.active_modifiers[card.card_type]}</span>`);
+            badges.push(`<span class="card-badge modifier"><span><i class="fa-solid fa-circle-question"></i> ${cardData.active_modifiers[card.card_type]}</span></span>`);
         }
         
         if (cardData.active_modifiers[card.card_type + '_veto']) {
-            badges.push(`<span class="card-badge modifier"><i class="fa-solid fa-circle-question"></i> ${cardData.active_modifiers[card.card_type + '_veto']}</span>`);
+            badges.push(`<span class="card-badge modifier"><span><i class="fa-solid fa-circle-question"></i> ${cardData.active_modifiers[card.card_type + '_veto']}</span></span>`);
         }
     }
     

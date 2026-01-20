@@ -4,6 +4,12 @@ define('DEBUG_PLAYER_ID', 1);
 define('DEBUG_CARD_TYPE', 'spicy');
 define('DEBUG_CARD_ID', 255);
 
+function debugLog($message) {
+    file_put_contents('/tmp/couples_quest_debug.log', 
+        date('Y-m-d H:i:s') . " - " . $message . "\n", 
+        FILE_APPEND);
+}
+
 function registerPlayer($inviteCode, $gender, $firstName) {
     try {
         $pdo = Config::getDatabaseConnection();
@@ -241,6 +247,13 @@ function createTimer($gameId, $playerId, $description, $durationMinutes) {
 
         // Schedule the job with at
         $atJob = shell_exec("echo '{$atCommand}' | at {$atTime} 2>&1");
+
+        // Extract job ID from output (format: "job 123 at ...")
+        if (preg_match('/job (\d+)/', $atJob, $matches)) {
+            $jobId = $matches[1];
+            $stmt = $pdo->prepare("UPDATE timers SET at_job_id = ? WHERE id = ?");
+            $stmt->execute([$jobId, $timerId]);
+        }
 
         // Log the at job creation for debugging
         error_log("Created at job for timer {$timerId}: {$atTime} +{$seconds}s - Result: {$atJob}");
@@ -1586,6 +1599,7 @@ function addCardToHand($gameId, $playerId, $cardId, $cardType, $quantity = 1, $f
 
 function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
     return executeWithDeadlockRetry(function() use ($gameId, $playerId, $cardId, $playerCardId) {
+
         $pdo = Config::getDatabaseConnection();
         $pdo->beginTransaction();
         
@@ -1618,6 +1632,7 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
             if (!$playerCard) {
                 throw new Exception("Card not found in player's hand");
             }
+
             
             $pointsAwarded = 0;
             
@@ -1739,7 +1754,8 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
                         $stmt->execute($effectIds);
                     }
 
-                    // Now handle card removal and next modifier activation
+                    // SEPARATE: Now handle card removal and timer cleanup (NO activation yet)
+                    $effectOwnersToActivate = []; // Track who needs activation
                     foreach ($effectsToRemove as $effect) {
                         $effectOwnerId = $effect['player_id'];
                         
@@ -1752,6 +1768,7 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
                             // Non-timer effect - remove from hand
                             $stmt = $pdo->prepare("DELETE FROM player_cards WHERE game_id = ? AND player_id = ? AND card_id = ?");
                             $stmt->execute([$gameId, $effectOwnerId, $effect['chance_card_id']]);
+                            $effectOwnersToActivate[$effectOwnerId] = true; // Mark for activation
                         } elseif ($cardInfo['timer_completion_type'] === 'first_trigger') {
                             // Timer-based but completes on first use - remove card and timer
                             $stmt = $pdo->prepare("DELETE FROM player_cards WHERE game_id = ? AND player_id = ? AND card_id = ?");
@@ -1760,49 +1777,51 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
                                 $stmt = $pdo->prepare("DELETE FROM timers WHERE id = ?");
                                 $stmt->execute([$effect['timer_id']]);
                             }
+                            $effectOwnersToActivate[$effectOwnerId] = true; // Mark for activation
                         }
-                        // For timer_expires effects, the card and effect remain until timer naturally expires
+                    }
+
+                    // AFTER all cleanup, activate next modifiers ONCE per owner
+                    foreach (array_keys($effectOwnersToActivate) as $ownerId) {
+                        // Check ONCE if there's already an active challenge modifier for this player
+                        $activeEffects = getActiveChanceEffects($gameId, 'challenge_modify');
+                        $hasActiveModifier = false;
                         
-                        // Activate next modifier for the effect owner (only if no challenge modifier is currently active)
-                        if ($effectOwnerId == $playerId) {
-                            // Check if there's still an active challenge modifier
-                            $activeEffects = getActiveChanceEffects($gameId, 'challenge_modify');
-                            $hasActiveModifier = false;
-                            
-                            foreach ($activeEffects as $existing) {
-                                if (($existing['target_player_id'] == $playerId) || 
-                                    ($existing['player_id'] == $playerId && !$existing['target_player_id'])) {
-                                    $hasActiveModifier = true;
-                                    break;
-                                }
+                        foreach ($activeEffects as $existing) {
+                            if (($existing['target_player_id'] == $playerId) || 
+                                ($existing['player_id'] == $playerId && !$existing['target_player_id'])) {
+                                $hasActiveModifier = true;
+                                break;
                             }
+                        }
+                        
+                        // Only activate if no active modifier exists
+                        if (!$hasActiveModifier) {
+                            // Look for next challenge_modify card for this owner
+                            $stmt = $pdo->prepare("
+                                SELECT pc.*, c.* FROM player_cards pc
+                                JOIN cards c ON pc.card_id = c.id
+                                WHERE pc.game_id = ? AND pc.player_id = ? AND c.card_type = 'chance' AND c.challenge_modify = 1
+                                ORDER BY pc.id ASC LIMIT 1
+                            ");
+                            $stmt->execute([$gameId, $ownerId]);
+                            $nextModifier = $stmt->fetch();
                             
-                            if (!$hasActiveModifier) {
-                                // Current player - activate next challenge_modify
-                                $stmt = $pdo->prepare("
-                                    SELECT pc.*, c.* FROM player_cards pc
-                                    JOIN cards c ON pc.card_id = c.id
-                                    WHERE pc.game_id = ? AND pc.player_id = ? AND c.card_type = 'chance' AND c.challenge_modify = 1
-                                    ORDER BY pc.id ASC LIMIT 1
-                                ");
-                                $stmt->execute([$gameId, $playerId]);
-                                $nextModifier = $stmt->fetch();
-                                
-                                if ($nextModifier) {
-                                    $modifyValue = $nextModifier['score_modify'] !== 'none' ? $nextModifier['score_modify'] : 'modify';
-                                    $effectId = addActiveChanceEffect($gameId, $playerId, $nextModifier['card_id'], 'challenge_modify', $modifyValue);
+                            if ($nextModifier) {
+                                $modifyValue = $nextModifier['score_modify'] !== 'none' ? $nextModifier['score_modify'] : 'modify';
+                                $effectId = addActiveChanceEffect($gameId, $ownerId, $nextModifier['card_id'], 'challenge_modify', $modifyValue);
                                 
                                 // Create timer if this card has one
                                 if ($nextModifier['timer']) {
-                                    $timerResult = createTimer($gameId, $playerId, $nextModifier['card_name'], $nextModifier['timer']);
+                                    $timerResult = createTimer($gameId, $ownerId, $nextModifier['card_name'], $nextModifier['timer']);
                                     if ($timerResult['success']) {
                                         $stmt = $pdo->prepare("UPDATE active_chance_effects SET timer_id = ? WHERE id = ?");
                                         $stmt->execute([$timerResult['timer_id'], $effectId]);
                                     }
                                 }
                             } else {
-                                // No challenge_modify found, check for opponent_challenge_modify targeting this player
-                                $opponentId = getOpponentPlayerId($gameId, $playerId);
+                                // No challenge_modify found for this owner, check for opponent modifier
+                                $opponentId = getOpponentPlayerId($gameId, $ownerId);
                                 $stmt = $pdo->prepare("
                                     SELECT pc.*, c.* FROM player_cards pc
                                     JOIN cards c ON pc.card_id = c.id
@@ -1814,8 +1833,8 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
                                 
                                 if ($nextOpponentModifier) {
                                     $modifyValue = $nextOpponentModifier['score_modify'] !== 'none' ? $nextOpponentModifier['score_modify'] : 'modify';
-                                    $effectId = addActiveChanceEffect($gameId, $opponentId, $nextOpponentModifier['card_id'], 'challenge_modify', $modifyValue, $playerId);
-
+                                    $effectId = addActiveChanceEffect($gameId, $opponentId, $nextOpponentModifier['card_id'], 'challenge_modify', $modifyValue, $ownerId);
+                                    
                                     // Create timer if this card has one
                                     if ($nextOpponentModifier['timer']) {
                                         $timerResult = createTimer($gameId, $opponentId, $nextOpponentModifier['card_name'], $nextOpponentModifier['timer']);
@@ -1827,24 +1846,9 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
                                 }
                             }
                         }
-                        } else {
-                            // Opponent modifier was cleared - activate current player's next challenge_modify
-                            $stmt = $pdo->prepare("
-                                SELECT pc.*, c.* FROM player_cards pc
-                                JOIN cards c ON pc.card_id = c.id
-                                WHERE pc.game_id = ? AND pc.player_id = ? AND c.card_type = 'chance' AND c.challenge_modify = 1
-                                ORDER BY pc.id ASC LIMIT 1
-                            ");
-                            $stmt->execute([$gameId, $playerId]);
-                            $nextModifier = $stmt->fetch();
-                            
-                            if ($nextModifier) {
-                                $modifyValue = $nextModifier['score_modify'] !== 'none' ? $nextModifier['score_modify'] : 'modify';
-                                addActiveChanceEffect($gameId, $playerId, $nextModifier['card_id'], 'challenge_modify', $modifyValue);
-                            }
-                        }
                     }
                 }
+
 
                 $pointsAwarded = $finalPoints;
             }
@@ -1868,6 +1872,7 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
                         $usedEffects[] = $effect;
                     }
                 }
+
                 
                 // Remove used modifiers
                 foreach ($usedEffects as $effect) {
@@ -1881,7 +1886,7 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
                         $stmt->execute([$gameId, $effect['player_id'], $effect['chance_card_id']]);
                     }
                     
-                    removeActiveChanceEffect($effect['id']);
+                    removeActiveChanceEffect($effect['id'], $pdo);
                 }
                 
                 // Activate next modifier for each effect owner
@@ -2580,11 +2585,20 @@ function getActiveChanceEffects($gameId, $effectType = null, $playerId = null) {
     }
 }
 
-function removeActiveChanceEffect($effectId) {
+function removeActiveChanceEffect($effectId, $pdo = null) {
+    // If PDO is provided (we're in a transaction), use it directly
+    if ($pdo !== null) {
+        $stmt = $pdo->prepare("DELETE FROM active_chance_effects WHERE id = ?");
+        $stmt->execute([$effectId]);
+        return true;
+    }
+    
+    // Otherwise, use retry logic with new connection
     return executeWithDeadlockRetry(function() use ($effectId) {
         $pdo = Config::getDatabaseConnection();
         $stmt = $pdo->prepare("DELETE FROM active_chance_effects WHERE id = ?");
-        return $stmt->execute([$effectId]);
+        $stmt->execute([$effectId]);
+        return true;
     });
 }
 
@@ -3060,9 +3074,8 @@ function checkRecurringEffectCompletion($gameId, $playerId, $cardType) {
     
     $pdo = Config::getDatabaseConnection();
     
-    // Find and remove any recurring timer effects (Clock Siphon)
     $stmt = $pdo->prepare("
-        SELECT ace.*, t.id as timer_id 
+        SELECT ace.*, t.id as timer_id, t.at_job_id 
         FROM active_chance_effects ace
         LEFT JOIN timers t ON ace.timer_id = t.id
         WHERE ace.game_id = ? AND ace.player_id = ? AND ace.effect_type = 'recurring_timer'
@@ -3071,40 +3084,21 @@ function checkRecurringEffectCompletion($gameId, $playerId, $cardType) {
     $recurringEffects = $stmt->fetchAll();
     
     foreach ($recurringEffects as $effect) {
-        // Delete the timer if it exists
         if ($effect['timer_id']) {
+            // FAST: Direct job removal using stored ID
+            if ($effect['at_job_id']) {
+                shell_exec("atrm " . escapeshellarg($effect['at_job_id']) . " 2>/dev/null");
+            }
+            
             $stmt = $pdo->prepare("DELETE FROM timers WHERE id = ?");
             $stmt->execute([$effect['timer_id']]);
-            
-            // Remove any at jobs for this timer
-            $atJobs = shell_exec('atq 2>/dev/null') ?: '';
-            $lines = explode("\n", trim($atJobs));
-            
-            foreach ($lines as $line) {
-                if (empty($line)) continue;
-                
-                $parts = explode("\t", $line);
-                if (count($parts) >= 1) {
-                    $jobId = trim($parts[0]);
-                    $jobContent = shell_exec("at -c {$jobId} 2>/dev/null | tail -1");
-                    if (strpos($jobContent, "timer_{$effect['timer_id']}") !== false) {
-                        shell_exec("atrm {$jobId} 2>/dev/null");
-                        error_log("Removed at job {$jobId} for recurring timer {$effect['timer_id']}");
-                        break;
-                    }
-                }
-            }
         }
         
-        // Remove the active effect
         $stmt = $pdo->prepare("DELETE FROM active_chance_effects WHERE id = ?");
         $stmt->execute([$effect['id']]);
         
-        // Remove the chance card from hand
         $stmt = $pdo->prepare("DELETE FROM player_cards WHERE game_id = ? AND player_id = ? AND card_id = ?");
         $stmt->execute([$gameId, $playerId, $effect['chance_card_id']]);
-        
-        error_log("Completed Clock Siphon effect for player $playerId");
     }
 }
 

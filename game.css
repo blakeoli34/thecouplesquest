@@ -1422,7 +1422,7 @@ body.notification {
 }
 
 .card-overlay.active {
-    background: rgba(0,0,0,0.8);
+    background: rgba(0,0,0,0.4);
     backdrop-filter: blur(8px);
     pointer-events: all;
 }
@@ -1551,6 +1551,10 @@ body.notification {
     transform: translateY(-4px);
 }
 
+.custom-serve-card * {
+    color: #fff !important;
+}
+
 /* Custom card form */
 .custom-card-form-container {
     max-height: 80vh;
@@ -1563,21 +1567,21 @@ body.notification {
     color: #fff;
 }
 
-.form-group {
+.custom-card-form-container .form-group {
     margin-bottom: 16px;
 }
 
-.form-group label {
+.custom-card-form-container .form-group label {
     display: block;
     margin-bottom: 8px;
     color: #fff;
     font-weight: 500;
 }
 
-.form-group input[type="text"],
-.form-group input[type="number"],
-.form-group input[type="datetime-local"],
-.form-group textarea {
+.custom-card-form-container .form-group input[type="text"],
+.custom-card-form-container .form-group input[type="number"],
+.custom-card-form-container .form-group input[type="datetime-local"],
+.custom-card-form-container .form-group textarea {
     width: 100%;
     padding: 10px;
     border: 1px solid #fff;
@@ -1589,16 +1593,16 @@ body.notification {
     outline: none !important;
 }
 
-.form-group input[type="datetime-local"] {
+.custom-card-form-container .form-group input[type="datetime-local"] {
     min-height: 40px;
 }
 
-.form-group textarea {
+.custom-card-form-container .form-group textarea {
     min-height: 80px;
     resize: vertical;
 }
 
-.form-group input[type="number"] {
+.custom-card-form-container .form-group input[type="number"] {
     width: 80px;
 }
 
@@ -1649,22 +1653,24 @@ body.notification {
 
 .form-actions button {
     flex: 1;
-    padding: 15px;
-    border: none;
-    border-radius: 8px;
+    padding: 15px 25px;
+    border: solid 2px #fff;
+    border-radius: 10px;
     font-size: 16px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s;
+    background: transparent;
+    transition: all 0.3s ease;
+    color: #fff;
 }
 
-.btn-back {
-    background: var(--veto-color);
-    color: white;
+.form-actions .btn-back {
+    border-color: transparent;
 }
 
-.btn-back:hover {
-    opacity: 0.9;
+.form-actions button:hover {
+    background: #fff;
+    color: #111;
 }
 
 body.male .game-card,
@@ -1891,8 +1897,50 @@ body.christmas.female .game-card.daily-card {
 }
 
 .card-badge.modifier {
-    background: #ff9800;
+    background: transparent;
     color: white;
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    width: 100px;
+    height: 100px;
+    display: block;
+    border-radius: unset;
+    overflow: hidden;
+}
+
+.card-badge.modifier:before,
+.card-badge.modifier:after {
+    content: '';
+    z-index: -1;
+    position: absolute;
+    display: block;
+    border: solid 5px #333;
+    border-top-color: transparent;
+    border-right-color: transparent;
+}
+
+.card-badge.modifier:before {
+    top: 0;
+    left: 0;
+}
+
+.card-badge.modifier:after {
+    bottom: 0;
+    right: 0;
+}
+
+.card-badge.modifier span {
+    position: absolute;
+    display: block;
+    padding: 10px 0;
+    text-align: center;
+    background: #555;
+    box-shadow: 0 3px 6px rgba(0,0,0,0.3);
+    transform: rotate(45deg);
+    right: -35px;
+    top: 25px;
+    width: 150px;
 }
 
 /* Close button */
@@ -1971,6 +2019,13 @@ body.christmas.female .game-card.daily-card {
     border-color: #1565c0;
 }
 
+@media (prefers-color-scheme: light) {
+    .card-selection-actions .btn-complete {
+        color: #fff;
+        border-color: #fff;
+    }
+}
+
 .card-selection-actions .btn-complete:hover,
 .card-selection-actions .btn-complete:active {
     background: #0d47a1;
@@ -1980,6 +2035,13 @@ body.christmas.female .game-card.daily-card {
 .card-selection-actions .btn-veto {
     border-color: #c62828;
     color: #c62828;
+}
+
+@media (prefers-color-scheme: light) {
+    .card-selection-actions .btn-veto {
+        color: #fff;
+        border-color: #fff;
+    }
 }
 
 .card-selection-actions .btn-veto:hover,
@@ -3054,6 +3116,9 @@ body.digital .hybrid-menu-item {
 }
 
 @media (prefers-color-scheme: dark) {
+    .card-overlay.active {
+        background: rgba(0,0,0,0.8);
+    }
     .player-score.female {
         background: var(--color-pink-dark);
         color: var(--color-pink);
@@ -3252,6 +3317,19 @@ body.digital .hybrid-menu-item {
     body.nd-theme .card-badge.duration,
     body.christmas .card-badge.duration {
         color: #fff;
+    }
+
+    .card-badge.modifier {
+        color: #333;
+    }
+
+    .card-badge.modifier span {
+        background: #ddd;
+    }
+
+    .card-badge.modifier:before,
+    .card-badge.modifier:after {
+        border-color: #aaa;
     }
     
     .card-name {
