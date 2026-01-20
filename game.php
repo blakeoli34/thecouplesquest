@@ -373,6 +373,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
             exit;
 
+        case 'check_chance_card_status':
+            $card_id = $_POST['card_id'] ?? null;
+            $player_id = $_POST['player_id'] ?? $player['id'];
+            
+            if (!$card_id) {
+                echo json_encode(['error' => 'Missing card_id']);
+                exit;
+            }
+            
+            // Check if this card has active effects
+            $stmt = $pdo->prepare("SELECT COUNT(*) as active_count FROM active_chance_effects WHERE chance_card_id = ? AND player_id = ?");
+            $stmt->execute([$card_id, $player_id]);
+            $active_result = $stmt->fetch(PDO::FETCH_ASSOC);
+            $has_active = $active_result['active_count'] > 0;
+            
+            // Get the card's potential effects
+            $stmt = $pdo->prepare("SELECT challenge_modify, opponent_challenge_modify, score_modify, veto_modify, snap_modify, dare_modify, spicy_modify FROM cards WHERE id = ?");
+            $stmt->execute([$card_id]);
+            $card = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            // Check if card has any potential effects
+            $has_effects = ($card['challenge_modify'] || $card['opponent_challenge_modify'] || 
+                        $card['score_modify'] || $card['timer'] || $card['veto_modify'] || 
+                        $card['snap_modify'] || $card['dare_modify'] || $card['spicy_modify']);
+            
+            $status = 'none';
+            if ($has_active) {
+                $status = 'active';
+            } elseif ($has_effects) {
+                $status = 'waiting';
+            }
+            
+            echo json_encode(['status' => $status]);
+            exit;
+
         case 'mark_cards_seen':
             $cardIds = json_decode($_POST['card_ids'] ?? '[]', true);
             

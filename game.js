@@ -324,6 +324,7 @@ function openHandCards() {
         ...(cardData.hand_cards.chance || [])
     ];
     populateCardGrid('handCardsGrid', allHandCards, 'hand');
+    updateChanceCardStatuses();
     document.getElementById('handCardsOverlay').classList.add('active');
     setOverlayActive(true);
 }
@@ -503,6 +504,17 @@ function getCardDisplayInfo(card, context = 'serve') {
     if(card.win_loss) {
         badges.push('<span class="card-badge timer"><i class="fa-solid fa-swords"></i> BATTLE</span>')
     }
+
+    // Chance card status badges (active/waiting effects)
+    if (card.card_type === 'chance' && context === 'hand') {
+        // We'll add a data attribute to trigger async check
+        badges.push(`<span class="card-badge chance-status" data-card-id="${card.card_id}" data-player-id="${gameData.currentPlayerId}"><i class="fa-solid fa-spinner fa-spin"></i></span>`);
+    }
+
+    if (card.card_type === 'chance' && context === 'opponent') {
+        // We'll add a data attribute to trigger async check
+        badges.push(`<span class="card-badge chance-status" data-card-id="${card.card_id}" data-player-id="${gameData.opponentPlayerId}"><i class="fa-solid fa-spinner fa-spin"></i></span>`);
+    }
     
     // Points
     if (card.card_points) {
@@ -670,6 +682,33 @@ function getCardDisplayInfo(card, context = 'serve') {
     return badges.join('');
 }
 
+// Check and update chance card status badges
+function updateChanceCardStatuses() {
+    document.querySelectorAll('.card-badge.chance-status').forEach(badge => {
+        const cardId = badge.dataset.cardId;
+        const playerId = badge.dataset.playerId;
+        
+        fetch('game.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `action=check_chance_card_status&card_id=${cardId}&player_id=${playerId}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'active') {
+                badge.innerHTML = '<i class="fa-solid fa-bolt"></i>';
+                badge.classList.add('active-effect');
+            } else if (data.status === 'waiting') {
+                badge.innerHTML = '<i class="fa-solid fa-hourglass"></i>';
+                badge.classList.add('waiting-effect');
+            } else {
+                // No effects, remove badge
+                badge.remove();
+            }
+        });
+    });
+}
+
 function openOpponentHandPopover() {
     if (!document.body.classList.contains('digital')) return;
     
@@ -682,6 +721,7 @@ function openOpponentHandPopover() {
     .then(data => {
         if (data.success) {
             showOpponentHandPopover(data.hand_cards);
+            updateChanceCardStatuses();
         }
     })
     .catch(error => {
