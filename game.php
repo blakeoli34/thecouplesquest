@@ -1550,8 +1550,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         <button class="card-overlay-close" onclick="closeCardOverlay('serveCardsOverlay')">
             <i class="fa-solid fa-xmark"></i>
         </button>
-        <div class="card-grid" id="serveCardsGrid">
-            <!-- Serve cards will be populated here -->
+        <div class="card-grid-container">
+            <div class="card-grid" id="serveCardsGrid">
+                <!-- Serve cards will be populated here -->
+            </div>
         </div>
         
         <!-- Serve Selection Actions -->
@@ -1567,8 +1569,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         <button class="card-overlay-close" onclick="closeCardOverlay('handCardsOverlay')">
             <i class="fa-solid fa-xmark"></i>
         </button>
-        <div class="card-grid" id="handCardsGrid">
-            <!-- Hand cards will be populated here -->
+        <div class="card-grid-container">
+            <div class="card-grid" id="handCardsGrid">
+                <!-- Hand cards will be populated here -->
+            </div>
         </div>
         
         <!-- Card Selection Actions -->

@@ -4,6 +4,7 @@
 let gameData = {};
 let selectedPlayer = null;
 let firebaseMessaging = null;
+let cardDataInterval = null;
 
 // Animated Menu System Variables
 let menuOpen = false;
@@ -3253,9 +3254,7 @@ function initializeDigitalCards() {
         setTimeout(() => loadCardData(), 500);
         
         // Refresh card data periodically
-        setInterval(() => {
-            loadCardData();
-        }, 10000); // Every 10 seconds
+        cardDataInterval = setInterval(loadCardData, 10000); // Every 10 seconds
     }
 }
 
@@ -3401,7 +3400,7 @@ function loadThemePreference() {
     // Check if body already has a scheduled theme class (other than male/female/gradient-theme)
     const bodyClasses = document.body.className.split(' ');
     const hasScheduledTheme = bodyClasses.some(cls => 
-        cls !== 'male' && cls !== 'female' && cls !== 'gradient-theme' && cls !== 'digital'
+        cls !== 'male' && cls !== 'female' && cls !== 'gradient-theme' && cls !== 'digital' && cls !== 'foreground' && cls !== 'interact'
     );
     
     if (hasScheduledTheme) {
@@ -3738,12 +3737,17 @@ function handleDailyOverlayClick(event) {
 
 // Check for unseen received cards and show animation
 function checkForReceivedCards() {
+    if (!$('body').hasClass('foreground') || document.visibilityState !== 'visible') return;
     if (!cardData || !cardData.hand_cards || !cardData.hand_cards.accepted_serve) return;
     if (isShowingReceivedCards) return; // Don't trigger if already showing
+
+    console.log('checking for received cards');
     
     const unseenCards = cardData.hand_cards.accepted_serve.filter(card => card.animation_shown === 0);
     
     if (unseenCards.length > 0) {
+        document.body.classList.add('receiving-card');
+        console.log('found received cards, animating');
         showReceivedCardsAnimation(unseenCards);
     }
 }
@@ -3801,6 +3805,8 @@ function showReceivedCardsAnimation(cards) {
             overlay.classList.remove('active');
             container.classList.remove('active');
             container.innerHTML = '';
+            document.body.classList.remove('receiving-card');
+            document.body.classList.add('interact');
             
             // Reset flag
             isShowingReceivedCards = false;
@@ -3952,6 +3958,33 @@ async function handleCustomCardSubmit(e) {
     } catch (error) {
         console.error('Error serving custom card:', error);
     }
+}
+
+// Handle foreground and background states
+// Add foreground class when app becomes visible
+document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible') {
+        cardDataInterval = setInterval(loadCardData, 10000);
+        document.body.classList.add('foreground');
+        setTimeout(function() {
+            if(!document.body.classList.contains('receiving-card')) {
+                document.body.classList.add('interact');
+            }
+        }, 1250);
+    } else {
+        clearInterval(cardDataInterval);
+        document.body.classList.remove('foreground', 'interact');
+    }
+});
+
+// Add foreground class on initial load if page is visible
+if (document.visibilityState === 'visible') {
+    document.body.classList.add('foreground');
+    setTimeout(function(){
+        if(!document.body.classList.contains('receiving-card')) {
+            document.body.classList.add('interact');
+        }
+    }, 1500);
 }
 
 // Initialize everything when DOM is loaded
