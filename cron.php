@@ -208,11 +208,16 @@ function checkExpiringCards() {
         
         // Get cards expiring in 12 hours, 1 hour, or 10 minutes (with 30 second tolerance)
         $stmt = $pdo->prepare("
-            SELECT pc.*, p.fcm_token, p.first_name, c.card_name,
+            SELECT pc.*, p.fcm_token, p.first_name, 
+                   CASE 
+                       WHEN pc.is_custom = 1 THEN cc.card_name
+                       ELSE c.card_name
+                   END as card_name,
                    TIMESTAMPDIFF(MINUTE, NOW(), pc.expires_at) as minutes_until_expiry
             FROM player_cards pc
             JOIN players p ON pc.player_id = p.id
-            JOIN cards c ON pc.card_id = c.id
+            LEFT JOIN cards c ON pc.card_id = c.id AND pc.is_custom = 0
+            LEFT JOIN custom_cards cc ON pc.card_id = cc.id AND pc.is_custom = 1
             WHERE pc.expires_at IS NOT NULL 
             AND pc.expires_at > NOW()
             AND p.fcm_token IS NOT NULL 
@@ -259,10 +264,16 @@ function checkExpiringCards() {
         
         // Check for newly expired cards (expired within last minute)
         $stmt = $pdo->prepare("
-            SELECT pc.*, p.fcm_token, p.first_name, c.card_name
+            SELECT pc.*, p.fcm_token, p.first_name, 
+                   CASE 
+                       WHEN pc.is_custom = 1 THEN cc.card_name
+                       ELSE c.card_name
+                   END as card_name,
+                   c.card_type
             FROM player_cards pc
             JOIN players p ON pc.player_id = p.id
-            JOIN cards c ON pc.card_id = c.id
+            LEFT JOIN cards c ON pc.card_id = c.id AND pc.is_custom = 0
+            LEFT JOIN custom_cards cc ON pc.card_id = cc.id AND pc.is_custom = 1
             WHERE pc.expires_at IS NOT NULL 
             AND pc.expires_at <= NOW()
             AND pc.expires_at > DATE_SUB(NOW(), INTERVAL 1 MINUTE)
@@ -273,6 +284,26 @@ function checkExpiringCards() {
         $expiredCards = $stmt->fetchAll();
         
         foreach ($expiredCards as $card) {
+            // Auto-veto daily cards
+            if ($card['card_type'] === 'daily') {
+                $message = "Your {$card['card_name']} daily card has expired and been automatically vetoed.";
+                
+                $result = sendPushNotification(
+                    $card['fcm_token'],
+                    'Daily Card Expired',
+                    $message
+                );
+                
+                if ($result) {
+                    $notificationsSent++;
+                    echo "Daily card expiry notification sent for card {$card['id']} to {$card['first_name']}\n";
+                }
+                
+                vetoHandCard($card['game_id'], $card['player_id'], $card['card_id'], $card['id']);
+                echo "Daily card {$card['id']} auto-vetoed after expiration\n";
+                continue;
+            }
+            
             $message = "Your {$card['card_name']} card has expired! You can veto it or ask your opponent to extend the card.";
             
             $result = sendPushNotification(

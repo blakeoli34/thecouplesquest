@@ -556,9 +556,67 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 }
             }
             
+            // Get active modifiers for opponent
+            $activeModifiers = [];
+            $effects = getActiveChanceEffects($player['game_id'], null, $opponentId);
+            foreach ($effects as $effect) {
+                $stmt = $pdo->prepare("SELECT card_name FROM cards WHERE id = ?");
+                $stmt->execute([$effect['chance_card_id']]);
+                $cardName = $stmt->fetchColumn();
+                
+                switch ($effect['effect_type']) {
+                    case 'challenge_modify':
+                        // Only show if opponent is the target
+                        if (!$effect['target_player_id'] || $effect['target_player_id'] == $opponentId) {
+                            $activeModifiers['accepted_serve'] = $cardName;
+                        }
+                        break;
+                    case 'snap_modify':
+                        // Show if opponent is the target OR if they own it and no target (self-modifier)
+                        if ($effect['target_player_id'] == $opponentId || 
+                            ($effect['player_id'] == $opponentId && !$effect['target_player_id'])) {
+                            $activeModifiers['snap'] = $cardName;
+                        }
+                        break;
+                    case 'dare_modify':
+                        // Show if opponent is the target OR if they own it and no target (self-modifier)
+                        if ($effect['target_player_id'] == $opponentId || 
+                            ($effect['player_id'] == $opponentId && !$effect['target_player_id'])) {
+                            $activeModifiers['dare'] = $cardName;
+                        }
+                        break;
+                    case 'spicy_modify':
+                        // These only affect the player who drew the card
+                        if ($effect['player_id'] == $opponentId) {
+                            $activeModifiers['spicy'] = $cardName;
+                        }
+                        break;
+                    case 'veto_modify':
+                        if (strpos($effect['effect_value'], 'opponent_double') !== false) {
+                            // Show on opponent's cards only
+                            if ($effect['target_player_id'] == $opponentId) {
+                                $activeModifiers['accepted_serve_veto'] = $cardName;
+                                $activeModifiers['snap_veto'] = $cardName;
+                                $activeModifiers['dare_veto'] = $cardName;
+                            }
+                        } elseif(strpos($effect['effect_value'], 'opponent_reward') !== false) {
+                            // Do not show opponent reward as veto modifier badge
+                        } else {
+                            // Show on opponent's cards
+                            if ($effect['player_id'] == $opponentId) {
+                                $activeModifiers['accepted_serve_veto'] = $cardName;
+                                $activeModifiers['snap_veto'] = $cardName;
+                                $activeModifiers['dare_veto'] = $cardName;
+                            }
+                        }
+                        break;
+                }
+            }
+            
             echo json_encode([
                 'success' => true,
-                'hand_cards' => $handCards
+                'hand_cards' => $handCards,
+                'active_modifiers' => $activeModifiers
             ]);
             exit;
 

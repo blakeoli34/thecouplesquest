@@ -1,7 +1,7 @@
 <?php
 // Not so random card draws
-define('DEBUG_PLAYER_ID', 1);
-define('DEBUG_CARD_TYPE', 'spicy');
+define('DEBUG_PLAYER_ID', 1); // Kara 33
+define('DEBUG_CARD_TYPE', 'chance');
 define('DEBUG_CARD_ID', 255);
 
 function debugLog($message) {
@@ -1658,7 +1658,7 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
                 $finalPoints = $playerCard['card_points'];
                 
                 // Only apply challenge modifiers if card clears effects
-                if ($playerCard['clears_challenge_modify_effects']) {
+                if ($playerCard['clears_challenge_modify_effects'] || $playerCard['is_custom']) {
                     // Check for blocking effects
                     if (hasBlockingChanceCard($gameId, $playerId)) {
                         $blockingCards = getBlockingChanceCardNames($gameId, $playerId);

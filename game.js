@@ -22,6 +22,8 @@ let cardData = {
     pending_serves: []
 };
 
+let opponentCardData = null;
+
 let selectedCard = null;
 
 let selectedHandCard = null;
@@ -669,7 +671,7 @@ function getCardDisplayInfo(card, context = 'serve') {
     // Modifier badges (only for hand cards)
     if (context === 'hand' && cardData.active_modifiers) {
         // Don't show challenge modifiers on cards that don't clear effects
-        if (card.card_type === 'accepted_serve' && card.clears_challenge_modify_effects == 0) {
+        if (card.card_type === 'accepted_serve' && (card.clears_challenge_modify_effects == 0 || card.is_custom === 1)) {
             // Skip challenge modifier badge for this card
         } else if (cardData.active_modifiers[card.card_type]) {
             badges.push(`<span class="card-badge modifier"><span><i class="fa-solid fa-circle-question"></i> ${cardData.active_modifiers[card.card_type]}</span></span>`);
@@ -677,6 +679,19 @@ function getCardDisplayInfo(card, context = 'serve') {
         
         if (cardData.active_modifiers[card.card_type + '_veto']) {
             badges.push(`<span class="card-badge modifier"><span><i class="fa-solid fa-circle-question"></i> ${cardData.active_modifiers[card.card_type + '_veto']}</span></span>`);
+        }
+    }
+
+    if(context === 'opponent' && opponentCardData.active_modifiers) {
+        // Don't show challenge modifiers on cards that don't clear effects
+        if (card.card_type === 'accepted_serve' && (card.clears_challenge_modify_effects == 0 || card.is_custom === 1)) {
+            // Skip challenge modifier badge for this card
+        } else if (opponentCardData.active_modifiers[card.card_type]) {
+            badges.push(`<span class="card-badge modifier"><span><i class="fa-solid fa-circle-question"></i> ${opponentCardData.active_modifiers[card.card_type]}</span></span>`);
+        }
+        
+        if (opponentCardData.active_modifiers[card.card_type + '_veto']) {
+            badges.push(`<span class="card-badge modifier"><span><i class="fa-solid fa-circle-question"></i> ${opponentCardData.active_modifiers[card.card_type + '_veto']}</span></span>`);
         }
     }
     
@@ -721,6 +736,7 @@ function openOpponentHandPopover() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
+            opponentCardData = data;
             showOpponentHandPopover(data.hand_cards);
             updateChanceCardStatuses();
         }
