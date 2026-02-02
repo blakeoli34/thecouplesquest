@@ -299,7 +299,12 @@ function checkExpiringCards() {
                     echo "Daily card expiry notification sent for card {$card['id']} to {$card['first_name']}\n";
                 }
                 
-                vetoHandCard($card['game_id'], $card['player_id'], $card['card_id'], $card['id']);
+                $vetoResponse = vetoHandCard($card['game_id'], $card['player_id'], $card['card_id'], $card['id']);
+                if($vetoResponse['score_changes']) {
+                    foreach($vetoResponse['score_changes'] as $change) {
+                        updateScore($card['game_id'], $card['player_id'], $change['points'], $card['player_id']);
+                    }
+                }
                 echo "Daily card {$card['id']} auto-vetoed after expiration\n";
                 continue;
             }
