@@ -682,6 +682,10 @@ function getCardDisplayInfo(card, context = 'serve') {
         }
     }
 
+    if(context === 'opponent' && card.card_type === 'accepted_serve' && card.animation_shown === 0) {
+        badges.push(`<span class="card-badge duration"><i class="fa-solid fa-eye-slash"></i></span>`);
+    } 
+
     if(context === 'opponent' && opponentCardData.active_modifiers) {
         // Don't show challenge modifiers on cards that don't clear effects
         if (card.card_type === 'accepted_serve' && (card.clears_challenge_modify_effects == 0 || card.is_custom === 1)) {
