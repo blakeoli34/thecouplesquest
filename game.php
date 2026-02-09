@@ -1905,7 +1905,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js"></script>
     <script src="/game.js"></script>
-    <?php if($todayTheme === 'christmas') {
+    <?php if($todayTheme === 'christmas' || $todayTheme === 'valentines' || $todayTheme === 'shamrock') {
         echo '<script src="/pure-snow.js"></script>';
     } ?>
 </body>

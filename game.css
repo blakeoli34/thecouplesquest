@@ -132,6 +132,14 @@ body:not(.interact) .game-timer {
     background: #1d351d;
 }
 
+.valentines .player-score.male {
+    background: #C00000;
+}
+
+.shamrock .player-score.male {
+    background: #039442;
+}
+
 .nd-theme .player-score.female {
     background: #ae9142;
 }
@@ -140,7 +148,17 @@ body:not(.interact) .game-timer {
     background: #6f0f11;
 }
 
-.nd-theme .player-score-value {
+.valentines .player-score.female {
+    background: #FF6F77;
+}
+
+.shamrock .player-score.female {
+    background: #09cf6d;
+}
+
+.nd-theme .player-score-value,
+.valentines .player-score-value,
+.shamrock .player-score-value {
     color: white !important;
 }
 
@@ -1749,6 +1767,48 @@ body.christmas.female .game-card.daily-card {
     background: linear-gradient(to bottom, #fff 0%, #fff 50%, #e6be9a 100%);
 }
 
+body.valentines.male .game-card,
+body.valentines.female .game-card.accepted_serve-card,
+body.valentines.female .opponent-hand-popover .game-card,
+body.valentines.male .opponent-hand-popover .game-card.accepted_serve-card {
+    background: linear-gradient(to bottom, #fff 0%, #fff 50%, #C00000 100%);
+}
+
+body.valentines.female .game-card,
+body.valentines.male .game-card.accepted_serve-card,
+body.valentines.male .opponent-hand-popover .game-card,
+body.valentines.female .opponent-hand-popover .game-card.accepted_serve-card {
+    background: linear-gradient(to bottom, #fff 0%, #fff 50%, #FF6F77 100%);
+}
+
+body.valentines .game-card.daily-card,
+body.valentines .opponent-hand-popover .game-card.daily-card,
+body.valentines.male .game-card.daily-card,
+body.valentines.female .game-card.daily-card {
+    background: linear-gradient(to bottom, #fff 0%, #fff 50%, #957FEF 100%);
+}
+
+body.shamrock.male .game-card,
+body.shamrock.female .game-card.accepted_serve-card,
+body.shamrock.female .opponent-hand-popover .game-card,
+body.shamrock.male .opponent-hand-popover .game-card.accepted_serve-card {
+    background: linear-gradient(to bottom, #fff 0%, #fff 50%, #039442 100%);
+}
+
+body.shamrock.female .game-card,
+body.shamrock.male .game-card.accepted_serve-card,
+body.shamrock.male .opponent-hand-popover .game-card,
+body.shamrock.female .opponent-hand-popover .game-card.accepted_serve-card {
+    background: linear-gradient(to bottom, #fff 0%, #fff 50%, #09cf6d 100%);
+}
+
+body.shamrock .game-card.daily-card,
+body.shamrock .opponent-hand-popover .game-card.daily-card,
+body.shamrock.male .game-card.daily-card,
+body.shamrock.female .game-card.daily-card {
+    background: linear-gradient(to bottom, #fff 0%, #fff 50%, #f7d21e 100%);
+}
+
 
 .card-header {
     display: flex;
@@ -3101,8 +3161,32 @@ body:not(.interact) .opponent-hand-counts {
     ) !important;
 }
 
+.valentines .wheel-background {
+    background: conic-gradient(
+        #C00000 0deg 60deg,
+        #FF6F77 60deg 120deg,
+        #C00000 120deg 180deg,
+        #FF6F77 180deg 240deg,
+        #C00000 240deg 300deg,
+        #FF6F77 300deg 360deg
+    ) !important;
+}
+
+.shamrock .wheel-background {
+    background: conic-gradient(
+        #039442 0deg 60deg,
+        #09cf6d 60deg 120deg,
+        #039442 120deg 180deg,
+        #09cf6d 180deg 240deg,
+        #039442 240deg 300deg,
+        #09cf6d 300deg 360deg
+    ) !important;
+}
+
 .nd-theme .wheel-text,
-.christmas .wheel-text {
+.christmas .wheel-text,
+.valentines .wheel-text,
+.shamrock .wheel-text {
     color: #fff !important;
 }
 
@@ -3199,6 +3283,22 @@ body:not(.interact) .opponent-hand-counts {
 
     .gradient-theme .player-score.female {
         background: linear-gradient(to bottom, var(--color-pink) 0%, var(--color-pink-dark) 2%, #000 45% 55%, var(--color-pink-dark) 98%, var(--color-pink) 100%);
+    }
+
+    .valentines .player-score.male {
+        background: #660000;
+    }
+
+    .valentines .player-score.female {
+        background: #B80009;
+    }
+
+    .shamrock .player-score.male {
+        background: #025024;
+    }
+
+    .shamrock .player-score.female {
+        background: #068947;
     }
 
     .opponent-hand-badge {
@@ -3380,8 +3480,52 @@ body:not(.interact) .opponent-hand-counts {
         background: linear-gradient(to bottom, #2a2a2a 0%, #2a2a2a 50%, #e6be9a 100%);
     }
 
+    body.valentines.male .game-card,
+    body.valentines.female .game-card.accepted_serve-card,
+    body.valentines.female .opponent-hand-popover .game-card,
+    body.valentines.male .opponent-hand-popover .game-card.accepted_serve-card {
+        background: linear-gradient(to bottom, #2a2a2a 0%, #2a2a2a 50%, #C00000 100%);
+    }
+
+    body.valentines.female .game-card,
+    body.valentines.male .game-card.accepted_serve-card,
+    body.valentines.male .opponent-hand-popover .game-card,
+    body.valentines.female .opponent-hand-popover .game-card.accepted_serve-card {
+        background: linear-gradient(to bottom, #2a2a2a 0%, #2a2a2a 50%, #ff6f77 100%);
+    }
+
+    body.valentines .game-card.daily-card,
+    body.valentines .opponent-hand-popover .game-card.daily-card,
+    body.valentines.male .game-card.daily-card,
+    body.valentines.female .game-card.daily-card {
+        background: linear-gradient(to bottom, #2a2a2a 0%, #2a2a2a 50%, #957fef 100%);
+    }
+
+    body.shamrock.male .game-card,
+    body.shamrock.female .game-card.accepted_serve-card,
+    body.shamrock.female .opponent-hand-popover .game-card,
+    body.shamrock.male .opponent-hand-popover .game-card.accepted_serve-card {
+        background: linear-gradient(to bottom, #2a2a2a 0%, #2a2a2a 50%, #039442 100%);
+    }
+
+    body.shamrock.female .game-card,
+    body.shamrock.male .game-card.accepted_serve-card,
+    body.shamrock.male .opponent-hand-popover .game-card,
+    body.shamrock.female .opponent-hand-popover .game-card.accepted_serve-card {
+        background: linear-gradient(to bottom, #2a2a2a 0%, #2a2a2a 50%, #09cf6d 100%);
+    }
+
+    body.shamrock .game-card.daily-card,
+    body.shamrock .opponent-hand-popover .game-card.daily-card,
+    body.shamrock.male .game-card.daily-card,
+    body.shamrock.female .game-card.daily-card {
+        background: linear-gradient(to bottom, #2a2a2a 0%, #2a2a2a 50%, #f7d21e 100%);
+    }
+
     body.nd-theme .card-badge.duration,
-    body.christmas .card-badge.duration {
+    body.christmas .card-badge.duration,
+    body.valentines .card-badge.duration,
+    body.shamrock .card-badge.duration {
         color: #fff;
     }
 
@@ -3958,4 +4102,22 @@ body:not(.interact) .opponent-hand-counts {
   /* Workaround for Chromium's selective color inversion */
   border-radius: 50%;
   filter: drop-shadow(0 0 10px white);
+}
+
+.valentines .snowflake,
+.shamrock .snowflake {
+    background: none;
+    border-radius: unset;
+    filter: none;
+    color: white;
+}
+
+.valentines .snowflake:after {
+    content: "\2665";
+    font-size: 16px;
+}
+
+.shamrock .snowflake:after {
+    content: "☘︎";
+    font-size: 36px;
 }

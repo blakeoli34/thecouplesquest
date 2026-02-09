@@ -1289,14 +1289,8 @@ function showCardSelectionActions() {
                         <button class="btn btn-veto" onclick="loseSelectedCard()">Loss</button>
                     `;
                 } else {
-                    const hasVetoPenalty = selectedHandCard.veto_subtract || selectedHandCard.veto_steal || 
-                                        selectedHandCard.veto_draw_chance || selectedHandCard.veto_draw_snap_dare || 
-                                        selectedHandCard.veto_draw_spicy || 
-                                        ['snap', 'dare', 'spicy'].includes(selectedHandCard.card_type);
                     
-                    const vetoButton = hasVetoPenalty ? 
-                        `<button class="btn btn-veto" onclick="vetoSelectedCard()">Veto</button>` :
-                        `<button class="btn btn-veto" disabled>No Veto</button>`;
+                    const vetoButton =  `<button class="btn btn-veto" onclick="vetoSelectedCard()">Veto</button>`;
                     
                     actions.innerHTML = `
                         <button class="btn btn-complete" onclick="completeSelectedCard()">Complete</button>
@@ -4197,7 +4191,7 @@ document.addEventListener('DOMContentLoaded', function() {
         $('.player-score.female .img-inject').html('<img src="img/nd-leprechaun-football.png" alt="ND Football Leprechaun">');
     }
 
-    if($('body').hasClass('christmas')) {
+    if($('body').is('.christmas, .valentines, .shamrock')) {
         $('body').prepend('<div id="snow" data-count="50"></div>');
     }
 

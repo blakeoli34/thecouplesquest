@@ -44,6 +44,9 @@ switch ($action) {
     case 'auto_decline':
         autoDeclineChallenges();
         break;
+    case 'unread':
+        checkForUnreadCards();
+        break;
     case 'all':
     default:
         checkExpiredTimers();
@@ -613,5 +616,73 @@ function autoDeclineChallenges() {
     }
     
     echo "Auto-declined " . count($players) . " pending challenges\n";
+}
+
+function checkForUnreadCards() {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        
+        // Get count of unread accepted_serve cards per player with opponent info
+        $stmt = $pdo->prepare("
+            SELECT 
+                p.id as player_id,
+                p.fcm_token,
+                p.game_id,
+                COUNT(pc.id) as unread_count
+            FROM players p
+            JOIN player_cards pc ON p.id = pc.player_id
+            JOIN cards c ON pc.card_id = c.id
+            WHERE pc.card_type = 'accepted_serve'
+            AND pc.animation_shown = 0
+            AND p.fcm_token IS NOT NULL 
+            AND p.fcm_token != ''
+            GROUP BY p.id, p.fcm_token, p.game_id
+            HAVING unread_count > 0
+        ");
+        $stmt->execute();
+        $playersWithUnread = $stmt->fetchAll();
+        
+        $notificationsSent = 0;
+        
+        foreach ($playersWithUnread as $player) {
+            // Get opponent's name
+            $opponentStmt = $pdo->prepare("
+                SELECT first_name 
+                FROM players 
+                WHERE game_id = ? AND id != ?
+                LIMIT 1
+            ");
+            $opponentStmt->execute([$player['game_id'], $player['player_id']]);
+            $opponent = $opponentStmt->fetch();
+            
+            if ($opponent) {
+                $count = $player['unread_count'];
+                $cardWord = $count === 1 ? 'card' : 'cards';
+                $notifyWord = $count === 1 ? 'Card' : 'Cards';
+                $message = "You have {$count} new serve {$cardWord} from {$opponent['first_name']}, open the app to view your hand.";
+                
+                $result = sendPushNotification(
+                    $player['fcm_token'],
+                    "New {$notifyWord} Waiting",
+                    $message
+                );
+                
+                if ($result) {
+                    $notificationsSent++;
+                    echo "Unread cards notification sent to player {$player['player_id']} ({$count} cards)\n";
+                }
+            }
+        }
+        
+        if ($notificationsSent > 0) {
+            echo "Unread cards notifications completed: {$notificationsSent} sent\n";
+        }
+        
+        return $notificationsSent;
+        
+    } catch (Exception $e) {
+        error_log("Error checking unread cards: " . $e->getMessage());
+        return 0;
+    }
 }
 ?>
