@@ -3521,7 +3521,7 @@ function spinWheelAction() {
             // Do 6 full rotations (2160deg) plus the angle to reach the target
             const finalRotation = 2160 + (360 - segmentAngle);
             
-            wheelBackground.style.transform = `rotate(${finalRotation}deg)`;
+            rotateElement(wheelBackground, finalRotation);
             
             playSoundIfEnabled('/wheel-spin.m4r');
             
@@ -3558,6 +3558,34 @@ function spinWheelAction() {
         alert('Failed to spin wheel');
         isWheelSpinning = false;
     });
+}
+
+function rotateElement(element, finalRotation) {
+  // Create unique animation name
+  const animationName = `rotate-${Date.now()}`;
+  
+  // Create keyframes
+  const keyframes = `
+    @keyframes ${animationName} {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(${finalRotation}deg); }
+    }
+  `;
+  
+  // Inject keyframes into document
+  const styleSheet = document.createElement('style');
+  styleSheet.textContent = keyframes;
+  document.head.appendChild(styleSheet);
+  
+  // Apply animation
+  element.style.animation = `${animationName} 4s cubic-bezier(0.36, 0.95, 0.64, 1) forwards`;
+  
+  // Clean up after animation completes
+  setTimeout(() => {
+    styleSheet.remove();
+    element.style.animation = '';
+    element.style.transform = `rotate(${finalRotation}deg)`;
+  }, 4000);
 }
 
 function executePrize(prize) {
