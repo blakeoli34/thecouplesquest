@@ -288,6 +288,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             
             echo json_encode(['success' => true]);
             exit;
+
+        case 'request_time':
+            $card_name = $_POST['card_name'];
+            $requesterName = $currentPlayer['first_name'];
+            $receiverToken = $opponentPlayer['fcm_token'];
+            $body = $requesterName . ' would like more time to complete their ' . $card_name . ' card. Open the app to extend their card.';
+            $result = sendPushNotification($receiverToken, 'Card Extension Request', $body);
+            if($result) {
+                echo json_encode(['success' => true]);
+            }
+            exit;
             
         case 'send_bump':
             $result = sendBumpNotification($player['game_id'], $player['id']);

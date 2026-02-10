@@ -1280,7 +1280,8 @@ function showCardSelectionActions() {
         } else {
             // For non-chance cards
             if (isExpired) {
-                actions.innerHTML = `<button class="btn btn-veto" onclick="vetoSelectedCard()">Veto (Expired)</button>`;
+                actions.innerHTML = `<button class="btn btn-veto" onclick="vetoSelectedCard()">Veto (Expired)</button>
+                                     <button class="btn btn-request" onclick="requestMoreTime()">Request Extension</button>`;
             } else {
                 // Existing win/loss and regular card logic
                 if (selectedHandCard.win_loss == 1 || selectedHandCard.win_loss === true) {
@@ -1448,6 +1449,41 @@ function vetoSelectedCard() {
         clearCardSelection();
         console.error('Error vetoing card:', error);
         alert('Failed to veto card');
+    });
+}
+
+// Ask opponent for more time
+function requestMoreTime() {
+    if (!selectedHandCard) return;
+    
+    const cardName = selectedHandCard.card_name;
+    $('.btn-request').text('Requesting...');
+    
+    // Make API call
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `action=request_time&card_name=${cardName}&player_card_id=${selectedHandCard.id}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Wait for animation to complete
+            setTimeout(() => {
+                hideCardSelectionActions();
+                closeCardOverlay('handCardsOverlay');
+                loadCardData();
+                showInAppNotification('Extension Requested!', 'Your extension request has been sent successfully.');
+            }, 1100);
+        } else {
+            clearCardSelection();
+            alert('Failed to request an extension: ' + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        clearCardSelection();
+        console.error('Error asking for extension:', error);
+        alert('Failed to request an extension');
     });
 }
 
@@ -3547,7 +3583,7 @@ function spinWheelAction() {
                     }, 500);
                 }, 3000);
                 
-            }, 4000);
+            }, 5000);
         } else {
             alert('Failed to spin wheel: ' + (data.message || 'Unknown error'));
             isWheelSpinning = false;
@@ -3578,14 +3614,14 @@ function rotateElement(element, finalRotation) {
   document.head.appendChild(styleSheet);
   
   // Apply animation
-  element.style.animation = `${animationName} 4s cubic-bezier(0.36, 0.95, 0.64, 1) forwards`;
+  element.style.animation = `${animationName} 5s cubic-bezier(0.36, 0.95, 0.64, 1) forwards`;
   
   // Clean up after animation completes
   setTimeout(() => {
     styleSheet.remove();
     element.style.animation = '';
     element.style.transform = `rotate(${finalRotation}deg)`;
-  }, 4000);
+  }, 5000);
 }
 
 function executePrize(prize) {
@@ -3633,7 +3669,7 @@ function populateWheel(prizes) {
     // Reset wheel state
     const wheelBackground = document.querySelector('.wheel-background');
     if (wheelBackground) {
-        wheelBackground.style.transform = 'rotate(0deg)';
+        wheelBackground.style.transform = '';
     }
 }
 

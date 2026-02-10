@@ -3121,12 +3121,12 @@ body:not(.digital) .rules-content .ultimate-mode {
     height: 100%;
     border-radius: 50%;
     position: relative;
-    transform: rotate(-225deg) !important;
+    transform: rotate(-225deg);
     transition: all 0.7s;
 }
 
 .wheel-overlay.active .wheel-background {
-    transform: rotate(0deg) !important;
+    transform: rotate(0deg);
 }
 
 /* Gender-specific wheel colors using conic-gradient */
