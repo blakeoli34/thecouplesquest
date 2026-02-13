@@ -73,6 +73,28 @@ if ($timeRemaining) {
     $gameTimeText = 'Game Ended';
 }
 
+if($player['status'] === 'paused') {
+    $pausedDate = new DateTime($player['paused_date'], new DateTimeZone('America/Indiana/Indianapolis'));
+    $pausedGameTimeRemaining = $pausedDate < $endDate ? $endDate->diff($pausedDate) : null;
+    if($pausedGameTimeRemaining) {
+        $timeRemaining = $pausedGameTimeRemaining;
+        $parts = [];
+    
+        if ($timeRemaining->days > 0) {
+            $parts[] = $timeRemaining->days . ' day' . ($timeRemaining->days > 1 ? 's' : '');
+        }
+        
+        if ($timeRemaining->h > 0) {
+            $parts[] = $timeRemaining->h . ' hour' . ($timeRemaining->h > 1 ? 's' : '');
+        }
+        
+        if ($timeRemaining->i > 0) {
+            $parts[] = $timeRemaining->i . ' minute' . ($timeRemaining->i > 1 ? 's' : '');
+        }
+        $pausedGameTimeRemaining = implode(', ', $parts);
+    }
+}
+
 function getTodayTheme() {
     try {
         $pdo = Config::getDatabaseConnection();
@@ -291,6 +313,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
         case 'request_time':
             $card_name = $_POST['card_name'];
+            $card_id = $_POST['player_card_id'];
+            $stmt = $pdo->prepare("
+                UPDATE player_cards
+                SET extension_request = 1
+                WHERE id = ?
+            ");
+            $stmt->execute([$card_id]);
             $requesterName = $currentPlayer['first_name'];
             $receiverToken = $opponentPlayer['fcm_token'];
             $body = $requesterName . ' would like more time to complete their ' . $card_name . ' card. Open the app to extend their card.';
@@ -348,13 +377,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $now = new DateTime('now', $timezone);
             $endDate = new DateTime($player['end_date'], $timezone);
             $gameExpired = ($now >= $endDate && $player['status'] === 'active');
+            $gameStatus = $player['status'];
             
             echo json_encode([
                 'players' => $updatedPlayers,
                 'timers' => $timers,
                 'history' => $history,
                 'gametime' => $gameTimeText,
-                'game_expired' => $gameExpired
+                'game_expired' => $gameExpired,
+                'game_status' => $gameStatus
             ]);
             exit;
 
@@ -638,13 +669,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
             
             $playerCardId = intval($_POST['player_card_id']);
-            $hours = $_POST['hours']; // Can be 1, 4, 12, 24, or 'remove'
+            $hours = $_POST['hours']; // Can be eod, eot, 1, 7, remove, or decline
             
             try {
                 $pdo = Config::getDatabaseConnection();
                 
                 // Verify card exists and has expires_at
-                $stmt = $pdo->prepare("SELECT expires_at FROM player_cards WHERE id = ? AND expires_at IS NOT NULL");
+                $stmt = $pdo->prepare("SELECT expires_at FROM player_cards WHERE id = ? AND expires_at IS NOT NULL AND extension_request = 1");
                 $stmt->execute([$playerCardId]);
                 $currentExpiry = $stmt->fetchColumn();
                 
@@ -654,14 +685,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 }
                 
                 if ($hours === 'remove') {
-                    $stmt = $pdo->prepare("UPDATE player_cards SET expires_at = NULL WHERE id = ?");
+                    $stmt = $pdo->prepare("UPDATE player_cards SET expires_at = NULL, extension_request = 0 WHERE id = ?");
                     $stmt->execute([$playerCardId]);
-                    $message = 'Timer removed';
-                } else {
+                    $message = 'Expiration removed';
+                    $body = $currentPlayer['first_name'] . ' has allowed you to complete your card anytime.';
+                    sendPushNotification($opponentPlayer['fcm_token'], 'Extension Request Approved!', $body);
+                } elseif($hours === 'decline') {
                     $hoursInt = intval($hours);
-                    $stmt = $pdo->prepare("UPDATE player_cards SET expires_at = DATE_ADD(expires_at, INTERVAL ? HOUR) WHERE id = ?");
-                    $stmt->execute([$hoursInt, $playerCardId]);
-                    $message = "Timer extended by {$hoursInt} hour" . ($hoursInt > 1 ? 's' : '');
+                    $stmt = $pdo->prepare("UPDATE player_cards SET extension_request = -1 WHERE id = ?");
+                    $stmt->execute([$playerCardId]);
+                    $message = "Extension request declined";
+                    $body = $currentPlayer['first_name'] . ' has declined your extension request. Please veto your card.';
+                    sendPushNotification($opponentPlayer['fcm_token'], 'Extension Request Declined', $body);
+                } elseif($hours === 'eod') {
+                    $midnight = new DateTime('tomorrow', $timezone);
+                    $midnight->setTime(0, 0, 0);
+                    $stmt = $pdo->prepare("UPDATE player_cards SET expires_at = ?, extension_request = 0 WHERE id = ?");
+                    $stmt->execute([$midnight->format('Y-m-d H:i:s'), $playerCardId]);
+                    $message = "Timer extended to end of today";
+                    $body = $currentPlayer['first_name'] . ' has allowed you to complete your card before the end of the day.';
+                    sendPushNotification($opponentPlayer['fcm_token'], 'Extension Request Approved!', $body);
+                } elseif($hours === 'eot') {
+                    $midnight = new DateTime('tomorrow', $timezone);
+                    $midnight->modify('+1 day');
+                    $midnight->setTime(0, 0, 0);
+                    $stmt = $pdo->prepare("UPDATE player_cards SET expires_at = ?, extension_request = 0 WHERE id = ?");
+                    $stmt->execute([$midnight->format('Y-m-d H:i:s'), $playerCardId]);
+                    $message = "Timer extended to end of tomorrow";
+                    $body = $currentPlayer['first_name'] . ' has allowed you to complete your card before the end of the day tomorrow.';
+                    sendPushNotification($opponentPlayer['fcm_token'], 'Extension Request Approved!', $body);
+                } else {
+                    $dayInt = intval($hours);
+                    $stmt = $pdo->prepare("UPDATE player_cards SET expires_at = DATE_ADD(NOW(), INTERVAL ? DAY), extension_request = 0 WHERE id = ?");
+                    $stmt->execute([$dayInt, $playerCardId]);
+                    $message = "Timer extended by {$dayInt} day" . ($dayInt > 1 ? 's' : '');
+                    $body = $currentPlayer['first_name'] . ' has allowed you to complete your card in the next ' . $dayInt . ($dayInt > 1 ? 's.' : '.');
+                    sendPushNotification($opponentPlayer['fcm_token'], 'Extension Request Approved!', $body);
                 }
                 
                 echo json_encode(['success' => true, 'message' => $message]);
@@ -963,7 +1022,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 ");
                 $stmt->execute([$player['game_id'], $opponentId]);
                 $counts = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
-                echo json_encode(['success' => true, 'counts' => $counts]);
+                $stmt2 = $pdo->prepare("
+                    SELECT count(*) as count
+                    FROM player_cards
+                    WHERE extension_request = 1
+                        AND player_id = ?
+                        AND game_id = ?
+                    LIMIT 1
+                ");
+                $stmt2->execute([$opponentId, $player['game_id']]);
+                $extension_requests = $stmt2->fetchColumn();
+                echo json_encode(['success' => true, 'counts' => $counts, 'requests' => $extension_requests]);
             } else {
                 echo json_encode(['success' => false]);
             }
@@ -1143,6 +1212,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             } else {
                 echo json_encode(['success' => false, 'error' => 'Failed to serve custom card']);
             }
+            exit;
+
+        case 'pause_game':
+            if ($gameMode !== 'digital') {
+                echo json_encode(['success' => false, 'message' => 'Not a digital game']);
+                exit;
+            }
+
+            // Pause the game
+            $stmt = $pdo->prepare("UPDATE games SET status = 'paused', paused_date = NOW() WHERE id = ?");
+            $stmt->execute([$player['game_id']]);
+            $body = $currentPlayer['first_name'] . ' chose to freeze the game. Restart the game anytime in the app.';
+            sendPushNotification($opponentPlayer['fcm_token'], 'Game Frozen!', $body);
+            echo json_encode(['success' => true]);
+            exit;
+
+        case 'resume_game':
+            if ($gameMode !== 'digital') {
+                echo json_encode(['success' => false, 'message' => 'Not a digital game']);
+                exit;
+            }
+            $diff = $pausedDate->diff($endDate);
+            $newEndDate = new DateTime('now', new DateTimeZone('UTC'));
+            $newEndDate->add($diff);
+            $updateCardTimers = $pdo->prepare("
+                UPDATE player_cards pc
+                JOIN games g ON pc.game_id = g.id
+                SET pc.expires_at = DATE_ADD(
+                    NOW(),
+                    INTERVAL TIMESTAMPDIFF(SECOND, g.paused_date, pc.expires_at) SECOND
+                )
+                WHERE pc.game_id = ?
+                AND pc.expires_at IS NOT NULL");
+            $updateCardTimers->execute([$currentPlayer['game_id']]);
+            $updateGameTimers = $pdo->prepare("
+                UPDATE timers t
+                JOIN games g ON t.game_id = g.id
+                SET t.end_time = DATE_ADD(
+                    UTC_TIMESTAMP(),
+                    INTERVAL TIMESTAMPDIFF(SECOND, CONVERT_TZ(g.paused_date, 'America/Indiana/Indianapolis', 'UTC'), t.end_time) SECOND
+                )
+                WHERE t.game_id = ?
+                AND t.end_time IS NOT NULL
+                AND t.is_active = TRUE");
+            $updateGameTimers->execute([$currentPlayer['game_id']]);
+            $restoreGameState = $pdo->prepare("
+                UPDATE games
+                SET status = 'active', end_date = ?, paused_date = NULL
+                WHERE id = ?");
+            $restoreGameState->execute([$newEndDate->format('Y-m-d H:i:s'), $currentPlayer['game_id']]);
+            sendPushNotification($opponentPlayer['fcm_token'], 'Game Resumed!', $currentPlayer['first_name'] . ' has restarted your game. Open the app to play!');
+            echo json_encode(['success' => true]);
             exit;
 
         case 'end_game':
@@ -1399,6 +1520,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     </button>
                 </div>
             </div>
+
+        <?php elseif ($gameStatus === 'paused'): 
+            $winner = $players[0]['score'] > $players[1]['score'] ? $players[0] : $players[1];
+            $loser = $players[0]['score'] > $players[1]['score'] ? $players[1] : $players[0];
+            if ($players[0]['score'] === $players[1]['score']) $winner = null;
+            if($winner) {
+                $winner_msg = $winner['first_name'] . ' is winning';
+            } else {
+                $winner_msg = 'The game is currently tied';
+            }
+            $gameScore = $winner['score'] . ' – ' . $loser['score'];
+
+            ?>
+            <!-- Game paused -->
+            <div class="game-paused">
+                <div class="game-paused-emoji">❄️</div>
+                <div class="game-paused-headline">Your Game with <?php echo $opponentPlayer['first_name']; ?> is Frozen</div>
+                <div class="game-paused-score-message"><?php echo $winner_msg; ?></div>
+                <div class="game-paused-score"><?php echo $gameScore; ?></div>
+                <div class="btn btn-resume" onclick="resumeGame()"><i class="fa-solid fa-circle-play"></i></div>
+                <div class="btn-label">Resume Game</div>
+                <div class="game-paused-message">After resuming, your game clock, card states, and timers will be restored. <em>This will result in your game end date being extended by the freeze duration.</em><br><br><strong><?php echo $pausedGameTimeRemaining; ?></strong><br>remaining</div>
+            </div>
             
         <?php else: ?>
             <!-- Active game -->
@@ -1533,6 +1677,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     <div class="flyout-menu-item red" onclick="openEndGameModal()">
                         <div class="flyout-menu-item-icon"><i class="fa-solid fa-ban"></i></div>
                         <div class="flyout-menu-item-text">End Game Now</div>
+                    </div>
+                    <div class="flyout-menu-item orange digital-menu-item" onclick="openPauseGameModal()">
+                        <div class="flyout-menu-item-icon"><i class="fa-solid fa-circle-pause"></i></div>
+                        <div class="flyout-menu-item-text">Freeze Game</div>
                     </div>
                     <div class="flyout-menu-item" onclick="hardRefresh()">
                         <div class="flyout-menu-item-icon"><i class="fa-solid fa-arrows-rotate"></i></div>
@@ -1738,6 +1886,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             <div class="modal-buttons">
                 <button class="btn dark" onclick="closeModal('endGameModal')">No</button>
                 <button class="btn red" onclick="endGame()">Yes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pause Game Modal -->
+    <div class="modal" id="pauseGameModal">
+        <div class="modal-content">
+            <div class="modal-title">Are you sure you want to freeze the game?</div>
+            <div class="modal-subtitle">All cards, timers, and game time remaining will be restored when you are ready to play again.</div>
+            <div class="modal-buttons">
+                <button class="btn dark" onclick="closeModal('pauseGameModal')">No</button>
+                <button class="btn red" onclick="pauseGame()">Yes</button>
             </div>
         </div>
     </div>

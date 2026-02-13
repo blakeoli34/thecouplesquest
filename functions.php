@@ -77,7 +77,7 @@ function getPlayerByDeviceId($deviceId) {
         $pdo = Config::getDatabaseConnection();
         $stmt = $pdo->prepare("
             SELECT p.id as player_id, p.device_id, p.first_name, p.gender, p.score, p.fcm_token, p.joined_at,
-                   g.id as game_id, g.invite_code, g.duration_days, g.start_date, g.end_date, g.status, g.created_at
+                   g.id as game_id, g.invite_code, g.duration_days, g.start_date, g.end_date, g.paused_date, g.status, g.created_at
             FROM players p 
             JOIN games g ON p.game_id = g.id 
             WHERE p.device_id = ?
@@ -1082,7 +1082,7 @@ function getPlayerCards($gameId, $playerId, $cardType = null) {
                 CASE WHEN pc.is_custom = 1 THEN cc.card_points ELSE c.card_points END as original_points,
                 CASE WHEN pc.is_custom = 1 THEN COALESCE(pc.card_points, cc.card_points) ELSE COALESCE(pc.card_points, c.card_points) END as card_points,
                 CASE WHEN pc.is_custom = 1 THEN cc.card_duration ELSE c.card_duration END as card_duration,
-                pc.expires_at, pc.filled_values, pc.animation_shown,
+                pc.expires_at, pc.filled_values, pc.animation_shown, pc.extension_request,
                 CASE WHEN pc.is_custom = 1 THEN NULL ELSE c.serve_to_her END as serve_to_her,
                 CASE WHEN pc.is_custom = 1 THEN NULL ELSE c.serve_to_him END as serve_to_him,
                 CASE WHEN pc.is_custom = 1 THEN NULL ELSE c.for_her END as for_her,

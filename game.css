@@ -41,6 +41,54 @@ body.notification {
     overflow: hidden;
 }
 
+.game-paused {
+    display: flex;
+    flex-flow: column nowrap;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    height: 100vh;
+    text-align: center;
+    padding: 40px;
+    box-shadow: inset 0px 0px 40px 20px var(--color-blue-light);
+}
+
+.game-paused-emoji {
+    font-size: 80px;
+    margin-bottom: 12px;
+}
+
+.game-paused-headline {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 40px;
+}
+
+.game-paused-score-message {
+    font-size: 12px;
+    font-weight: 900;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+
+.game-paused-score {
+    font-weight: 900;
+    font-size: 32px;
+    margin-bottom: 40px;
+}
+
+.game-paused .btn-label {
+    margin-top: 8px;
+    margin-bottom: 20px;
+    font-size: 20px;
+    font-weight: 700;
+    color: #10b981;
+}
+
+.game-paused-message {
+    line-height: 24px;
+}
+
 .game-timer {
     background: rgba(250,250,250,0.7);
     color: #111;
@@ -883,6 +931,16 @@ body:not(.interact) .bottom-right-menu {
 .btn-test {
     background: #10b981;
     margin-top: 10px;
+}
+
+.btn-resume {
+    background: #10b981;
+    width: 100px;
+    height: 100px;
+    padding: unset;
+    border-radius: 50%;
+    font-size: 64px;
+    line-height: 104px;
 }
 
 .history-item {
@@ -2770,6 +2828,39 @@ body.digital .hybrid-menu-item {
     transition: all 0.3s ease;
 }
 
+.opponent-request-flag {
+    position: absolute;
+    top: 50%;
+    left: 56px;
+    transform: translateY(-50%) scaleX(1);
+    white-space: nowrap;
+    font-size: 12px;
+    padding: 5px 10px 5px 5px;
+    border-top-right-radius: 15px;
+    border-bottom-right-radius: 15px;
+    background: rgba(255,255,255,0.7);
+    transform-origin: left;
+    color: #111;
+    transition: all 0.4s;
+}
+
+.opponent-request-flag:before {
+    content: '';
+    width: 0;
+    height: 0;
+    border-top: 12px solid transparent;
+    border-bottom: 12px solid transparent;
+    border-right: 12px solid rgba(255,255,255,0.7);
+    position: absolute;
+    top: 0;
+    left: -12px;
+}
+
+.opponent-request-flag:has(~ .opponent-hand-popover) {
+    opacity: 0;
+    transform: translateY(-50%) scaleX(0);
+}
+
 .overlay-active .opponent-hand-counts,
 body:not(.interact) .opponent-hand-counts {
     left: -40px;
@@ -3314,9 +3405,14 @@ body:not(.digital) .rules-content .ultimate-mode {
         background: #068947;
     }
 
-    .opponent-hand-badge {
+    .opponent-hand-badge,
+    .opponent-request-flag {
         background: rgba(25,25,25,0.7);
         color: #ccc;
+    }
+
+    .opponent-request-flag:before {
+        border-right-color: rgba(25,25,25,0.7);
     }
 
     .player-name {

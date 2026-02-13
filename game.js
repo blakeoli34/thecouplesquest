@@ -224,6 +224,12 @@ function updateOpponentHandDisplay() {
                         container.appendChild(badge);
                     }
                 });
+                if(data.requests !== 0) {
+                    const requestFlag = document.createElement('div');
+                    requestFlag.className = 'opponent-request-flag';
+                    requestFlag.textContent = 'Extension Requested!';
+                    container.appendChild(requestFlag);
+                }
             }
         }
     });
@@ -365,7 +371,7 @@ function createCardElement(card, type) {
         div.onclick = () => selectHandCard(card);
     } else if (type === 'opponent') {
         // Check if card has expires_at before adding click handler
-        if (card.expires_at) {
+        if (card.expires_at && card.extension_request === 1) {
             div.onclick = (e) => {
                 e.stopPropagation(); // Prevent popover from closing
                 closeOpponentHandPopover();
@@ -394,16 +400,16 @@ function createCardElement(card, type) {
 function showTimerExtensionModal(card) {
     const modal = document.createElement('div');
     modal.className = 'modal active';
+    modal.onclick = () => closeTimerExtensionModal();
     modal.innerHTML = `
         <div class="modal-content">
-            <div class="modal-title">Extend Timer</div>
-            <div class="modal-subtitle">${card.card_name}</div>
-            <button class="btn" onclick="extendCardTimer(${card.id}, 1)">+1 Hour</button>
-            <button class="btn" onclick="extendCardTimer(${card.id}, 4)">+4 Hours</button>
-            <button class="btn" onclick="extendCardTimer(${card.id}, 12)">+12 Hours</button>
-            <button class="btn" onclick="extendCardTimer(${card.id}, 24)">+24 Hours</button>
-            <button class="btn btn-secondary" onclick="extendCardTimer(${card.id}, 'remove')">Remove Timer</button>
-            <button class="btn btn-secondary" onclick="closeTimerExtensionModal()">Cancel</button>
+            <div class="modal-title">Would You Like to Extend ${gameData.opponentPlayerName}'s "${card.card_name}" Card?</div>
+            <button class="btn btn-secondary" onclick="extendCardTimer(${card.id}, 'eod')">End of Today</button>
+            <button class="btn btn-secondary" onclick="extendCardTimer(${card.id}, 1)">1 Day</button>
+            <button class="btn btn-secondary" onclick="extendCardTimer(${card.id}, 'eot')">+12 Hours</button>
+            <button class="btn btn-secondary" onclick="extendCardTimer(${card.id}, 7)">1 Week</button>
+            <button class="btn btn-secondary" onclick="extendCardTimer(${card.id}, 'remove')">Complete Anytime</button>
+            <button class="btn red" onclick="extendCardTimer(${card.id}, 'decline')">Decline Request</button>
         </div>
     `;
     document.body.appendChild(modal);
@@ -664,7 +670,15 @@ function getCardDisplayInfo(card, context = 'serve') {
             
             badges.push(`<span class="card-badge duration counting"><i class="fa-solid fa-timer"></i> ${timeText}</span>`);
         } else {
-            badges.push(`<span class="card-badge penalty"><i class="fa-solid fa-circle-exclamation"></i> Expired</span>`);
+            if(card.extension_request === 1) {
+                badges.push(`<span class="card-badge penalty"><i class="fa-solid fa-user-clock"></i> Requested</span>`);
+            }
+            else if(card.extension_request === -1) {
+                badges.push(`<span class="card-badge penalty"><i class="fa-solid fa-ban"></i> Declined</span>`);
+            }
+            else {
+                badges.push(`<span class="card-badge penalty"><i class="fa-solid fa-circle-exclamation"></i> Expired</span>`);
+            }
         }
     }
 
@@ -684,7 +698,7 @@ function getCardDisplayInfo(card, context = 'serve') {
 
     if(context === 'opponent' && card.card_type === 'accepted_serve' && card.animation_shown === 0) {
         badges.push(`<span class="card-badge duration"><i class="fa-solid fa-eye-slash"></i></span>`);
-    } 
+    }
 
     if(context === 'opponent' && opponentCardData.active_modifiers) {
         // Don't show challenge modifiers on cards that don't clear effects
@@ -1280,8 +1294,12 @@ function showCardSelectionActions() {
         } else {
             // For non-chance cards
             if (isExpired) {
+                let requestBtn = '';
+                if(selectedHandCard.extension_request === 0) {
+                    requestBtn = '<button class="btn btn-request" onclick="requestMoreTime()">Request Extension</button>';
+                }
                 actions.innerHTML = `<button class="btn btn-veto" onclick="vetoSelectedCard()">Veto (Expired)</button>
-                                     <button class="btn btn-request" onclick="requestMoreTime()">Request Extension</button>`;
+                                     ${requestBtn}`;
             } else {
                 // Existing win/loss and regular card logic
                 if (selectedHandCard.win_loss == 1 || selectedHandCard.win_loss === true) {
@@ -2356,6 +2374,14 @@ function openEndGameModal() {
     }
 }
 
+function openPauseGameModal() {
+    const modal = document.getElementById('pauseGameModal');
+    if(modal) {
+        modal.classList.add('active');
+        setOverlayActive(true);
+    }
+}
+
 function closeModal(modalId) {
     const modal = document.getElementById(modalId);
     if (modal) {
@@ -2814,6 +2840,10 @@ function refreshGameData() {
             });
             return; // Don't process other updates
         }
+
+        if(data.game_status === 'paused') {
+            location.reload();
+        }
         
         // Check for score changes and animate them
         if (data.players && oldPlayers) {
@@ -2944,6 +2974,50 @@ function endGame() {
     .catch(error => {
         console.error('Error ending game:', error);
         alert('Failed to end game. Please try again.');
+    });
+}
+
+function pauseGame() {
+    fetch('game.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'action=pause_game'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Failed to pause game: ' + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error pausing game:', error);
+        alert('Failed to pause game. Please try again.');
+    });
+}
+
+function resumeGame() {
+    fetch('game.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'action=resume_game'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Failed to resume game: ' + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error resuming game:', error);
+        alert('Failed to resume game. Please try again.');
     });
 }
 
@@ -4096,6 +4170,35 @@ document.addEventListener('DOMContentLoaded', function() {
     setupModalHandlers();
     setupAnimatedMenu(); // New animated menu system
     initializeDigitalCards();
+
+    if (document.querySelector('.game-paused')) {
+        console.log('Starting resume polling...');
+
+        function checkGameStatus() {
+            fetch('game.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'action=check_game_status'
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Game status check: ', data);
+                if(data.success && data.status === 'active') {
+                    console.log('game has been resumed, reloading...');
+                    location.reload();
+                }
+            })
+        }
+        // Check every 10 seconds
+        const statusInterval = setInterval(checkGameStatus, 5000);
+
+        // Clear interval when page unloads
+        window.addEventListener('beforeunload', () => {
+            clearInterval(statusInterval);
+        });
+    }
 
     // Check if we're waiting on an opponent
     if (document.querySelector('.waiting-screen.no-opponent')) {

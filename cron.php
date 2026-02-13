@@ -212,24 +212,26 @@ function checkExpiringCards() {
         // Get cards expiring in 12 hours, 1 hour, or 10 minutes (with 30 second tolerance)
         $stmt = $pdo->prepare("
             SELECT pc.*, p.fcm_token, p.first_name, 
-                   CASE 
-                       WHEN pc.is_custom = 1 THEN cc.card_name
-                       ELSE c.card_name
-                   END as card_name,
-                   TIMESTAMPDIFF(MINUTE, NOW(), pc.expires_at) as minutes_until_expiry
+                CASE 
+                    WHEN pc.is_custom = 1 THEN cc.card_name
+                    ELSE c.card_name
+                END as card_name,
+                TIMESTAMPDIFF(MINUTE, NOW(), pc.expires_at) as minutes_until_expiry
             FROM player_cards pc
             JOIN players p ON pc.player_id = p.id
+            JOIN games g ON pc.game_id = g.id
             LEFT JOIN cards c ON pc.card_id = c.id AND pc.is_custom = 0
             LEFT JOIN custom_cards cc ON pc.card_id = cc.id AND pc.is_custom = 1
             WHERE pc.expires_at IS NOT NULL 
             AND pc.expires_at > NOW()
             AND p.fcm_token IS NOT NULL 
             AND p.fcm_token != ''
+            AND g.status = 'active'
             AND (
-                (TIMESTAMPDIFF(MINUTE, NOW(), pc.expires_at) = 1441) OR  -- 1 day
-                (TIMESTAMPDIFF(MINUTE, NOW(), pc.expires_at) = 720) OR  -- 12 hours
-                (TIMESTAMPDIFF(MINUTE, NOW(), pc.expires_at) = 60) OR   -- 1 hour
-                (TIMESTAMPDIFF(MINUTE, NOW(), pc.expires_at) = 10)      -- 10 minute
+                (TIMESTAMPDIFF(MINUTE, NOW(), pc.expires_at) = 1441) OR
+                (TIMESTAMPDIFF(MINUTE, NOW(), pc.expires_at) = 720) OR
+                (TIMESTAMPDIFF(MINUTE, NOW(), pc.expires_at) = 60) OR
+                (TIMESTAMPDIFF(MINUTE, NOW(), pc.expires_at) = 10)
             )
         ");
         $stmt->execute();
@@ -268,13 +270,14 @@ function checkExpiringCards() {
         // Check for newly expired cards (expired within last minute)
         $stmt = $pdo->prepare("
             SELECT pc.*, p.fcm_token, p.first_name, 
-                   CASE 
-                       WHEN pc.is_custom = 1 THEN cc.card_name
-                       ELSE c.card_name
-                   END as card_name,
-                   c.card_type
+                CASE 
+                    WHEN pc.is_custom = 1 THEN cc.card_name
+                    ELSE c.card_name
+                END as card_name,
+                c.card_type
             FROM player_cards pc
             JOIN players p ON pc.player_id = p.id
+            JOIN games g ON pc.game_id = g.id
             LEFT JOIN cards c ON pc.card_id = c.id AND pc.is_custom = 0
             LEFT JOIN custom_cards cc ON pc.card_id = cc.id AND pc.is_custom = 1
             WHERE pc.expires_at IS NOT NULL 
@@ -282,6 +285,7 @@ function checkExpiringCards() {
             AND pc.expires_at > DATE_SUB(NOW(), INTERVAL 1 MINUTE)
             AND p.fcm_token IS NOT NULL 
             AND p.fcm_token != ''
+            AND g.status = 'active'
         ");
         $stmt->execute();
         $expiredCards = $stmt->fetchAll();
@@ -350,7 +354,9 @@ function checkExpiredTimers($specificTimerId = null) {
                 SELECT t.*, p.fcm_token, p.first_name 
                 FROM timers t
                 JOIN players p ON t.player_id = p.id
+                JOIN games g ON t.game_id = g.id
                 WHERE t.id = ? AND t.is_active = TRUE
+                AND g.status = 'active'
             ");
             $stmt->execute([$specificTimerId]);
             $expiredTimers = $stmt->fetchAll();
@@ -360,7 +366,9 @@ function checkExpiredTimers($specificTimerId = null) {
                 SELECT t.*, p.fcm_token, p.first_name 
                 FROM timers t
                 JOIN players p ON t.player_id = p.id
+                JOIN games g ON t.game_id = g.id
                 WHERE t.is_active = TRUE AND t.end_time <= UTC_TIMESTAMP()
+                AND g.status = 'active'
             ");
             $stmt->execute();
             $expiredTimers = $stmt->fetchAll();
@@ -632,10 +640,12 @@ function checkForUnreadCards() {
             FROM players p
             JOIN player_cards pc ON p.id = pc.player_id
             JOIN cards c ON pc.card_id = c.id
+            JOIN games g ON p.game_id = g.id
             WHERE pc.card_type = 'accepted_serve'
             AND pc.animation_shown = 0
             AND p.fcm_token IS NOT NULL 
             AND p.fcm_token != ''
+            AND g.status = 'active'
             GROUP BY p.id, p.fcm_token, p.game_id
             HAVING unread_count > 0
         ");
