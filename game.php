@@ -850,6 +850,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
         case 'accept_daily_card':
             $response = acceptDailyCard($player['id']);
+            $genderWord = ($currentPlayer['gender'] === 'male') ? 'his' : 'her';
+            $body = $currentPlayer['first_name'] . ' has accepted ' . $genderWord . ' daily card! Check it out in the app.';
+            sendPushNotification($opponentPlayer['fcm_token'], 'Daily Card Accepted', $body);
             echo json_encode($response);
             exit;
 
@@ -1078,6 +1081,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
             
             $result = spinWheel($player['game_id'], $player['id']);
+            sendPushNotification($opponentPlayer['fcm_token'], 'Daily Wheel Spun!', $currentPlayer['first_name'] . ' chose to spin the daily wheel and landed on ' . $result['winning_prize']['display_text'] . '.');
             echo json_encode($result);
             exit;
 

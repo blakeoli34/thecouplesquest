@@ -1951,8 +1951,24 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
                 }
             }
 
-            if($playerCard['card_type'] === 'daily') {
+            if($playerCard['card_type'] === 'daily' || $playerCard['card_type'] === 'snap' || $playerCard['card_type'] === 'dare' || $playerCard['card_type'] === 'spicy') {
                 $opponentId = getOpponentPlayerId($gameId, $playerId);
+                $body = "$playerName completed their card!";
+                $cardName = $playerCard['card_name'];
+                switch($playerCard['card_type']) {
+                    case 'daily':
+                        $body = "$playerName completed their Daily Challenge card!";
+                        break;
+                    case 'snap':
+                        $body = "$playerName completed their $cardName (Snap) card!";
+                        break;
+                    case 'dare':
+                        $body = "$playerName completed their $cardName (Dare) card!";
+                        break;
+                    case 'spicy':
+                        $body = "$playerName completed their $cardName (Spicy) card!";
+                        break;
+                }
                 if($opponentId) {
                     $stmt = $pdo->prepare("SELECT first_name FROM players WHERE id = ?");
                     $stmt->execute([$playerId]);
@@ -1966,7 +1982,7 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
                         sendPushNotification(
                             $opponentToken,
                             "Card Completed!",
-                            "$playerName completed their Daily Challenge card!"
+                            $body
                         );
                     }
                 }
@@ -2192,25 +2208,27 @@ function vetoHandCard($gameId, $playerId, $cardId, $playerCardId) {
         $stmt->execute([$gameId, $playerId]);
         $vetoModifierCard = $stmt->fetch();
 
-        // Send notification to opponent if this was a served card
+        // Send notification to opponent
+        $bodyEnd = 'card!';
         if ($playerCard['card_type'] === 'accepted_serve') {
-            $opponentId = getOpponentPlayerId($gameId, $playerId);
-            if ($opponentId) {
-                $stmt = $pdo->prepare("SELECT first_name FROM players WHERE id = ?");
-                $stmt->execute([$playerId]);
-                $playerName = $stmt->fetchColumn();
-                
-                $stmt = $pdo->prepare("SELECT fcm_token FROM players WHERE id = ?");
-                $stmt->execute([$opponentId]);
-                $opponentToken = $stmt->fetchColumn();
-                
-                if ($opponentToken) {
-                    sendPushNotification(
-                        $opponentToken,
-                        "Card Vetoed!",
-                        "$playerName vetoed the {$playerCard['card_name']} card you served them!"
-                    );
-                }
+            $bodyEnd = 'card you served them!';
+        }
+        $opponentId = getOpponentPlayerId($gameId, $playerId);
+        if ($opponentId) {
+            $stmt = $pdo->prepare("SELECT first_name FROM players WHERE id = ?");
+            $stmt->execute([$playerId]);
+            $playerName = $stmt->fetchColumn();
+            
+            $stmt = $pdo->prepare("SELECT fcm_token FROM players WHERE id = ?");
+            $stmt->execute([$opponentId]);
+            $opponentToken = $stmt->fetchColumn();
+            
+            if ($opponentToken) {
+                sendPushNotification(
+                    $opponentToken,
+                    "Card Vetoed!",
+                    "$playerName vetoed their {$playerCard['card_name']} $bodyEnd"
+                );
             }
         }
         

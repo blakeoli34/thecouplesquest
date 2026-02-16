@@ -53,6 +53,10 @@ body.notification {
     box-shadow: inset 0px 0px 40px 20px var(--color-blue-light);
 }
 
+body.female .game-paused {
+    box-shadow: inset 0px 0px 40px 20px var(--color-pink-light);
+}
+
 .game-paused-emoji {
     font-size: 80px;
     margin-bottom: 12px;
@@ -83,6 +87,14 @@ body.notification {
     font-size: 20px;
     font-weight: 700;
     color: #10b981;
+}
+
+body.male .game-paused .btn-label {
+    color: var(--color-blue);
+}
+
+body.female .game-paused .btn-label {
+    color: var(--color-pink);
 }
 
 .game-paused-message {
@@ -941,6 +953,14 @@ body:not(.interact) .bottom-right-menu {
     border-radius: 50%;
     font-size: 64px;
     line-height: 104px;
+}
+
+body.male .btn-resume {
+    background: var(--color-blue);
+}
+
+body.female .btn-resume {
+    background: var(--color-pink);
 }
 
 .history-item {
