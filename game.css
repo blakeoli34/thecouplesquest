@@ -50,16 +50,39 @@ body.notification {
     height: 100vh;
     text-align: center;
     padding: 40px;
-    box-shadow: inset 0px 0px 40px 20px var(--color-blue-light);
+    position: relative;
 }
 
-body.female .game-paused {
+.game-paused:after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    box-shadow: inset 0px 0px 40px 20px var(--color-blue-light);
+    animation: shadowBreathe 10s linear infinite;
+    border-radius: 50px;
+    pointer-events: none;
+}
+
+body.female .game-paused:after {
     box-shadow: inset 0px 0px 40px 20px var(--color-pink-light);
+}
+
+@keyframes shadowBreathe {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
 }
 
 .game-paused-emoji {
     font-size: 80px;
     margin-bottom: 12px;
+    animation: wheelSpin 20s linear infinite;
 }
 
 .game-paused-headline {
@@ -87,6 +110,18 @@ body.female .game-paused {
     font-size: 20px;
     font-weight: 700;
     color: #10b981;
+}
+
+.game-paused .btn-label .ready {
+    display: none;
+}
+
+.game-paused .btn-label.holding .ready {
+    display: block;
+}
+
+.game-paused .btn-label.holding .default {
+    display: none;
 }
 
 body.male .game-paused .btn-label {
@@ -953,14 +988,27 @@ body:not(.interact) .bottom-right-menu {
     border-radius: 50%;
     font-size: 64px;
     line-height: 104px;
+    transition: all 0.4s;
+}
+
+.btn-resume.holding {
+    box-shadow: 0px 0px 20px 10px rgba(255,255,255,0.5);
 }
 
 body.male .btn-resume {
     background: var(--color-blue);
 }
 
+body.male .btn-resume.holding {
+    box-shadow: 0px 0px 20px 10px var(--color-blue-light);
+}
+
 body.female .btn-resume {
     background: var(--color-pink);
+}
+
+body.female .btn-resume.holding {
+    box-shadow: 0px 0px 20px 10px var(--color-pink-light);
 }
 
 .history-item {

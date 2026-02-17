@@ -40,6 +40,16 @@ let isShowingReceivedCards = false;
 let actionSound = new Audio('data:audio/mpeg;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsuY29tIC8gTGFTb25vdGhlcXVlLm9yZwBURU5DAAAAHQAAA1N3aXRjaCBQbHVzIMKpIE5DSCBTb2Z0d2FyZQBUSVQyAAAABgAAAzIyMzUAVFNTRQAAAA8AAANMYXZmNTcuODMuMTAwAAAAAAAAAAAAAAD/80DEAAAAA0gAAAAATEFNRTMuMTAwVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQsRbAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQMSkAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV');
 
 $(document).ready(function() {
+
+    $('.game-paused .btn-resume').on('pointerdown', function(e) {
+        e.preventDefault();
+        resumeButtonState(1);
+    });
+
+    $('.game-paused .btn-resume').on('pointerup', function(e) {
+        e.preventDefault();
+        resumeButtonState(0);
+    });
     let hasClicked = false;
     
     $(document).on('click', function(event) {
@@ -2997,6 +3007,28 @@ function pauseGame() {
         console.error('Error pausing game:', error);
         alert('Failed to pause game. Please try again.');
     });
+}
+
+function resumeButtonState(state) {
+    if(state === 1) {
+        $('.game-paused .btn-resume, .game-paused .btn-label').addClass('holding');
+    } else {
+        $('.game-paused .btn-resume, .game-paused .btn-label').removeClass('holding');
+    }
+    fetch('game.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `action=set_ready_to_resume&ready=${state}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('ready! checking opponent state: ' + data.opponent_ready);
+        if (data.success && data.opponent_ready === 1) {
+            resumeGame();
+        }
+    })
 }
 
 function resumeGame() {

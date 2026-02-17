@@ -1232,6 +1232,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             echo json_encode(['success' => true]);
             exit;
 
+        case 'set_ready_to_resume':
+            if ($gameMode !== 'digital') {
+                echo json_encode(['success' => false, 'message' => 'Not a digital game']);
+                exit;
+            }
+            $ready = $_POST['ready'];
+            error_log('setting field to: ' . $ready);
+            $opponentReady = 0;
+            $stmt = $pdo->prepare("UPDATE players SET ready_to_resume = ? WHERE id = ?");
+            $stmt->execute([$ready, $currentPlayer['id']]);
+
+            if($ready == 1) {
+                error_log('player is ready, checking opponent status...');
+                $stmt = $pdo->prepare("SELECT ready_to_resume FROM players WHERE id = ?");
+                $stmt->execute([$opponentPlayer['id']]);
+                $result = $stmt->fetchColumn();
+                error_log($result);
+                if($result === 1) {
+                    $opponentReady = 1;
+                }
+            }
+
+            echo json_encode(['success' => true, 'opponent_ready' => $opponentReady]);
+            exit;
+
         case 'resume_game':
             if ($gameMode !== 'digital') {
                 echo json_encode(['success' => false, 'message' => 'Not a digital game']);
@@ -1266,6 +1291,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 SET status = 'active', end_date = ?, paused_date = NULL
                 WHERE id = ?");
             $restoreGameState->execute([$newEndDate->format('Y-m-d H:i:s'), $currentPlayer['game_id']]);
+            $resetReadyField = $pdo->prepare("UPDATE players SET ready_to_resume = 0 WHERE game_id = ?");
+            $resetReadyField->execute([$currentPlayer['game_id']]);
             sendPushNotification($opponentPlayer['fcm_token'], 'Game Resumed!', $currentPlayer['first_name'] . ' has restarted your game. Open the app to play!');
             echo json_encode(['success' => true]);
             exit;
@@ -1543,8 +1570,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 <div class="game-paused-headline">Your Game with <?php echo $opponentPlayer['first_name']; ?> is Frozen</div>
                 <div class="game-paused-score-message"><?php echo $winner_msg; ?></div>
                 <div class="game-paused-score"><?php echo $gameScore; ?></div>
-                <div class="btn btn-resume" onclick="resumeGame()"><i class="fa-solid fa-circle-play"></i></div>
-                <div class="btn-label">Resume Game</div>
+                <div class="btn btn-resume"><i class="fa-solid fa-circle-play"></i></div>
+                <div class="btn-label"><div class="default">Hold to Resume</div><div class="ready">Waiting for <?php echo $opponentPlayer['first_name']; ?>...</div></div>
                 <div class="game-paused-message">After resuming, your game clock, card states, and timers will be restored. <em>This will result in your game end date being extended by the freeze duration.</em><br><br><strong><?php echo $pausedGameTimeRemaining; ?></strong><br>remaining</div>
             </div>
             
