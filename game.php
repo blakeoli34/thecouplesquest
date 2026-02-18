@@ -1293,7 +1293,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $restoreGameState->execute([$newEndDate->format('Y-m-d H:i:s'), $currentPlayer['game_id']]);
             $resetReadyField = $pdo->prepare("UPDATE players SET ready_to_resume = 0 WHERE game_id = ?");
             $resetReadyField->execute([$currentPlayer['game_id']]);
-            sendPushNotification($opponentPlayer['fcm_token'], 'Game Resumed!', $currentPlayer['first_name'] . ' has restarted your game. Open the app to play!');
             echo json_encode(['success' => true]);
             exit;
 
