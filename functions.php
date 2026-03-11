@@ -4,6 +4,12 @@ define('DEBUG_PLAYER_ID', 1); // Kara 33
 define('DEBUG_CARD_TYPE', 'chance');
 define('DEBUG_CARD_ID', 255);
 
+// Award levels and points
+$snapdare_levels = [1, 5, 15, 25, 35];
+$snapdare_points = [5, 10, 25, 50, 100];
+$spicy_levels = [1, 5, 10, 20, 40];
+$spicy_points = [5, 15, 35, 75, 200];
+
 function debugLog($message) {
     file_put_contents('/tmp/couples_quest_debug.log', 
         date('Y-m-d H:i:s') . " - " . $message . "\n", 
@@ -101,7 +107,7 @@ function getGamePlayers($gameId) {
     try {
         $pdo = Config::getDatabaseConnection();
         $stmt = $pdo->prepare("
-            SELECT id, device_id, first_name, gender, score, fcm_token, joined_at, game_id
+            SELECT *
             FROM players 
             WHERE game_id = ? 
             ORDER BY joined_at ASC
@@ -173,13 +179,14 @@ function setGameDuration($gameId, $durationDays) {
         
         $stmt = $pdo->prepare("
             UPDATE games 
-            SET duration_days = ?, start_date = ?, end_date = ?, status = 'active' 
+            SET duration_days = ?, start_date = ?, end_date = ?, created_at = ?
             WHERE id = ?
         ");
         $stmt->execute([
             $durationDays, 
             $startDateUTC->format('Y-m-d H:i:s'), 
             $endDateUTC->format('Y-m-d H:i:s'), 
+            $startDateUTC->format('Y-m-d H:i:s'),
             $gameId
         ]);
         
@@ -419,7 +426,7 @@ function applyHandCardPenalties($gameId) {
                 SELECT SUM(quantity) as card_count
                 FROM player_cards 
                 WHERE game_id = ? AND player_id = ? 
-                AND card_type IN ('accepted_serve', 'snap', 'dare', 'spicy')
+                AND card_type IN ('accepted_serve', 'snap', 'dare', 'spicy', 'daily')
             ");
             $stmt->execute([$gameId, $player['id']]);
             $cardCount = $stmt->fetchColumn() ?: 0;
@@ -430,8 +437,8 @@ function applyHandCardPenalties($gameId) {
                 $newScore = $oldScore - $penalty;
                 
                 // Apply penalty
-                $stmt = $pdo->prepare("UPDATE players SET score = ? WHERE id = ?");
-                $stmt->execute([$newScore, $player['id']]);
+                $stmt = $pdo->prepare("UPDATE players SET score = ?, penalties = ? WHERE id = ?");
+                $stmt->execute([$newScore, $penalty, $player['id']]);
                 
                 // Record in score history
                 $stmt = $pdo->prepare("
@@ -457,6 +464,103 @@ function applyHandCardPenalties($gameId) {
         error_log("Error applying hand card penalties: " . $e->getMessage());
         return ['success' => false, 'message' => $e->getMessage()];
     }
+}
+
+function endGameAwards($gameId) {
+    $pdo = Config::getDatabaseConnection();
+    $SERVE_AWARD_POINTS = 50;
+    $DAILY_AWARD_POINTS = 25;
+    $BATTLE_AWARD_POINTS = 25;
+
+    // Fetch both players for this game
+    $stmt = $pdo->prepare("SELECT * FROM players WHERE game_id = ? ORDER BY id ASC LIMIT 2");
+    $stmt->execute([$gameId]);
+    $players = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    if (count($players) < 2) {
+        return ['success' => false, 'message' => 'Could not find players for this game'];
+    }
+
+    $p1 = $players[0];
+    $p2 = $players[1];
+    $results = [];
+
+    // --- Serve Award ---
+    if ($p1['serve_completed'] > $p2['serve_completed']) {
+        $pdo->prepare("UPDATE players SET score = score + ?, awards = awards + ? WHERE id = ?")
+            ->execute([$SERVE_AWARD_POINTS, $SERVE_AWARD_POINTS, $p1['id']]);
+        $results['serve'] = [
+            'tied'   => false,
+            'winner' => $p1,
+            'points' => $SERVE_AWARD_POINTS
+        ];
+    } elseif ($p2['serve_completed'] > $p1['serve_completed']) {
+        $pdo->prepare("UPDATE players SET score = score + ?, awards = awards + ? WHERE id = ?")
+            ->execute([$SERVE_AWARD_POINTS, $SERVE_AWARD_POINTS, $p2['id']]);
+        $results['serve'] = [
+            'tied'   => false,
+            'winner' => $p2,
+            'points' => $SERVE_AWARD_POINTS
+        ];
+    } else {
+        $results['serve'] = [
+            'tied'   => true,
+            'winner' => null,
+            'points' => 0
+        ];
+    }
+
+    // --- Daily Award ---
+    if ($p1['daily_completed'] > $p2['daily_completed']) {
+        $pdo->prepare("UPDATE players SET score = score + ?, awards = awards + ? WHERE id = ?")
+            ->execute([$DAILY_AWARD_POINTS, $DAILY_AWARD_POINTS, $p1['id']]);
+        $results['daily'] = [
+            'tied'   => false,
+            'winner' => $p1,
+            'points' => $DAILY_AWARD_POINTS
+        ];
+    } elseif ($p2['daily_completed'] > $p1['daily_completed']) {
+        $pdo->prepare("UPDATE players SET score = score + ?, awards = awards + ? WHERE id = ?")
+            ->execute([$DAILY_AWARD_POINTS, $DAILY_AWARD_POINTS, $p2['id']]);
+        $results['daily'] = [
+            'tied'   => false,
+            'winner' => $p2,
+            'points' => $DAILY_AWARD_POINTS
+        ];
+    } else {
+        $results['daily'] = [
+            'tied'   => true,
+            'winner' => null,
+            'points' => 0
+        ];
+    }
+
+    // --- Battle Award ---
+    if ($p1['battle_completed'] > $p2['battle_completed']) {
+        $pdo->prepare("UPDATE players SET score = score + ?, awards = awards + ? WHERE id = ?")
+            ->execute([$BATTLE_AWARD_POINTS, $BATTLE_AWARD_POINTS, $p1['id']]);
+        $results['battle'] = [
+            'tied'   => false,
+            'winner' => $p1,
+            'points' => $BATTLE_AWARD_POINTS
+        ];
+    } elseif ($p2['battle_completed'] > $p1['battle_completed']) {
+        $pdo->prepare("UPDATE players SET score = score + ?, awards = awards + ? WHERE id = ?")
+            ->execute([$BATTLE_AWARD_POINTS, $BATTLE_AWARD_POINTS, $p2['id']]);
+        $results['battle'] = [
+            'tied'   => false,
+            'winner' => $p2,
+            'points' => $BATTLE_AWARD_POINTS
+        ];
+    } else {
+        $results['battle'] = [
+            'tied'   => true,
+            'winner' => null,
+            'points' => 0
+        ];
+    }
+
+    return ['success' => true, 'awards' => $results];
 }
 
 function sendPushNotification($fcmToken, $title, $body, $data = [], $retryCount = 0) {
@@ -897,11 +1001,11 @@ function resetGameForNewRound($gameId) {
         $pdo->beginTransaction();
         
         // Reset players: scores to 0, ready status to false
-        $stmt = $pdo->prepare("UPDATE players SET score = 0, ready_for_new_game = FALSE WHERE game_id = ?");
+        $stmt = $pdo->prepare("UPDATE players SET score = 0, ready_to_resume = 0, serve_completed = 0, daily_completed = 0, battle_completed = 0, snapdare_completed = 0, spicy_completed = 0, snapdare_level = 0, spicy_level = 0, penalties = 0, awards = 0, ready_for_new_game = FALSE WHERE game_id = ?");
         $stmt->execute([$gameId]);
         
         // Reset game: status to waiting, clear dates and duration
-        $stmt = $pdo->prepare("UPDATE games SET status = 'waiting', duration_days = NULL, start_date = NULL, end_date = NULL, game_mode = NULL WHERE id = ?");
+        $stmt = $pdo->prepare("UPDATE games SET status = 'waiting', duration_days = NULL, prize = NULL, start_date = NULL, end_date = NULL, custom_end_date = NULL, game_mode = NULL, paused_date = NULL, awards_enabled = 1 WHERE id = ?");
         $stmt->execute([$gameId]);
         
         // Clear timers
@@ -1949,24 +2053,32 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
                         );
                     }
                 }
+                // Track card completion counts for awards
+                $increment = $pdo->prepare('UPDATE players SET serve_completed = serve_completed + 1 WHERE id = ?');
+                $increment->execute([$playerId]);
             }
 
             if($playerCard['card_type'] === 'daily' || $playerCard['card_type'] === 'snap' || $playerCard['card_type'] === 'dare' || $playerCard['card_type'] === 'spicy') {
                 $opponentId = getOpponentPlayerId($gameId, $playerId);
                 $body = "$playerName completed their card!";
+                $column = 'serve_completed';
                 $cardName = $playerCard['card_name'];
                 switch($playerCard['card_type']) {
                     case 'daily':
                         $body = "$playerName completed their Daily Challenge card!";
+                        $column = 'daily_completed';
                         break;
                     case 'snap':
                         $body = "$playerName completed their $cardName (Snap) card!";
+                        $column = 'snapdare_completed';
                         break;
                     case 'dare':
                         $body = "$playerName completed their $cardName (Dare) card!";
+                        $column = 'snapdare_completed';
                         break;
                     case 'spicy':
                         $body = "$playerName completed their $cardName (Spicy) card!";
+                        $column = 'spicy_completed';
                         break;
                 }
                 if($opponentId) {
@@ -1986,6 +2098,9 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
                         );
                     }
                 }
+                // Track card completion counts for awards
+                $increment = $pdo->prepare("UPDATE players SET $column = $column + 1 WHERE id = ?");
+                $increment->execute([$playerId]);
             }
             
             // Remove card from player's hand
@@ -2412,6 +2527,8 @@ function processWinLossCard($gameId, $playerId, $cardId, $playerCardId, $isWin) 
         $response = ['success' => true, 'score_changes' => []];
         
         if ($isWin) {
+            $stmt = $pdo->prepare("UPDATE players SET battle_completed = battle_completed + 1 WHERE id = ?");
+            $stmt->execute([$playerId]);
             // Player wins: gets points, opponent gets veto penalty
             if ($playerCard['card_points']) {
                 $response['score_changes'][] = ['player_id' => $playerId, 'points' => $playerCard['card_points']];
@@ -2439,6 +2556,8 @@ function processWinLossCard($gameId, $playerId, $cardId, $playerCardId, $isWin) 
                 drawCards($gameId, $opponentId, 'spicy', $playerCard['veto_draw_spicy']);
             }
         } else {
+            $stmt = $pdo->prepare("UPDATE players SET battle_completed = battle_completed + 1 WHERE id = ?");
+            $stmt->execute([$opponentId]);
             // Player loses: gets veto penalty, opponent gets points
             if ($playerCard['card_points']) {
                 $response['score_changes'][] = ['player_id' => $opponentId, 'points' => $playerCard['card_points']];
@@ -3342,5 +3461,27 @@ function executeWithDeadlockRetry($callback, $maxRetries = 3) {
             usleep(rand(100000, 500000)); // Random delay 100-500ms
         }
     }
+}
+
+function get_level_and_til($count, $levels, $points) {
+    $current_level = 0;
+
+    foreach ($levels as $i => $threshold) {
+        if ($count >= $threshold) {
+            $current_level = $i + 1;
+        }
+    }
+
+    $max_level = count($levels);
+    if ($current_level < $max_level) {
+        $next_threshold = $levels[$current_level];
+        $til_next = $next_threshold - $count;
+        $next_points = $points[$current_level];
+    } else {
+        $til_next = null;
+        $next_points = null;
+    }
+
+    return [$current_level, $til_next, $next_points];
 }
 ?>

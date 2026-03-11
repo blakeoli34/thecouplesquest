@@ -476,7 +476,7 @@ function saveCard($data) {
                 ];
             } else {
                 // snap, dare, or spicy (simple cards)
-                $sql = "INSERT INTO cards (card_type, card_name, card_description, quantity, card_duration, for_her, for_him, extra_spicy) VALUES (?, ?, ?, ?, ?, ?, ?)";
+                $sql = "INSERT INTO cards (card_type, card_name, card_description, quantity, card_duration, for_her, for_him, extra_spicy) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
                 $params = [
                     $cardType, $cardName, $cardDescription, intval($data['quantity']) ?: 1,
                     !empty($data['card_duration']) ? intval($data['card_duration']) : null,
@@ -1362,7 +1362,7 @@ function showLoginForm($error = null) {
                         <th>Status</th>
                         <th>Players & Devices</th>
                         <th>Duration</th>
-                        <th>Created</th>
+                        <th>Started</th>
                         <th>Actions</th>
                     </tr>
                 </thead>

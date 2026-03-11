@@ -69,6 +69,10 @@ if ($timeRemaining) {
     }
     
     $gameTimeText = 'Game ends in ' . implode(', ', $parts);
+
+    if (empty($parts)) {
+        $gameTimeText = 'Game ending momentarily';
+    }
 } else {
     $gameTimeText = 'Game Ended';
 }
@@ -210,7 +214,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $pdo = Config::getDatabaseConnection();
                     $stmt = $pdo->prepare("
                         UPDATE games 
-                        SET duration_days = ?, start_date = ?, end_date = ?, status = 'active', custom_end_date = ?
+                        SET duration_days = ?, start_date = ?, end_date = ?, custom_end_date = ?, created_date = ?
                         WHERE id = ?
                     ");
                     $stmt->execute([
@@ -218,6 +222,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         $now->format('Y-m-d H:i:s'),
                         $customDateTime->format('Y-m-d H:i:s'),
                         $customDate,
+                        $now->format('Y-m-d H:i:s'),
                         $player['game_id']
                     ]);
                     $result = ['success' => true];
@@ -240,6 +245,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
             
             echo json_encode($result);
+            exit;
+
+        case 'set_game_prize':
+            if($_POST['prize']) {
+                $prize = $_POST['prize'];
+                $stmt = $pdo->prepare("UPDATE games SET prize = ?, status = 'active' WHERE id = ?");
+                $stmt->execute([$prize, $player['game_id']]);
+                echo json_encode(['success' => true]);
+                exit;
+            } else {
+                echo json_encode(['success' => false, 'message' => 'no prize set']);
+            }
             exit;
 
         case 'set_game_mode':
@@ -373,9 +390,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $history = getScoreHistory($player['game_id']);
 
             // Check if game has expired using Indianapolis timezone
-            $timezone = new DateTimeZone('America/Indiana/Indianapolis');
-            $now = new DateTime('now', $timezone);
-            $endDate = new DateTime($player['end_date'], $timezone);
+            $now = new DateTime('now');
+            $endDate = new DateTime($player['end_date']);
             $gameExpired = ($now >= $endDate && $player['status'] === 'active');
             $gameStatus = $player['status'];
             
@@ -385,7 +401,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 'history' => $history,
                 'gametime' => $gameTimeText,
                 'game_expired' => $gameExpired,
-                'game_status' => $gameStatus
+                'game_status' => $gameStatus,
+                'awards' => $gameData['awards_enabled']
             ]);
             exit;
 
@@ -395,7 +412,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 $gameId = $player['game_id'];
                 
                 // Get updated game info including mode
-                $stmt = $pdo->prepare("SELECT status, game_mode FROM games WHERE id = ?");
+                $stmt = $pdo->prepare("SELECT status, game_mode, prize, duration_days FROM games WHERE id = ?");
                 $stmt->execute([$gameId]);
                 $gameInfo = $stmt->fetch();
                 
@@ -403,9 +420,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 
                 echo json_encode([
                     'success' => true,
+                    'duration' => $gameInfo['duration_days'],
                     'status' => $gameInfo['status'],
                     'game_mode' => $gameInfo['game_mode'],
-                    'player_count' => count($currentPlayers)
+                    'player_count' => count($currentPlayers),
+                    'prize' => $gameInfo['prize']
                 ]);
             } catch (Exception $e) {
                 echo json_encode([
@@ -660,6 +679,131 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 'hand_cards' => $handCards,
                 'active_modifiers' => $activeModifiers
             ]);
+            exit;
+
+        case 'get_awards_data':
+
+            [$p_snap_level, $p_snap_til, $p_snap_pts] = get_level_and_til($currentPlayer['snapdare_completed'], $snapdare_levels, $snapdare_points);
+            [$p_spicy_level, $p_spicy_til, $p_spicy_pts] = get_level_and_til($currentPlayer['spicy_completed'], $spicy_levels, $spicy_points);
+            [$o_snap_level, $o_snap_til, $o_snap_pts] = get_level_and_til($opponentPlayer['snapdare_completed'], $snapdare_levels, $snapdare_points);
+            [$o_spicy_level, $o_spicy_til, $o_spicy_pts] = get_level_and_til($opponentPlayer['spicy_completed'], $spicy_levels, $spicy_points);
+
+            echo json_encode([
+                'success' => true,
+                'player_serve_count'         => $currentPlayer['serve_completed'],
+                'player_daily_count'         => $currentPlayer['daily_completed'],
+                'player_battle_count'        => $currentPlayer['battle_completed'],
+                'player_snapdare_count'      => $currentPlayer['snapdare_completed'],
+                'player_snapdare_level'      => $p_snap_level,
+                'player_snapdare_til'        => $p_snap_til,
+                'player_spicy_count'         => $currentPlayer['spicy_completed'],
+                'player_spicy_level'         => $p_spicy_level,
+                'player_spicy_til'           => $p_spicy_til,
+                'opponent_serve_count'       => $opponentPlayer['serve_completed'],
+                'opponent_daily_count'       => $opponentPlayer['daily_completed'],
+                'opponent_battle_count'      => $opponentPlayer['battle_completed'],
+                'opponent_snapdare_count'    => $opponentPlayer['snapdare_completed'],
+                'opponent_snapdare_level'    => $o_snap_level,
+                'opponent_snapdare_til'      => $o_snap_til,
+                'opponent_spicy_count'       => $opponentPlayer['spicy_completed'],
+                'opponent_spicy_level'       => $o_spicy_level,
+                'opponent_spicy_til'         => $o_spicy_til,
+                'player_snapdare_next_points'   => $p_snap_pts,
+                'player_spicy_next_points'      => $p_spicy_pts,
+                'opponent_snapdare_next_points' => $o_snap_pts,
+                'opponent_spicy_next_points'    => $o_spicy_pts
+            ]);
+            exit;
+
+        case 'check_award_level_up':
+
+            if ($gameData['awards_enabled'] != 1) {
+                echo json_encode(['success' => false, 'level_up' => false, 'message' => 'awards not enabled']);
+                exit;
+            }
+
+            $award_type = $_POST['award_type'] ?? null;
+
+            if (!$award_type || !in_array($award_type, ['snapdare', 'spicy', 'any'])) {
+                echo json_encode(['success' => false, 'level_up' => false]);
+                exit;
+            }
+
+            $types_to_check = $award_type === 'any' ? ['snapdare', 'spicy'] : [$award_type];
+
+            foreach ($types_to_check as $type) {
+
+                if ($type === 'snapdare') {
+                    $levels        = $snapdare_levels;
+                    $points        = $snapdare_points;
+                    $count         = $currentPlayer['snapdare_completed'];
+                    $current_level = $currentPlayer['snapdare_level'];
+                } else {
+                    $levels        = $spicy_levels;
+                    $points        = $spicy_points;
+                    $count         = $currentPlayer['spicy_completed'];
+                    $current_level = $currentPlayer['spicy_level'];
+                }
+
+                $new_level = 0;
+                foreach ($levels as $i => $threshold) {
+                    if ($count >= $threshold) {
+                        $new_level = $i + 1;
+                    }
+                }
+
+                if ($new_level <= $current_level) {
+                    continue; // no level up for this type, try the next
+                }
+
+                $award_label = 'Spicy';
+                if ($currentPlayer['gender'] === 'female' && $type === 'snapdare') {
+                    $award_label = 'Snap';
+                } elseif ($currentPlayer['gender'] === 'male' && $type === 'snapdare') {
+                    $award_label = 'Dare';
+                }
+
+                echo json_encode([
+                    'success'     => true,
+                    'level_up'    => true,
+                    'award_type'  => $type,
+                    'award_label' => $award_label,
+                    'new_level'   => $new_level,
+                    'points'      => $points[$new_level - 1]
+                ]);
+                exit;
+            }
+
+            // No level up found for any type
+            echo json_encode(['success' => true, 'level_up' => false]);
+            exit;
+
+        case 'claim_award':
+            $award_type = $_POST['award_type'] ?? null;
+            $new_level  = (int)($_POST['new_level'] ?? 0);
+
+            if (!$award_type || !in_array($award_type, ['snapdare', 'spicy']) || $new_level <= 0) {
+                echo json_encode(['success' => false, 'message' => 'Invalid claim data']);
+                exit;
+            }
+
+            $stmt = $pdo->prepare("UPDATE players SET {$award_type}_level = ? WHERE id = ?");
+            $stmt->execute([$new_level, $currentPlayer['id']]);
+            $award_label = 'Spicy';
+            if($award_type === 'snapdare') {
+                if($currentPlayer['gender'] === 'female') {
+                    $award_label = 'Snap';
+                } else {
+                    $award_label = 'Dare';
+                }
+            }
+
+
+            $notifyTitle = $currentPlayer['first_name'] . ' Leveled Up!';
+            $notifyBody = $currentPlayer['first_name'] . ' is now ' . $award_label . ' Level ' . $new_level . ', earning a ' . $_POST['points'] . ' point award!';
+            sendPushNotification($opponentPlayer['fcm_token'], $notifyTitle, $notifyBody);
+
+            echo json_encode(['success' => true]);
             exit;
 
         case 'extend_card_timer':
@@ -1299,9 +1443,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         case 'end_game':
             try {
                 $pdo = Config::getDatabaseConnection();
+
                 
                 // Apply hand card penalties before ending game
                 $penaltyResult = applyHandCardPenalties($player['game_id']);
+                $awardResults = 'Awards Not Enabled';
+                if($gameData['awards_enabled']) {
+                    error_log('awards are enabled, applying awards now');
+                    $awardResults = endGameAwards($player['game_id']);
+                } else {
+                    error_log('awards are not enabled, skipping');
+                }
                 
                 // Get final scores after penalties
                 $players = getGamePlayers($player['game_id']);
@@ -1350,7 +1502,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 echo json_encode([
                     'success' => true,
                     'penalties_applied' => $penaltyResult['penalties_applied'] ?? false,
-                    'penalties' => $penaltyResult['penalties'] ?? []
+                    'penalties' => $penaltyResult['penalties'] ?? [],
+                    'awards' => $awardResults
                 ]);
             } catch (Exception $e) {
                 error_log("Error ending game: " . $e->getMessage());
@@ -1427,6 +1580,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     $todayTheme = getTodayTheme();
     if ($todayTheme) { echo ' ' . $todayTheme; }
 ?>">
+    <input type="checkbox" switch id="haptics" style="display: none;">
+    <label id="haptics-label" for="haptics" style="display: none;"></label>
     <div class="container">
         <?php if ($gameStatus === 'waiting' && count($players) < 2): ?>
             <!-- Waiting for other player -->
@@ -1500,6 +1655,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     </div>
                 </div>
             </div>
+
+        <?php elseif ($gameStatus === 'waiting' && count($players) === 2 && $gameMode && $gameData['duration_days'] && !$gameData['prize']): ?>
+            <!-- Set game prize -->
+            <div class="waiting-screen prize">
+                <div class="notify-bubble" style="margin-bottom: 30px; padding: 20px; border-radius: 15px;">
+                    <h3 style="margin-bottom: 15px;">🔔 Enable Notifications</h3>
+                    <p style="margin-bottom: 15px; font-size: 14px;">Get notified when your partner bumps you or when timers expire!</p>
+                    <button id="enableNotificationsBtn" class="btn" onclick="enableNotifications()">
+                        Enable Notifications
+                    </button>
+                    <div id="notificationStatus" style="margin-top: 10px; font-size: 14px;"></div>
+                </div>
+                <h2>Set Game Prize</h2>
+                <p>What does the winner of this game receive?</p>
+    
+                <div class="custom-prize">
+                    <div class="form-group">
+                        <label for="customEndDate">Set Prize:</label>
+                        <input type="text" id="customPrize" placeholder="No Prize">
+                    </div>
+                    <div style="display: flex; gap: 15px;">
+                        <button class="btn" onclick="setPrize()" style="flex: 1;">Set Game Prize</button>
+                    </div>
+                </div>
+            </div>
             
         <?php elseif ($gameStatus === 'completed'): ?>
             <!-- Game ended -->
@@ -1527,13 +1707,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     <div class="winner <?= $winner['gender'] ?>">
                         🎉 <?= htmlspecialchars($winner['first_name']) ?> Wins! 🎉
                     </div>
-                    <p>Final Score: <?= $winner['score'] ?>-<?= $loser['score'] ?></p>
+                    <p class="score"><?= $winner['score'] ?>-<?= $loser['score'] ?></p>
                 <?php else: ?>
                     <div class="winner">
                         🤝 It's a Tie! 🤝
                     </div>
                     <p>Final Score: <?= $players[0]['score'] ?> points each</p>
-                <?php endif; ?>
+                <?php endif; 
+                if($gameData['prize'] && $gameData['prize'] !== 'none') {
+                    printf('<div class="prize-winner">%s wins %s!</div>', $winner['first_name'], $gameData['prize']); 
+                } ?>
+
+                
+                <div class="score-breakdown">
+                    <p>End Game Penalties: <span class="negative">-<?php echo $currentPlayer['penalties']; ?></span></p>
+                    <p>End Game Awards: <span class="positive">+<?php echo $currentPlayer['awards']; ?></span></p>
+                </div>
 
                 <div style="margin-top: 40px;">
                     <?php if ($currentPlayerReady && $opponentPlayerReady): ?>
@@ -1542,6 +1731,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         <p style="color: #ffd43b; margin-bottom: 20px;">Waiting for opponent to be ready...</p>
                     <?php elseif ($opponentPlayerReady): ?>
                         <p style="color: #ffd43b; margin-bottom: 20px;">Your opponent is ready for a new game!</p>
+                    <?php else : ?>
+                        <p style="color: #fff; margin-bottom: 20px;">Want to play again?</p>
                     <?php endif; ?>
                     
                     <button id="newGameBtn" class="btn" onclick="readyForNewGame()" 
@@ -1683,6 +1874,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     <div class="menu-item-icon"><i class="fa-solid fa-hand-paper"></i></div>
                     <div class="menu-item-text">Hand</div>
                 </div>
+                <?php if($gameData['awards_enabled'] === 1): ?>
+                <div class="menu-item digital-menu-item" onclick="openAwards()">
+                    <div class="menu-item-icon"><i class="fa-solid fa-ranking-star"></i></div>
+                    <div class="menu-item-text">Awards</div>
+                </div>
+                <?php endif; ?>
                 <div class="menu-item digital-menu-item" onclick="event.stopPropagation(); openDrawPopover()">
                     <div class="menu-item-icon"><i class="fa-solid fa-cards-blank"></i></div>
                     <div class="menu-item-text">Draw</div>
@@ -1779,6 +1976,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     currentPlayerId: <?= $currentPlayer['id'] ?>,
                     opponentPlayerId: <?= $opponentPlayer['id'] ?>,
                     gameStatus: '<?= $gameStatus ?>',
+                    gameEndDate: '<?= $gameData['end_date'] ?>',
                     currentPlayerGender: '<?= $currentPlayer['gender'] ?>',
                     opponentPlayerGender: '<?= $opponentPlayer['gender'] ?>',
                     opponentPlayerName: '<?= htmlspecialchars($opponentPlayer['first_name']) ?>'
@@ -1816,6 +2014,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         <button class="card-overlay-close" onclick="closeCardOverlay('handCardsOverlay')">
             <i class="fa-solid fa-xmark"></i>
         </button>
+        <div class="penalties-warning">
+            <i class="fa-solid fa-circle-exclamation"></i>
+            <p>When the game ends, you will incur a <span id="penalty_points">0</span> point penalty unless you complete or veto the cards left in your hand.</p>
+        </div>
         <div class="card-grid-container">
             <div class="card-grid" id="handCardsGrid">
                 <!-- Hand cards will be populated here -->
@@ -1940,6 +2142,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             <button class="btn btn-secondary" onclick="closeModal('historyModal')" style="margin-top: 12px;">Close</button>
         </div>
     </div>
+
+    <!-- Level Up Modal -->
+     <div class="modal" id="levelUpModal">
+        <div class="modal-content">
+            <div class="levelUpBadge"><i class="fa-solid fa-ranking-star"></i><span id="level_up_badge_number">0</span></div>
+            <div class="modal-title">You've leveled up!</div>
+            <div class="modal-subtitle">You completed enough cards to advance to <span id="level_up_type"></span> Level <span id="level_up_number">0</span>!</div>
+            <div class="modal-level-up-badge" id="level_up_points">0</div>
+            <button class="btn" id="level_up_claim">Claim Award</button>
+        </div>
+     </div>
 
     <!-- Dice Overlay -->
     <div class="dice-popover" id="dicePopover">
@@ -2097,6 +2310,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         </div>
     </div>
 
+    <!-- Awards Overlay -->
+     <div class="card-overlay" id="awardsOverlay" onclick="handleAwardsOverlayClick(event)">
+        <button class="card-overlay-close" onclick="closeAwardsOverlay()">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
+        <div class="awardsOverlayContent">
+            <div class="awardsHeader">
+                <div class="awardsName"><?php echo $opponentPlayer['first_name']; ?></div>
+                <div class="awardsTitle">Awards</div>
+                <div class="awardsName"><?php echo $currentPlayer['first_name']; ?></div>
+            </div>
+            <div class="awardType">
+                <div class="opponentNumber" id="opponent-serve-count">0</div>
+                <div class="awardIcon"><i class="fa-solid fa-circle-arrow-up"></i><div class="awardLabel">Best Servant</div><div class="awardPoints">+50</div></div>
+                <div class="playerNumber" id="player-serve-count">0</div>
+            </div>
+            <div class="awardType">
+                <div class="opponentNumber" id="opponent-daily-count">0</div>
+                <div class="awardIcon"><i class="fa-solid fa-flag-checkered"></i><div class="awardLabel">Challenge Master</div><div class="awardPoints">+25</div></div>
+                <div class="playerNumber" id="player-daily-count">0</div>
+            </div>
+            <div class="awardType">
+                <div class="opponentNumber" id="opponent-battle-count">0</div>
+                <div class="awardIcon"><i class="fa-solid fa-swords"></i><div class="awardLabel">Battle Champion</div><div class="awardPoints">+25</div></div>
+                <div class="playerNumber" id="player-battle-count">0</div>
+            </div>
+            <div class="awardType">
+                <div class="opponentNumber"><div class="level">Level <span id="opponent-snapdare-level">0</span><div class="level-up"><span id="opponent-snapdare-til">0</span> til next level<br>+<span id="opponent-snapdare-pts">0</span></div></div><span id="opponent-snapdare-count">0</span></div>
+                <div class="awardIcon double"><i class="fa-solid fa-camera-retro"></i>/<i class="fa-solid fa-hand-point-right"></i></div>
+                <div class="playerNumber"><span id="player-snapdare-count">0</span><div class="level">Level <span id="player-snapdare-level">0</span><div class="level-up"><span id="player-snapdare-til">0</span> til next level<br>+<span id="player-snapdare-pts">0</span></div></div></div>
+            </div>
+            <div class="awardType" data-award="spicy">
+                <div class="opponentNumber"><div class="level">Level <span id="opponent-spicy-level">0</span><div class="level-up"><span id="opponent-spicy-til">0</span> til next level<br>+<span id="opponent-spicy-pts">0</span></div></div><span id="opponent-spicy-count">0</span></div>
+                <div class="awardIcon"><i class="fa-solid fa-pepper-hot"></i></i></div>
+                <div class="playerNumber"><span id="player-spicy-count">0</span><div class="level">Level <span id="player-spicy-level">0</span><div class="level-up"><span id="player-spicy-til">0</span> til next level<br>+<span id="player-spicy-pts">0</span></div></div></div>
+            </div>
+        </div>
+     </div>
+
     <!-- Card Reception Overlay -->
     <div class="card-reception-overlay" id="cardReceptionOverlay">
         <div class="card-reception-message">Receiving a card from <?php echo $opponentPlayer['first_name']; ?>...</div>
@@ -2105,6 +2357,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.1/dist/gsap.min.js"></script>
     <script src="/game.js"></script>
     <?php if($todayTheme === 'christmas' || $todayTheme === 'valentines' || $todayTheme === 'shamrock') {
         echo '<script src="/pure-snow.js"></script>';

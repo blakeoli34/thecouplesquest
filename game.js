@@ -37,6 +37,21 @@ let isNotificationShowing = false;
 
 let isShowingReceivedCards = false;
 
+function haptics() {
+    $('#haptics-label').trigger('click');
+}
+
+// Double tap haptic
+function doubleTapHaptic() {
+    // First tap
+    haptics();
+    
+    // Second tap after a short gap
+    gsap.delayedCall(0.12, () => {
+        haptics();
+    });
+}
+
 let actionSound = new Audio('data:audio/mpeg;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsuY29tIC8gTGFTb25vdGhlcXVlLm9yZwBURU5DAAAAHQAAA1N3aXRjaCBQbHVzIMKpIE5DSCBTb2Z0d2FyZQBUSVQyAAAABgAAAzIyMzUAVFNTRQAAAA8AAANMYXZmNTcuODMuMTAwAAAAAAAAAAAAAAD/80DEAAAAA0gAAAAATEFNRTMuMTAwVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQsRbAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQMSkAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV');
 
 $(document).ready(function() {
@@ -247,6 +262,7 @@ function updateOpponentHandDisplay() {
 
 // Open serve cards overlay
 function openServeCards() {
+    haptics();
     const grid = document.getElementById('serveCardsGrid');
     populateCardGrid('serveCardsGrid', cardData.serve_cards || [], 'serve');
     
@@ -334,6 +350,7 @@ function filterServeCards(searchTerm) {
 
 // Open hand cards overlay
 function openHandCards() {
+    haptics();
     const allHandCards = [
         ...(cardData.hand_cards.accepted_serve || []),
         ...(cardData.hand_cards.snap || []),
@@ -343,9 +360,21 @@ function openHandCards() {
         ...(cardData.hand_cards.chance || [])
     ];
     populateCardGrid('handCardsGrid', allHandCards, 'hand');
+    checkForPenaltyWarning(allHandCards);
     updateChanceCardStatuses();
     document.getElementById('handCardsOverlay').classList.add('active');
     setOverlayActive(true);
+}
+
+function checkForPenaltyWarning(handCards) {
+   const gameEndTime = new Date(gameData.gameEndDate.replace(" ", "T") + "Z");
+   const now = new Date();
+   const hoursUntilExpiry = (gameEndTime - now) / (1000 * 60 * 60);
+   const nonChanceCount = handCards.filter(card => card.type !== "chance").length;
+   if (hoursUntilExpiry > 0 && hoursUntilExpiry < 24 && nonChanceCount > 0) {
+        document.getElementById('penalty_points').textContent = nonChanceCount * 5;
+        document.getElementsByClassName('penalties-warning')[0].classList.add('show');
+    }
 }
 
 // Populate card grid
@@ -949,6 +978,10 @@ function serveSelectedCard() {
     const selectedCardElement = document.querySelector('.game-card.selected');
     
     if (selectedCardElement) {
+        gsap.ticker.add(haptics);
+        gsap.delayedCall(1, () => {
+            gsap.ticker.remove(haptics);
+        });
         selectedCardElement.classList.add('serving');
         setTimeout(() => playSoundIfEnabled('/card-served.m4r'), 500);
     }
@@ -1189,6 +1222,7 @@ function updateBlockingStatus(cardData) {
 }
 
 function openDrawPopover() {
+    haptics();
     closeDicePopover();
     const popover = document.getElementById('drawPopover');
     if (popover) {
@@ -1396,6 +1430,12 @@ function completeSelectedCard() {
                     } else if (data.points_awarded) {
                         updateScore(gameData.currentPlayerId, data.points_awarded);
                     }
+                   
+                    setTimeout(() => {
+                        console.log('checking for level up');
+                        checkForLevelUp('any');
+                    }, 2000);
+
                 }, 1500);
             }, 1100);
         } else {
@@ -1424,6 +1464,7 @@ function vetoSelectedCard() {
         } else {
             selectedCardElement.classList.add('serve-veto');
         }
+        doubleTapHaptic();
         playSoundIfEnabled('/card-vetoed.m4r');
     }
     
@@ -1673,6 +1714,7 @@ function displayActiveEffects() {
 }
 
 $('.bottom-right-menu').on('click', function() {
+    haptics();
     if($(this).hasClass('open')) {
         $(this).removeClass('open');
         handleWheelButtonState(true);
@@ -2214,6 +2256,7 @@ function setupAnimatedMenu() {
 }
 
 function toggleMenu() {
+    haptics();
     if (menuOpen) {
         closeMenu();
     } else {
@@ -2268,6 +2311,7 @@ function closeMenu() {
 }
 
 function showPointButtons() {
+    haptics();
     const actionButtons = document.querySelectorAll('.action-button');
     const pointButtons = document.querySelectorAll('.point-button');
     
@@ -2873,6 +2917,8 @@ function refreshGameData() {
         // Update stored game data
         gameData.players = data.players;
 
+        gameData.awards = data.awards;
+
         if(data.gametime === 'Game Ended') {
             location.reload();
         }
@@ -3116,6 +3162,7 @@ function startNewGamePolling() {
 }
 
 function openDicePopover() {
+    haptics();
     const popover = document.getElementById('dicePopover');
     if (popover) {
         if (popover.classList.contains('active')) {
@@ -3502,6 +3549,35 @@ function setCustomDuration() {
     });
 }
 
+function setPrize() {
+    const prizeInput = document.getElementById('customPrize');
+    let setPrize = prizeInput.value;
+    
+    if (!setPrize) {
+        setPrize = 'none';
+    }
+    
+    fetch('game.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'action=set_game_prize&prize=' + setPrize
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Failed to set game prize: ' + (data.message || 'Please try again.'));
+        }
+    })
+    .catch(error => {
+        console.error('Error setting game prize:', error);
+        alert('Failed to set game prize. Please try again.');
+    });
+}
+
 function openRulesOverlay() {
     fetch('game.php', {
         method: 'POST',
@@ -3619,6 +3695,14 @@ function handleWheelButtonState(bool) {
             $wheelButton.removeClass('hide');
         } else {
             $wheelButton.addClass('hide');
+        }
+    }
+    var $dailyButton = $('.daily-button');
+    if($dailyButton.hasClass('available')) {
+        if(bool === true) {
+            $dailyButton.removeClass('hide');
+        } else {
+            $dailyButton.addClass('hide');
         }
     }
 }
@@ -4144,6 +4228,120 @@ async function handleCustomCardSubmit(e) {
     }
 }
 
+function checkForLevelUp(award_type) {
+    if(gameData.awards) {
+        fetch('game.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `action=check_award_level_up&award_type=${award_type}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('level up data: ' + data);
+            if(data.success && data.level_up) {
+                showLevelUpModal(data);
+            }
+        });
+    }
+}
+
+function showLevelUpModal(data) {
+    document.getElementById('level_up_badge_number').textContent = data.new_level;
+    document.getElementById('level_up_number').textContent = data.new_level;
+    document.getElementById('level_up_type').textContent = data.award_label;
+    document.getElementById('level_up_points').textContent = '+' + data.points;
+    document.getElementById('level_up_claim').onclick = () => claimAward(data.award_type, data.new_level, data.points);
+    const modal = document.getElementById('levelUpModal');
+    if(modal) {
+        modal.classList.add('active');
+        setOverlayActive(true);
+    }
+}
+
+function claimAward(award_type, new_level, points) {
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `action=claim_award&award_type=${award_type}&new_level=${new_level}&points=${points}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if(data.success) {
+            closeModal('levelUpModal');
+            updateScore(gameData.currentPlayerId, points);
+        }
+    });
+}
+
+function openAwards() {
+    haptics();
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'action=get_awards_data'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Serve & Daily counts
+            document.getElementById('player-serve-count').textContent    = data.player_serve_count;
+            document.getElementById('player-daily-count').textContent    = data.player_daily_count;
+            document.getElementById('player-battle-count').textContent    = data.player_battle_count;
+            document.getElementById('opponent-serve-count').textContent  = data.opponent_serve_count;
+            document.getElementById('opponent-daily-count').textContent  = data.opponent_daily_count;
+            document.getElementById('opponent-battle-count').textContent  = data.opponent_battle_count;
+
+            // Snap/Dare
+            document.getElementById('player-snapdare-count').textContent    = data.player_snapdare_count;
+            document.getElementById('player-snapdare-level').textContent    = data.player_snapdare_level;
+            document.getElementById('opponent-snapdare-count').textContent  = data.opponent_snapdare_count;
+            document.getElementById('opponent-snapdare-level').textContent  = data.opponent_snapdare_level;
+            setTilNextLevel('player-snapdare-til', 'player-snapdare-pts', data.player_snapdare_til, data.player_snapdare_next_points);
+            setTilNextLevel('opponent-snapdare-til', 'opponent-snapdare-pts', data.opponent_snapdare_til, data.opponent_snapdare_next_points);
+
+            // Spicy
+            document.getElementById('player-spicy-count').textContent    = data.player_spicy_count;
+            document.getElementById('player-spicy-level').textContent    = data.player_spicy_level;
+            document.getElementById('opponent-spicy-count').textContent  = data.opponent_spicy_count;
+            document.getElementById('opponent-spicy-level').textContent  = data.opponent_spicy_level;
+            setTilNextLevel('player-spicy-til', 'player-spicy-pts', data.player_spicy_til, data.player_spicy_next_points);
+            setTilNextLevel('opponent-spicy-til', 'opponent-spicy-pts', data.opponent_spicy_til, data.opponent_spicy_next_points);
+
+            document.getElementById('awardsOverlay').classList.add('active');
+            setOverlayActive(true);
+        } else {
+            alert('Failed to load award data');
+        }
+    })
+    .catch(error => {
+        console.error('Error loading award data:', error);
+        alert('Failed to load awards');
+    });
+}
+
+function setTilNextLevel(tilId, ptsId, tilValue, ptsValue) {
+    const span = document.getElementById(tilId);
+    const levelUp = span.closest('.level-up');
+    if (tilValue === null || tilValue === undefined) {
+        levelUp.style.display = 'none';
+    } else {
+        levelUp.style.display = '';
+        span.textContent = tilValue;
+        document.getElementById(ptsId).textContent = ptsValue;
+    }
+}
+
+function closeAwardsOverlay() {
+    document.getElementById('awardsOverlay').classList.remove('active');
+    setOverlayActive(false);
+}
+
+function handleAwardsOverlayClick(event) {
+    if (event.target.classList.contains('card-overlay')) {
+        closeAwardsOverlay();
+    }
+}
+
 // Handle foreground and background states
 // Add foreground class when app becomes visible
 document.addEventListener('visibilitychange', function() {
@@ -4320,7 +4518,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.log('Game status check:', data);
                 
                 // If game status changed or opponent joined, reload
-                if (data.success && (data.status !== 'waiting')) {
+                if (data.success && data.duration) {
                     console.log('Game status changed, reloading...');
                     window.location.reload();
                 }
@@ -4332,6 +4530,42 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Check every 10 seconds
         const statusInterval = setInterval(checkForStatusChange, 5000);
+        
+        // Clear interval when page unloads
+        window.addEventListener('beforeunload', () => {
+            clearInterval(statusInterval);
+        });
+    }
+
+    // Check if game prize has been set
+    if (document.querySelector('.waiting-screen.prize')) {
+        console.log('Starting game status polling...');
+        
+        function checkForPrizeChange() {
+            fetch('game.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'action=check_game_status'
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Game status check:', data);
+                
+                // If game prize has been set
+                if (data.success && data.prize && data.status !== 'waiting') {
+                    console.log('Game status changed, reloading...');
+                    window.location.reload();
+                }
+            })
+            .catch(error => {
+                console.error('Error checking game status:', error);
+            });
+        }
+        
+        // Check every 10 seconds
+        const statusInterval = setInterval(checkForPrizeChange, 5000);
         
         // Clear interval when page unloads
         window.addEventListener('beforeunload', () => {
@@ -4404,6 +4638,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }).catch(() => {}); // Silent cleanup
         }, 30000);
     }
+    checkForLevelUp('any');
 });
 
 // Confetti at game end
@@ -4449,6 +4684,8 @@ window.addEventListener('load', function() {
     setInterval(launchConfetti, 2000);
 
 });
+
+gsap.ticker.fps(60);
 
 // Make functions globally available
 window.openServeCards = openServeCards;
@@ -4497,6 +4734,7 @@ window.resetDecks = resetDecks;
 window.showCustomDatePicker = showCustomDatePicker;
 window.hideCustomDatePicker = hideCustomDatePicker;
 window.setCustomDuration = setCustomDuration;
+window.setPrize = setPrize;
 window.openRulesOverlay = openRulesOverlay;
 window.closeRulesOverlay = closeRulesOverlay;
 window.handleRulesOverlayClick = handleRulesOverlayClick;
@@ -4517,3 +4755,4 @@ window.acceptDailyCard = acceptDailyCard;
 window.declineDailyCard = declineDailyCard;
 window.showDailyOffer = showDailyOffer;
 window.showCustomCardForm = showCustomCardForm;
+window.openAwards = openAwards;
