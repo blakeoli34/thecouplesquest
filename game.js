@@ -724,7 +724,7 @@ function getCardDisplayInfo(card, context = 'serve') {
     // Modifier badges (only for hand cards)
     if (context === 'hand' && cardData.active_modifiers) {
         // Don't show challenge modifiers on cards that don't clear effects
-        if (card.card_type === 'accepted_serve' && (card.clears_challenge_modify_effects == 0 || card.is_custom === 1)) {
+        if (card.card_type === 'accepted_serve' && card.clears_challenge_modify_effects == 0) {
             // Skip challenge modifier badge for this card
         } else if (cardData.active_modifiers[card.card_type]) {
             badges.push(`<span class="card-badge modifier"><span><i class="fa-solid fa-circle-question"></i> ${cardData.active_modifiers[card.card_type]}</span></span>`);
@@ -741,7 +741,7 @@ function getCardDisplayInfo(card, context = 'serve') {
 
     if(context === 'opponent' && opponentCardData.active_modifiers) {
         // Don't show challenge modifiers on cards that don't clear effects
-        if (card.card_type === 'accepted_serve' && (card.clears_challenge_modify_effects == 0 || card.is_custom === 1)) {
+        if (card.card_type === 'accepted_serve' && card.clears_challenge_modify_effects == 0) {
             // Skip challenge modifier badge for this card
         } else if (opponentCardData.active_modifiers[card.card_type]) {
             badges.push(`<span class="card-badge modifier"><span><i class="fa-solid fa-circle-question"></i> ${opponentCardData.active_modifiers[card.card_type]}</span></span>`);
@@ -1526,13 +1526,14 @@ function requestMoreTime() {
     if (!selectedHandCard) return;
     
     const cardName = selectedHandCard.card_name;
+    const encodedCardName = encodeURIComponent(cardName);
     $('.btn-request').text('Requesting...');
     
     // Make API call
     fetch('game.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `action=request_time&card_name=${cardName}&player_card_id=${selectedHandCard.id}`
+        body: `action=request_time&card_name=${encodedCardName}&player_card_id=${selectedHandCard.id}`
     })
     .then(response => response.json())
     .then(data => {
@@ -2758,7 +2759,10 @@ function sendBump() {
     .then(data => {
         if (data.success) {
             $bubble.text(data.message);
-            playSoundIfEnabled('/bumped.m4r');
+            setTimeout(function() {
+                $bubble.addClass('sent');
+                playSoundIfEnabled('/card-served.m4r');
+            }, 3500);
         } else {
             $bubble.text('Failed to send bump');
         }
@@ -2768,7 +2772,7 @@ function sendBump() {
         $bubble.text('Bump Failed');
     });
     setTimeout(function() {
-        $bubble.text('').removeClass('show');
+        $bubble.text('').removeClass('show').removeClass('sent');
     }, 5000);
 }
 
@@ -2936,6 +2940,58 @@ function refreshGameData() {
     });
 }
 
+function updateOpponentStatus() {
+    fetch('game.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'action=get_player_status'
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('checking opponent status: ' + data.is_active + ' & ' + data.last_active);
+        $opponentStatus = $('.opponent .player-status');
+        $opponentStatusText = $('.opponent .player-status .label');
+        // Check if opponent is active now
+        if (data.is_active) {
+            $opponentStatus.addClass('active');
+            $opponentStatusText.text('Active now');
+        } else {
+            $opponentStatus.removeClass('active');
+            $opponentStatusText.text(getRelativeTime(data.last_active));
+        }
+    });
+}
+
+function getRelativeTime(timestamp) {
+    if (!timestamp) return 'Last seen recently';
+
+    const parts = timestamp.match(/(\d+)-(\d+)-(\d+) (\d+):(\d+):(\d+)/);
+    if (!parts) return 'Last seen recently';
+
+    // Treat as UTC by using Date.UTC() instead of local time
+    const lastActive = new Date(Date.UTC(parts[1], parts[2] - 1, parts[3], parts[4], parts[5], parts[6]));
+    const diffSeconds = Math.floor((Date.now() - lastActive.getTime()) / 1000);
+
+    if (diffSeconds < 60)        return 'Active just now';
+    if (diffSeconds < 3600)      return `Active ${Math.floor(diffSeconds / 60)}m ago`;
+    if (diffSeconds < 86400)     return `Last seen ${Math.floor(diffSeconds / 3600)}h ago`;
+    if (diffSeconds < 86400 * 7) return `Last seen ${Math.floor(diffSeconds / 86400)}d ago`;
+
+    return 'Last seen over a week ago';
+}
+
+function updatePlayerStatus(status) {
+    fetch('game.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `action=set_player_status&status=${status}`
+    });
+}
+
 function updateTimerDisplay(timers) {
     const currentTimers = document.getElementById('current-timers');
     const opponentTimers = document.getElementById('opponent-timers');
@@ -3100,6 +3156,7 @@ function resumeGame() {
 }
 
 function readyForNewGame() {
+    doubleTapHaptic();
     const button = document.getElementById('newGameBtn');
     button.disabled = true;
     button.textContent = 'Getting Ready...';
@@ -3423,6 +3480,7 @@ function initializeSexyDicePosition() {
 function setupModeButtons() {
     document.querySelectorAll('.mode-btn').forEach(btn => {
         btn.addEventListener('click', function() {
+            haptics();
             const mode = this.dataset.mode;
             
             fetch('game.php', {
@@ -3483,6 +3541,7 @@ function resetDecks() {
 }
 
 function showCustomDatePicker() {
+    haptics();
     const picker = document.getElementById('customDatePicker');
     const input = document.getElementById('customEndDate');
     const notifyBubble = document.querySelector('.notify-bubble');
@@ -3520,6 +3579,7 @@ function hideCustomDatePicker() {
 }
 
 function setCustomDuration() {
+    haptics();
     const dateInput = document.getElementById('customEndDate');
     const selectedDate = dateInput.value;
     
@@ -3550,6 +3610,7 @@ function setCustomDuration() {
 }
 
 function setPrize() {
+    haptics();
     const prizeInput = document.getElementById('customPrize');
     let setPrize = prizeInput.value;
     
@@ -3708,6 +3769,7 @@ function handleWheelButtonState(bool) {
 }
 
 function openWheelOverlay() {
+    haptics();
     fetch('game.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -3725,6 +3787,7 @@ function openWheelOverlay() {
 }
 
 function spinWheelAction() {
+    doubleTapHaptic();
     if (isWheelSpinning) return;
     
     isWheelSpinning = true;
@@ -3864,6 +3927,7 @@ function populateWheel(prizes) {
 }
 
 function showDailyOffer() {
+    haptics();
     fetch('game.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -3934,6 +3998,7 @@ function buildVetoPenaltyBadge(card) {
 }
 
 function acceptDailyCard() {
+    haptics();
     fetch('game.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -3969,6 +4034,7 @@ function acceptDailyCard() {
 }
 
 function declineDailyCard() {
+    doubleTapHaptic();
     fetch('game.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -4120,8 +4186,8 @@ function showCustomCardForm() {
                 </div>
                 
                 <div class="form-group">
-                    <label for="card-points">Card Points (0-25)</label>
-                    <input type="number" id="card-points" name="card_points" min="0" max="25" placeholder="0">
+                    <label for="card-points">Card Points</label>
+                    <input type="number" id="card-points" name="card_points" min="0" placeholder="0">
                 </div>
                 
                 <div class="form-group">
@@ -4161,6 +4227,13 @@ function showCustomCardForm() {
                         <label for="win-loss">
                             <i class="fa-solid fa-swords"></i>
                             Battle
+                        </label>
+                    </div>
+                    <div class="battle-checkbox-group">
+                        <input type="checkbox" id="clear-effects" name="clears_challenge_modify_effects" value="1" checked>
+                        <label for="clear-effects">
+                            <i class="fa-solid fa-circle-question"></i>
+                            Apply Modifiers
                         </label>
                     </div>
                 </div>
@@ -4222,6 +4295,8 @@ async function handleCustomCardSubmit(e) {
         if (result.success) {
             closeCardOverlay('serveCardsOverlay');
             showInAppNotification('Card Served', 'Custom card served successfully!');
+        } else {
+            alert(result.error);
         }
     } catch (error) {
         console.error('Error serving custom card:', error);
@@ -4348,6 +4423,7 @@ document.addEventListener('visibilitychange', function() {
     if (document.visibilityState === 'visible') {
         cardDataInterval = setInterval(loadCardData, 10000);
         document.body.classList.add('foreground');
+        updatePlayerStatus('active');
         setTimeout(function() {
             if(!document.body.classList.contains('receiving-card')) {
                 document.body.classList.add('interact');
@@ -4356,12 +4432,14 @@ document.addEventListener('visibilitychange', function() {
     } else {
         clearInterval(cardDataInterval);
         document.body.classList.remove('foreground', 'interact');
+        updatePlayerStatus('inactive');
     }
 });
 
 // Add foreground class on initial load if page is visible
 if (document.visibilityState === 'visible') {
     document.body.classList.add('foreground');
+    updatePlayerStatus('active');
     setTimeout(function(){
         if(!document.body.classList.contains('receiving-card')) {
             document.body.classList.add('interact');
@@ -4589,6 +4667,8 @@ document.addEventListener('DOMContentLoaded', function() {
         refreshGameData();
         loadThemePreference();
         updateSoundToggleText();
+        updateOpponentStatus();
+        setInterval(updateOpponentStatus, 30000);
         setInterval(refreshGameData, 5000); // Refresh every 5 seconds
     }
 
@@ -4624,7 +4704,7 @@ document.addEventListener('DOMContentLoaded', function() {
         $('.player-score.female .img-inject').html('<img src="img/nd-leprechaun-football.png" alt="ND Football Leprechaun">');
     }
 
-    if($('body').is('.christmas, .valentines, .shamrock')) {
+    if($('body').is('.christmas, .valentines, .shamrock, .usa')) {
         $('body').prepend('<div id="snow" data-count="50"></div>');
     }
 

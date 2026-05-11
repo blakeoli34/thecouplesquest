@@ -187,6 +187,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             ]);
             exit;
 
+        case 'get_player_status':
+            $stmt = $pdo->prepare("SELECT is_active, last_active from players where id = ?");
+            $stmt->execute([$opponentPlayer['id']]);
+            $status = $stmt->fetch();
+            echo json_encode(['success' => true, 'is_active' => $status['is_active'], 'last_active' => $status['last_active']]);
+            exit;
+
+        case 'set_player_status':
+            if($_POST['status'] === 'active') {
+                $stmt = $pdo->prepare("UPDATE players set is_active = 1 where id = ?");
+                $stmt->execute([$player['id']]);
+            } else {
+                $now = new DateTime('now');
+                $stmt = $pdo->prepare("UPDATE players set is_active = 0, last_active = ? where id = ?");
+                $stmt->execute([$now->format('Y-m-d H:i:s'), $player['id']]);
+            }
+            echo json_encode(['success' => true]);
+            exit;
+
         case 'set_duration':
             if (isset($_POST['custom_date'])) {
                 // Handle custom date
@@ -214,7 +233,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $pdo = Config::getDatabaseConnection();
                     $stmt = $pdo->prepare("
                         UPDATE games 
-                        SET duration_days = ?, start_date = ?, end_date = ?, custom_end_date = ?, created_date = ?
+                        SET duration_days = ?, start_date = ?, end_date = ?, custom_end_date = ?, created_at = ?
                         WHERE id = ?
                     ");
                     $stmt->execute([
@@ -832,14 +851,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $stmt = $pdo->prepare("UPDATE player_cards SET expires_at = NULL, extension_request = 0 WHERE id = ?");
                     $stmt->execute([$playerCardId]);
                     $message = 'Expiration removed';
-                    $body = $currentPlayer['first_name'] . ' has allowed you to complete your card anytime.';
+                    $body = $player['first_name'] . ' has allowed you to complete your card anytime.';
                     sendPushNotification($opponentPlayer['fcm_token'], 'Extension Request Approved!', $body);
                 } elseif($hours === 'decline') {
                     $hoursInt = intval($hours);
                     $stmt = $pdo->prepare("UPDATE player_cards SET extension_request = -1 WHERE id = ?");
                     $stmt->execute([$playerCardId]);
                     $message = "Extension request declined";
-                    $body = $currentPlayer['first_name'] . ' has declined your extension request. Please veto your card.';
+                    $body = $player['first_name'] . ' has declined your extension request. Please veto your card.';
                     sendPushNotification($opponentPlayer['fcm_token'], 'Extension Request Declined', $body);
                 } elseif($hours === 'eod') {
                     $midnight = new DateTime('tomorrow', $timezone);
@@ -847,7 +866,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $stmt = $pdo->prepare("UPDATE player_cards SET expires_at = ?, extension_request = 0 WHERE id = ?");
                     $stmt->execute([$midnight->format('Y-m-d H:i:s'), $playerCardId]);
                     $message = "Timer extended to end of today";
-                    $body = $currentPlayer['first_name'] . ' has allowed you to complete your card before the end of the day.';
+                    $body = $player['first_name'] . ' has allowed you to complete your card before the end of the day.';
                     sendPushNotification($opponentPlayer['fcm_token'], 'Extension Request Approved!', $body);
                 } elseif($hours === 'eot') {
                     $midnight = new DateTime('tomorrow', $timezone);
@@ -856,14 +875,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $stmt = $pdo->prepare("UPDATE player_cards SET expires_at = ?, extension_request = 0 WHERE id = ?");
                     $stmt->execute([$midnight->format('Y-m-d H:i:s'), $playerCardId]);
                     $message = "Timer extended to end of tomorrow";
-                    $body = $currentPlayer['first_name'] . ' has allowed you to complete your card before the end of the day tomorrow.';
+                    $body = $player['first_name'] . ' has allowed you to complete your card before the end of the day tomorrow.';
                     sendPushNotification($opponentPlayer['fcm_token'], 'Extension Request Approved!', $body);
                 } else {
                     $dayInt = intval($hours);
                     $stmt = $pdo->prepare("UPDATE player_cards SET expires_at = DATE_ADD(NOW(), INTERVAL ? DAY), extension_request = 0 WHERE id = ?");
                     $stmt->execute([$dayInt, $playerCardId]);
                     $message = "Timer extended by {$dayInt} day" . ($dayInt > 1 ? 's' : '');
-                    $body = $currentPlayer['first_name'] . ' has allowed you to complete your card in the next ' . $dayInt . ($dayInt > 1 ? 's.' : '.');
+                    $body = $player['first_name'] . ' has allowed you to complete your card in the next ' . $dayInt . ' day' . ($dayInt > 1 ? 's.' : '.');
                     sendPushNotification($opponentPlayer['fcm_token'], 'Extension Request Approved!', $body);
                 }
                 
@@ -994,8 +1013,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
         case 'accept_daily_card':
             $response = acceptDailyCard($player['id']);
-            $genderWord = ($currentPlayer['gender'] === 'male') ? 'his' : 'her';
-            $body = $currentPlayer['first_name'] . ' has accepted ' . $genderWord . ' daily card! Check it out in the app.';
+            $genderWord = ($player['gender'] === 'male') ? 'his' : 'her';
+            $body = $player['first_name'] . ' has accepted ' . $genderWord . ' daily card! Check it out in the app.';
             sendPushNotification($opponentPlayer['fcm_token'], 'Daily Card Accepted', $body);
             echo json_encode($response);
             exit;
@@ -1225,7 +1244,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
             
             $result = spinWheel($player['game_id'], $player['id']);
-            sendPushNotification($opponentPlayer['fcm_token'], 'Daily Wheel Spun!', $currentPlayer['first_name'] . ' chose to spin the daily wheel and landed on ' . $result['winning_prize']['display_text'] . '.');
+            sendPushNotification($opponentPlayer['fcm_token'], 'Daily Wheel Spun!', $player['first_name'] . ' chose to spin the daily wheel and landed on ' . $result['winning_prize']['display_text'] . '.');
             echo json_encode($result);
             exit;
 
@@ -1268,6 +1287,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $veto_draw_snap_dare = intval($_POST['veto_draw_snap_dare'] ?? 0);
             $veto_draw_spicy = intval($_POST['veto_draw_spicy'] ?? 0);
             $win_loss = isset($_POST['win_loss']) ? 1 : 0;
+            $clear_effects = isset($_POST['clears_challenge_modify_effects']) ? 1 : 0;
             
             // Validate required fields
             if (empty($card_name) || empty($card_description)) {
@@ -1276,8 +1296,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
             
             // Validate points range
-            if ($card_points < 0 || $card_points > 25) {
-                echo json_encode(['success' => false, 'error' => 'Card points must be between 0 and 25']);
+            if ($card_points < 0) {
+                echo json_encode(['success' => false, 'error' => 'Card points must be 0 or higher']);
                 exit;
             }
             
@@ -1317,13 +1337,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $stmt = $pdo->prepare("
                 INSERT INTO custom_cards 
                 (game_id, created_by_player_id, card_name, card_description, card_points, card_duration, 
-                veto_subtract, veto_steal, veto_draw_chance, veto_draw_snap_dare, veto_draw_spicy, win_loss) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                veto_subtract, veto_steal, veto_draw_chance, veto_draw_snap_dare, veto_draw_spicy, win_loss, clears_challenge_modify_effects) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             
             if (!$stmt->execute([
                 $game_id, $player_id, $card_name, $card_description, $card_points, $card_duration,
-                $veto_subtract, $veto_steal, $veto_draw_chance, $veto_draw_snap_dare, $veto_draw_spicy, $win_loss
+                $veto_subtract, $veto_steal, $veto_draw_chance, $veto_draw_snap_dare, $veto_draw_spicy, $win_loss, $clear_effects
             ])) {
                 echo json_encode(['success' => false, 'error' => 'Failed to create custom card']);
                 exit;
@@ -1804,6 +1824,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     </div>
                     <div class="player-timers" id="opponent-timers"></div>
                     <div class="player-name<?= strlen($opponentPlayer['first_name']) > 5 ? ' long' : '' ?>"><?= htmlspecialchars($opponentPlayer['first_name']) ?></div>
+                    <div class="player-status"><span class="indicator"></span><span class="label"></span></div>
                     <div class="player-score-value"><?= $opponentPlayer['score'] ?></div>
                     <div class="nd-theme img-inject"></div>
                 </div>
@@ -1927,7 +1948,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     </div>
                     <div class="flyout-menu-item digital-menu-item" onclick="sendBump()">
                         <div class="flyout-menu-item-icon"><i class="fa-solid fa-bullhorn"></i></div>
-                        <div class="flyout-menu-item-text">Bump</div>
+                        <div class="flyout-menu-item-text">Bump <?php echo $opponentPlayer['first_name']; ?></div>
                     </div>
                     <div class="flyout-menu-item digital-menu-item" onclick="openTimerModal()">
                         <div class="flyout-menu-item-icon"><i class="fa-solid fa-stopwatch"></i></div>
@@ -2150,7 +2171,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             <div class="modal-title">You've leveled up!</div>
             <div class="modal-subtitle">You completed enough cards to advance to <span id="level_up_type"></span> Level <span id="level_up_number">0</span>!</div>
             <div class="modal-level-up-badge" id="level_up_points">0</div>
-            <button class="btn" id="level_up_claim">Claim Award</button>
+            <button class="btn btn-accept" id="level_up_claim">Claim Award</button>
         </div>
      </div>
 
@@ -2290,7 +2311,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         <div class="card-overlay-content">
             <div class="card-overlay-header">
                 <h2><?php echo $player['first_name']; ?>'s Daily Challenge Offer</h2>
-                <p>Expires at noon. Challenge must be completed today.</p>
+                <p>Offer expires at 2pm. Card must be completed today.</p>
             </div>
             <div id="dailyCardsGrid" class="daily-card-grid"></div>
             <div id="dailyCardActions" class="card-selection-actions"></div>
@@ -2359,7 +2380,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.1/dist/gsap.min.js"></script>
     <script src="/game.js"></script>
-    <?php if($todayTheme === 'christmas' || $todayTheme === 'valentines' || $todayTheme === 'shamrock') {
+    <?php if($todayTheme === 'christmas' || $todayTheme === 'valentines' || $todayTheme === 'shamrock' || $todayTheme === 'usa') {
         echo '<script src="/pure-snow.js"></script>';
     } ?>
 </body>

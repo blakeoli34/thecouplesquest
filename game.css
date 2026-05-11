@@ -28,8 +28,8 @@ body:not(.digital) .digital-only {
 }
 
 body.notification {
-    height: 85vh;
-    margin-top: 15vh;
+    height: 87vh;
+    margin-top: 13vh;
     border-top-left-radius: 60px;
     border-top-right-radius: 60px;
 }
@@ -145,7 +145,7 @@ body.female .game-paused .btn-label {
     font-weight: 500;
     font-size: 12px;
     position: absolute;
-    z-index: 100;
+    z-index: 2000;
     top: 0px;
     left: 50%;
     transform: translateX(-50%) scale(0);
@@ -251,9 +251,46 @@ body:not(.interact) .game-timer {
     background: #09cf6d;
 }
 
+.usa .player-score.male {
+    background: linear-gradient(324deg, #3c3b6e 4%, transparent 4%) -0.7in 0.43in,
+		linear-gradient(36deg, #3c3b6e 4%, transparent 4%) 0.3in 0.43in,
+		linear-gradient(72deg, #57569F 8.5%, transparent 8.5%) 0.3in 0.43in,
+		linear-gradient(288deg, #57569F 8.5%, transparent 8.5%) -0.7in 0.43in,
+		linear-gradient(216deg, #57569F 7.5%, transparent 7.5%) -0.7in 0.23in,
+		linear-gradient(144deg, #57569F 7.5%, transparent 7.5%) 0.3in 0.23in,
+		linear-gradient(324deg, #3c3b6e 4%, transparent 4%) -0.2in 0.93in,
+		linear-gradient(36deg, #3c3b6e 4%, transparent 4%) 0.8in 0.93in,
+		linear-gradient(72deg, #57569F 8.5%, transparent 8.5%) 0.8in 0.93in,
+		linear-gradient(288deg, #57569F 8.5%, transparent 8.5%) -0.2in 0.93in,
+		linear-gradient(216deg, #57569F 7.5%, transparent 7.5%) -0.2in 0.73in,
+		linear-gradient(144deg, #57569F 7.5%, transparent 7.5%) 0.8in 0.73in,
+		#3c3b6e;
+	background-size: 1in 1in;
+}
+
+.usa .player-score.female {
+    background: repeating-linear-gradient(
+			90deg,
+			#b22234 0,
+			#b22234 7.69vw,
+			#fff 7.69vw,
+			#fff 15.38vw
+		);
+}
+
 .nd-theme .player-score-value,
 .valentines .player-score-value,
 .shamrock .player-score-value {
+    color: white !important;
+}
+
+.usa .player-score.female .player-score-value {
+    color: #3c3b6e;
+    -webkit-text-stroke: 20px white;
+    paint-order: stroke fill;
+}
+
+.usa .player-score.male .player-score-value {
     color: white !important;
 }
 
@@ -275,6 +312,74 @@ body:not(.interact) .game-timer {
     line-height: 96px;
     transition: all 0.3s;
     pointer-events: none;
+}
+
+.player-status {
+    position: absolute;
+    bottom: 150px;
+    background: rgba(255,255,255,0.8);
+    color: #888;
+    padding: 4px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    left: 50%;
+    transform: translateX(-50%) scale(0);
+    transition: all 0.4s;
+    display: flex;
+    align-items: center;
+    opacity: 0;
+}
+
+.player-status.active {
+    animation: statusPulse 5s linear infinite;
+}
+
+@keyframes statusPulse {
+    0%, 50%, 100% {
+        transform: translateX(-50%) scale(1);
+    }
+    25%, 75% {
+        transform: translateX(-50%) scale(1.1);
+    }
+}
+
+body.interact .player-status {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+}
+
+.player-status .indicator {
+    width: 10px;
+    height: 10px;
+    background: #ccc;
+    opacity: 0.4;
+    border-radius: 50%;
+    margin-right: 4px;
+    transition: all 0.4s;
+}
+
+.player-status.active .indicator {
+    opacity: 1;
+}
+
+body.notification .player-status {
+    bottom: 135px;
+}
+
+.opponent.female .player-status {
+    color: var(--color-pink);
+}
+
+.opponent.female .player-status .indicator {
+    background: var(--color-pink);
+}
+
+.opponent.male .player-status {
+    color: var(--color-blue);
+}
+
+.opponent.male .player-status .indicator {
+    background: var(--color-blue);
 }
 
 .player-name.long {
@@ -705,7 +810,7 @@ body:not(.interact) .game-timer {
     max-width: 375px;
     border-radius: 50px;
     transition: all 0.3s ease;
-    z-index: 1;
+    z-index: 2000;
 }
 
 .overlay-active .bottom-menu,
@@ -811,22 +916,25 @@ body:not(.interact) .bottom-right-menu {
 
 .bump-send-display {
     position: absolute;
-    background: white;
+    background: transparent;
+    border: solid 2px #fff;
+    color: white;
     min-width: 150px;
     max-width: 90vw;
     height: 50px;
     bottom: 84px;
-    left: 0;
+    left: 50%;
     border-radius: 30px;
+    border-bottom-right-radius: 0;
     display: flex;
     font-size: 16px;
     font-weight: 600;
     justify-content: center;
     align-items: center;
     padding: 16px;
-    transform-origin: bottom left;
+    transform-origin: bottom right;
     opacity: 0;
-    transform: scale(0);
+    transform: translateX(-25%) scale(0);
     transition: all 0.3s var(--animation-spring);
     z-index: 10;
     white-space: nowrap;
@@ -834,7 +942,29 @@ body:not(.interact) .bottom-right-menu {
 
 .bump-send-display.show {
     opacity: 1;
-    transform: scale(1);
+    transform: translateX(-25%) scale(1);
+}
+
+.bump-send-display.sent {
+    background: white;
+    color: #222;
+    animation: sentBump 1.2s ease-out forwards;
+}
+
+@keyframes sentBump {
+    0%, 30% {
+        transform: translate(-25%, 0) scale(1);
+        opacity: 1;
+    }
+    25% {
+        transform: translate(-25%, 20px) scale(1.1);
+        opacity: 0.8;
+    }
+    100% {
+        transform: translate(75%, -80vh) scale(4);
+        opacity: 0;
+    }
+
 }
 
 .menu-item {
@@ -1036,6 +1166,10 @@ body:not(.interact) .bottom-right-menu {
 .btn-test {
     background: #10b981;
     margin-top: 10px;
+}
+
+.btn-accept {
+    background: #68B684;
 }
 
 .btn-resume {
@@ -1299,7 +1433,7 @@ body.female .btn-resume.holding {
     top: 0px;
     height: 120px;
     color: #fff;
-    padding: 0 18px 12px;
+    padding: 12px 18px;
 }
 
 .iAN-title {
@@ -2053,6 +2187,27 @@ body.shamrock.female .game-card.daily-card {
     background: linear-gradient(to bottom, #fff 0%, #fff 50%, #f7d21e 100%);
 }
 
+body.usa.male .game-card,
+body.usa.female .game-card.accepted_serve-card,
+body.usa.female .opponent-hand-popover .game-card,
+body.usa.male .opponent-hand-popover .game-card.accepted_serve-card {
+    background: linear-gradient(to bottom, #fff 0%, #fff 50%, #3C3B6E 100%);
+}
+
+body.usa.female .game-card,
+body.usa.male .game-card.accepted_serve-card,
+body.usa.male .opponent-hand-popover .game-card,
+body.usa.female .opponent-hand-popover .game-card.accepted_serve-card  {
+    background: linear-gradient(to bottom, #fff 0%, #fff 50%, #b22234 100%);
+}
+
+body.usa .game-card.daily-card,
+body.usa opponent-hand-popover .game-card.daily-card,
+body.usa.male .game-card.daily-card,
+body.usa.female .game-card.daily-card {
+    background: linear-gradient(to bottom, #fff 0%, #fff 50%, #888 100%);
+}
+
 
 .card-header {
     display: flex;
@@ -2301,7 +2456,7 @@ body.shamrock.female .game-card.daily-card {
     display: block;
     padding: 10px 0;
     text-align: center;
-    background: #555;
+    background: rgba(85,85,85,0.85);
     box-shadow: 0 3px 6px rgba(0,0,0,0.3);
     transform: rotate(45deg);
     right: -35px;
@@ -3005,7 +3160,7 @@ body.digital .hybrid-menu-item {
     gap: 5px;
     cursor: pointer;
     border-radius: 8px;
-    z-index: 1001;
+    z-index: 2000;
     transition: all 0.3s ease;
 }
 
@@ -3054,7 +3209,7 @@ body:not(.interact) .opponent-hand-counts {
     left: 48px;
     width: 90vw;
     max-width: 350px;
-    max-height: 70vh;
+    max-height: 60vh;
     background: rgba(250,250,250,0.7);
     backdrop-filter: blur(8px);
     box-shadow: 0 -2px 20px rgba(0,0,0,0.1);
@@ -3255,7 +3410,7 @@ body:not(.digital) .rules-content .ultimate-mode {
     color: #111;
     cursor: pointer;
     transition: all 0.3s ease;
-    z-index: 1000;
+    z-index: 2000;
     backdrop-filter: blur(8px);
     transform: scale(0);
     pointer-events: none;
@@ -3468,10 +3623,22 @@ body:not(.digital) .rules-content .ultimate-mode {
     ) !important;
 }
 
+.usa .wheel-background {
+    background: conic-gradient(
+        #3c3b6e 0deg 60deg,
+        #b22234 60deg 120deg,
+        #3c3b6e 120deg 180deg,
+        #b22234 180deg 240deg,
+        #3c3b6e 240deg 300deg,
+        #b22234 300deg 360deg
+    ) !important;
+}
+
 .nd-theme .wheel-text,
 .christmas .wheel-text,
 .valentines .wheel-text,
-.shamrock .wheel-text {
+.shamrock .wheel-text,
+.usa .wheel-text {
     color: #fff !important;
 }
 
@@ -3556,9 +3723,11 @@ body:not(.digital) .rules-content .ultimate-mode {
     transform: translateY(100vh);
     opacity: 0;
     transition: all 0.4s;
-    background: #222;
+    background: rgba(34, 34, 34, 0.8);
     border-radius: 20px;
     overflow: hidden;
+    width: 90%;
+    max-width: 450px;
 }
 
 .card-overlay.active .awardsOverlayContent {
@@ -3650,6 +3819,11 @@ body.female .awardIcon.double {
     display: flex;
     flex-flow: row nowrap;
     align-items: center;
+    flex: 1;
+}
+
+.opponentNumber {
+    justify-content: right;
 }
 
 .level {
@@ -3684,6 +3858,19 @@ body.female .awardIcon.double {
     .player-score.male {
         background: var(--color-blue-dark);
         color: var(--color-blue);
+    }
+
+    .player-status {
+        background: rgba(25,25,25,0.7);
+        color: #aaa;
+    }
+
+    .opponent.female .player-status {
+        color: var(--color-pink-mid);
+    }
+
+    .opponent.male .player-status {
+        color: var(--color-blue-mid);
     }
 
     .gradient-theme .player-score.male {
@@ -3936,10 +4123,32 @@ body.female .awardIcon.double {
         background: linear-gradient(to bottom, #2a2a2a 0%, #2a2a2a 50%, #f7d21e 100%);
     }
 
+    body.usa.male .game-card,
+    body.usa.female .game-card.accepted_serve-card,
+    body.usa.female .opponent-hand-popover .game-card,
+    body.usa.male .opponent-hand-popover .game-card.accepted_serve-card {
+        background: linear-gradient(to bottom, #2a2a2a 0%, #2a2a2a 50%, #3C3B6E 100%);
+    }
+
+    body.usa.female .game-card,
+    body.usa.male .game-card.accepted_serve-card,
+    body.usa.male .opponent-hand-popover .game-card,
+    body.usa.female .opponent-hand-popover .game-card.accepted_serve-card  {
+        background: linear-gradient(to bottom, #2a2a2a 0%, #2a2a2a 50%, #b22234 100%);
+    }
+
+    body.usa .game-card.daily-card,
+    body.usa opponent-hand-popover .game-card.daily-card,
+    body.usa.male .game-card.daily-card,
+    body.usa.female .game-card.daily-card {
+        background: linear-gradient(to bottom, #2a2a2a 0%, #2a2a2a 50%, #888 100%);
+    }
+
     body.nd-theme .card-badge.duration,
     body.christmas .card-badge.duration,
     body.valentines .card-badge.duration,
-    body.shamrock .card-badge.duration {
+    body.shamrock .card-badge.duration,
+    body.usa .card-badge.duration {
         color: #fff;
     }
 
@@ -4516,10 +4725,12 @@ body.female .awardIcon.double {
   /* Workaround for Chromium's selective color inversion */
   border-radius: 50%;
   filter: drop-shadow(0 0 10px white);
+  pointer-events: none;
 }
 
 .valentines .snowflake,
-.shamrock .snowflake {
+.shamrock .snowflake,
+.usa .snowflake {
     background: none;
     border-radius: unset;
     filter: none;
@@ -4534,4 +4745,9 @@ body.female .awardIcon.double {
 .shamrock .snowflake:after {
     content: "☘︎";
     font-size: 36px;
+}
+
+.usa .snowflake:after {
+    content: "★";
+    font-size: 60px;
 }

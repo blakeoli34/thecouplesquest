@@ -866,8 +866,8 @@ function sendBumpNotification($gameId, $senderPlayerId) {
         // Send actual FCM notification
         $result = sendPushNotification(
             $recipient['fcm_token'],
-            'Bump!',
-            $senderName . ' wants to play. Play your hand cards or serve them a card.'
+            'Hey! Let\'s Play!',
+            $senderName . ' wants to play. Check out your hand cards or serve them a card.'
         );
         
         return [
@@ -1217,7 +1217,7 @@ function getPlayerCards($gameId, $playerId, $cardType = null) {
                 CASE WHEN pc.is_custom = 1 THEN 0 ELSE c.score_steal END as score_steal,
                 CASE WHEN pc.is_custom = 1 THEN 0 ELSE c.repeat_count END as repeat_count,
                 CASE WHEN pc.is_custom = 1 THEN cc.win_loss ELSE c.win_loss END as win_loss,
-                CASE WHEN pc.is_custom = 1 THEN 0 ELSE c.clears_challenge_modify_effects END as clears_challenge_modify_effects
+                CASE WHEN pc.is_custom = 1 THEN cc.clears_challenge_modify_effects ELSE c.clears_challenge_modify_effects END as clears_challenge_modify_effects
             FROM player_cards pc
             LEFT JOIN cards c ON pc.card_id = c.id AND pc.is_custom = 0
             LEFT JOIN custom_cards cc ON pc.card_id = cc.id AND pc.is_custom = 1
@@ -1718,7 +1718,7 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
                     CASE WHEN pc.is_custom = 1 THEN cc.card_description ELSE c.card_description END as card_description,
                     CASE WHEN pc.is_custom = 1 THEN cc.card_points ELSE c.card_points END as card_points,
                     CASE WHEN pc.is_custom = 1 THEN COALESCE(pc.card_points, cc.card_points) ELSE COALESCE(pc.card_points, c.card_points) END as effective_points,
-                    CASE WHEN pc.is_custom = 1 THEN 0 ELSE c.clears_challenge_modify_effects END as clears_challenge_modify_effects,
+                    CASE WHEN pc.is_custom = 1 THEN cc.clears_challenge_modify_effects ELSE c.clears_challenge_modify_effects END as clears_challenge_modify_effects,
                     CASE WHEN pc.is_custom = 1 THEN cc.veto_subtract ELSE c.veto_subtract END as veto_subtract,
                     CASE WHEN pc.is_custom = 1 THEN cc.veto_steal ELSE c.veto_steal END as veto_steal,
                     CASE WHEN pc.is_custom = 1 THEN cc.veto_draw_chance ELSE c.veto_draw_chance END as veto_draw_chance,
@@ -1762,7 +1762,7 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
                 $finalPoints = $playerCard['card_points'];
                 
                 // Only apply challenge modifiers if card clears effects
-                if ($playerCard['clears_challenge_modify_effects'] || $playerCard['is_custom']) {
+                if ($playerCard['clears_challenge_modify_effects']) {
                     // Check for blocking effects
                     if (hasBlockingChanceCard($gameId, $playerId)) {
                         $blockingCards = getBlockingChanceCardNames($gameId, $playerId);
@@ -2060,27 +2060,6 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
 
             if($playerCard['card_type'] === 'daily' || $playerCard['card_type'] === 'snap' || $playerCard['card_type'] === 'dare' || $playerCard['card_type'] === 'spicy') {
                 $opponentId = getOpponentPlayerId($gameId, $playerId);
-                $body = "$playerName completed their card!";
-                $column = 'serve_completed';
-                $cardName = $playerCard['card_name'];
-                switch($playerCard['card_type']) {
-                    case 'daily':
-                        $body = "$playerName completed their Daily Challenge card!";
-                        $column = 'daily_completed';
-                        break;
-                    case 'snap':
-                        $body = "$playerName completed their $cardName (Snap) card!";
-                        $column = 'snapdare_completed';
-                        break;
-                    case 'dare':
-                        $body = "$playerName completed their $cardName (Dare) card!";
-                        $column = 'snapdare_completed';
-                        break;
-                    case 'spicy':
-                        $body = "$playerName completed their $cardName (Spicy) card!";
-                        $column = 'spicy_completed';
-                        break;
-                }
                 if($opponentId) {
                     $stmt = $pdo->prepare("SELECT first_name FROM players WHERE id = ?");
                     $stmt->execute([$playerId]);
@@ -2089,7 +2068,27 @@ function completeHandCard($gameId, $playerId, $cardId, $playerCardId) {
                     $stmt = $pdo->prepare("SELECT fcm_token FROM players WHERE id = ?");
                     $stmt->execute([$opponentId]);
                     $opponentToken = $stmt->fetchColumn();
-                    
+                    $body = "$playerName completed their card!";
+                    $column = 'serve_completed';
+                    $cardName = $playerCard['card_name'];
+                    switch($playerCard['card_type']) {
+                        case 'daily':
+                            $body = "$playerName completed their Daily Challenge card!";
+                            $column = 'daily_completed';
+                            break;
+                        case 'snap':
+                            $body = "$playerName completed their $cardName (Snap) card!";
+                            $column = 'snapdare_completed';
+                            break;
+                        case 'dare':
+                            $body = "$playerName completed their $cardName (Dare) card!";
+                            $column = 'snapdare_completed';
+                            break;
+                        case 'spicy':
+                            $body = "$playerName completed their $cardName (Spicy) card!";
+                            $column = 'spicy_completed';
+                            break;
+                    }
                     if ($opponentToken) {
                         sendPushNotification(
                             $opponentToken,

@@ -73,7 +73,7 @@ function sendDailyNotifications() {
         
         // Get all active games with players, including game mode
         $stmt = $pdo->query("
-            SELECT g.id as game_id, g.end_date, g.game_mode,
+            SELECT g.id as game_id, g.end_date, g.game_mode, g.prize,
                    p.id, p.first_name, p.gender, p.score, p.fcm_token,
                    opponent.first_name as opponent_name, opponent.score as opponent_score
             FROM games g
@@ -122,7 +122,11 @@ function sendDailyNotifications() {
                     }
                 }
 
-                $message = "{$scoreStatus} {$daysLeft} days left in your game with {$player['opponent_name']}.{$cardCountText}";
+                if($player['prize']) {
+                    $message = "{$scoreStatus} {$daysLeft} days left to win {$player['prize']}.{$cardCountText}";
+                } else {
+                    $message = "{$scoreStatus} {$daysLeft} days left in your game with {$player['opponent_name']}.{$cardCountText}";
+                }
                 
                 $result = sendPushNotification(
                     $player['fcm_token'],
@@ -559,7 +563,7 @@ function offerDailyChallenges() {
         $updateStmt->execute([$card['id'], $player['id']]);
         
         // Send notification
-        sendPushNotification($player['fcm_token'], 'Daily Challenge Offer', 'Your daily challenge is available until noon!');
+        sendPushNotification($player['fcm_token'], 'Daily Challenge Offer', 'Your daily challenge is available until 2pm!');
     }
     
     echo "Daily challenges offered to " . count($players) . " players\n";
