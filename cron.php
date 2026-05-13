@@ -35,6 +35,12 @@ switch ($action) {
     case 'cleanup':
         cleanupExpiredGames();
         break;
+    case 'expires_penalty':
+        applyExpiredCardPenalties();
+        break;
+    case 'penalty_reminder':
+        notifyUpcomingExpiredCardPenalties();
+        break;
     case 'offer':
         offerDailyChallenges();
         break;
@@ -696,6 +702,122 @@ function checkForUnreadCards() {
         
     } catch (Exception $e) {
         error_log("Error checking unread cards: " . $e->getMessage());
+        return 0;
+    }
+}
+
+function applyExpiredCardPenalties() {
+    try {
+        $pdo = Config::getDatabaseConnection();
+
+        $stmt = $pdo->prepare("
+            SELECT pc.id, pc.player_id, pc.game_id, pc.card_id, pc.is_custom,
+                CASE 
+                    WHEN pc.is_custom = 1 THEN cc.card_name
+                    ELSE c.card_name
+                END as card_name,
+                p.first_name, p.fcm_token
+            FROM player_cards pc
+            JOIN players p ON pc.player_id = p.id
+            JOIN games g ON pc.game_id = g.id
+            LEFT JOIN cards c ON pc.card_id = c.id AND pc.is_custom = 0
+            LEFT JOIN custom_cards cc ON pc.card_id = cc.id AND pc.is_custom = 1
+            WHERE pc.expires_at IS NOT NULL
+            AND pc.expires_at <= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+            AND pc.extension_request != 1
+            AND pc.card_type NOT IN ('chance', 'daily')
+            AND g.status = 'active'
+        ");
+        $stmt->execute();
+        $penaltyCards = $stmt->fetchAll();
+
+        $penaltiesApplied = 0;
+
+        // Group by player so we can apply one score update and one notification per player
+        $playerPenalties = [];
+        foreach ($penaltyCards as $card) {
+            $pid = $card['player_id'];
+            if (!isset($playerPenalties[$pid])) {
+                $playerPenalties[$pid] = [
+                    'player_id'  => $card['player_id'],
+                    'game_id'    => $card['game_id'],
+                    'first_name' => $card['first_name'],
+                    'fcm_token'  => $card['fcm_token'],
+                    'count'      => 0
+                ];
+            }
+            $playerPenalties[$pid]['count']++;
+        }
+
+        foreach ($playerPenalties as $pid => $data) {
+            $count = $data['count'];
+            updateScore($data['game_id'], $data['player_id'], -$count, $data['player_id']);
+            $penaltiesApplied += $count;
+            echo "Applied -{$count} penalty to player {$data['player_id']} ({$data['first_name']}) for {$count} expired card(s)\n";
+
+            if (!empty($data['fcm_token'])) {
+                $points = $count === 1 ? '1 point' : "{$count} points";
+                sendPushNotification(
+                    $data['fcm_token'],
+                    'Expired Card Penalties',
+                    "You lost {$points} for having {$count} expired card" . ($count > 1 ? 's' : '') . " past 24 hours. Complete or veto your cards to avoid further penalties."
+                );
+            }
+        }
+
+        if ($penaltiesApplied > 0) {
+            echo "Expired card penalties applied: {$penaltiesApplied} total point(s) across " . count($playerPenalties) . " player(s)\n";
+        }
+
+        return $penaltiesApplied;
+
+    } catch (Exception $e) {
+        error_log("Error applying expired card penalties: " . $e->getMessage());
+        return 0;
+    }
+}
+
+function notifyUpcomingExpiredCardPenalties() {
+    try {
+        $pdo = Config::getDatabaseConnection();
+        $stmt = $pdo->prepare("
+            SELECT pc.player_id, pc.game_id,
+                COUNT(*) as penalty_count,
+                p.first_name, p.fcm_token
+            FROM player_cards pc
+            JOIN players p ON pc.player_id = p.id
+            JOIN games g ON pc.game_id = g.id
+            WHERE pc.expires_at IS NOT NULL
+            AND pc.expires_at < NOW()
+            AND pc.expires_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)
+            AND pc.extension_request != 1
+            AND pc.card_type NOT IN ('chance', 'daily')
+            AND g.status = 'active'
+            AND p.fcm_token IS NOT NULL
+            AND p.fcm_token != ''
+            GROUP BY pc.player_id, pc.game_id
+        ");
+        $stmt->execute();
+        $players = $stmt->fetchAll();
+
+        $notificationsSent = 0;
+
+        foreach ($players as $player) {
+            $count = $player['penalty_count'];
+            $points = $count === 1 ? '1 point' : "{$count} points";
+            sendPushNotification(
+                $player['fcm_token'],
+                'Upcoming Card Penalties',
+                "You have {$count} expired card" . ($count > 1 ? 's' : '') . " that will incur a {$points} penalty at midnight. Take action to avoid the penalty."
+            );
+            $notificationsSent++;
+            echo "Penalty warning notification sent to player {$player['player_id']} ({$player['first_name']}) for {$count} card(s)\n";
+        }
+
+        return $notificationsSent;
+
+    } catch (Exception $e) {
+        error_log("Error sending upcoming penalty notifications: " . $e->getMessage());
         return 0;
     }
 }

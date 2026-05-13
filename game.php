@@ -1382,6 +1382,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
             exit;
 
+        case 'get_wishlist':
+            $stmt = $pdo->prepare("SELECT id, item_text, is_completed FROM wishlist WHERE player_id = ? ORDER BY is_completed ASC, created_at ASC");
+            $stmt->execute([$currentPlayer['id']]);
+            $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            echo json_encode(['success' => true, 'items' => $items]);
+            exit;
+
+        case 'add_wishlist_item':
+            $text = trim($_POST['item_text'] ?? '');
+            if ($text === '') { echo json_encode(['success' => false, 'error' => 'Empty item']); break; }
+            
+            // Check limit
+            $countStmt = $pdo->prepare("SELECT COUNT(*) FROM wishlist WHERE player_id = ?");
+            $countStmt->execute([$currentPlayer['id']]);
+            if ($countStmt->fetchColumn() >= 100) {
+                echo json_encode(['success' => false, 'error' => 'Wishlist limit reached']);
+                exit;
+            }
+
+            $stmt = $pdo->prepare("INSERT INTO wishlist (player_id, item_text) VALUES (?, ?)");
+            $stmt->execute([$currentPlayer['id'], $text]);
+            echo json_encode(['success' => true]);
+            exit;
+
+        case 'toggle_wishlist_item':
+            $itemId = intval($_POST['item_id'] ?? 0);
+            $isCompleted = intval($_POST['is_completed'] ?? 0) ? 1 : 0;
+            $completedAt = $isCompleted ? date('Y-m-d H:i:s') : null;
+
+            $stmt = $pdo->prepare("UPDATE wishlist SET is_completed = ?, completed_at = ? WHERE id = ? AND player_id = ?");
+            $stmt->execute([$isCompleted, $completedAt, $itemId, $currentPlayer['id']]);
+            echo json_encode(['success' => true]);
+            exit;
+
+        case 'get_opponent_wishlist':
+            $stmt = $pdo->prepare("SELECT id, item_text, is_completed FROM wishlist WHERE player_id = ? ORDER BY is_completed ASC, created_at ASC");
+            $stmt->execute([$opponentPlayer['id']]);
+            $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            echo json_encode(['success' => true, 'items' => $items, 'opponent_name' => $opponentPlayer['first_name'] ?? 'Partner']);
+            exit;
+
+        case 'delete_wishlist_item':
+            $itemId = intval($_POST['item_id'] ?? 0);
+            $stmt = $pdo->prepare("DELETE FROM wishlist WHERE id = ? AND player_id = ?");
+            $stmt->execute([$itemId, $currentPlayer['id']]);
+            echo json_encode(['success' => true]);
+            exit;
+
+        case 'edit_wishlist_item':
+            $itemId = intval($_POST['item_id'] ?? 0);
+            $text = trim($_POST['item_text'] ?? '');
+            if ($text === '') { echo json_encode(['success' => false, 'error' => 'Empty item']); break; }
+            $stmt = $pdo->prepare("UPDATE wishlist SET item_text = ? WHERE id = ? AND player_id = ? AND is_completed = 0");
+            $stmt->execute([$text, $itemId, $currentPlayer['id']]);
+            echo json_encode(['success' => true]);
+            exit;
+
         case 'pause_game':
             if ($gameMode !== 'digital') {
                 echo json_encode(['success' => false, 'message' => 'Not a digital game']);
@@ -1954,6 +2011,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         <div class="flyout-menu-item-icon"><i class="fa-solid fa-stopwatch"></i></div>
                         <div class="flyout-menu-item-text">Timer</div>
                     </div>
+                    <div class="flyout-menu-item" onclick="openWishlistModal()">
+                        <div class="flyout-menu-item-icon"><i class="fa-solid fa-fire"></i></div>
+                        <div class="flyout-menu-item-text">My Wishlist</div>
+                    </div>
                     <div class="flyout-menu-item" onclick="openHistoryModal()">
                         <div class="flyout-menu-item-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
                         <div class="flyout-menu-item-text">History</div>
@@ -2038,6 +2099,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         <div class="penalties-warning">
             <i class="fa-solid fa-circle-exclamation"></i>
             <p>When the game ends, you will incur a <span id="penalty_points">0</span> point penalty unless you complete or veto the cards left in your hand.</p>
+        </div>
+        <div class="penalties-warning expired-penalty-warning">
+            <i class="fa-solid fa-clock"></i>
+            <p>You have <span id="expired_penalty_points">0</span> expired card<span id="expired_penalty_plural"></span> that will incur a <span id="expired_penalty_total">0</span> point penalty at midnight. Take action to avoid penalty.</p>
         </div>
         <div class="card-grid-container">
             <div class="card-grid" id="handCardsGrid">
@@ -2174,6 +2239,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             <button class="btn btn-accept" id="level_up_claim">Claim Award</button>
         </div>
      </div>
+
+     <!-- Wishlist Modal (My Wishlist) -->
+    <div class="modal" id="wishlistModal">
+        <div class="modal-content">
+            <div class="modal-title">My Wishlist</div>
+
+            <div id="wishlistItems" style="margin-bottom: 16px; max-height: 40vh; overflow-y: auto;"></div>
+
+            <div class="form-group" id="wishlistAddForm" style="margin-bottom:0;">
+                <label>New Wishlist Item</label>
+                <input type="text" id="wishlistNewItem" placeholder="Add something to your wishlist..." maxlength="500" style="margin-bottom: 8px;">
+                <button class="btn" onclick="submitWishlistItem()">Add to Wishlist</button>
+            </div>
+
+            <button class="btn btn-secondary" style="margin-top: 8px;" onclick="closeModal('wishlistModal')">Close</button>
+        </div>
+    </div>
+
+    <!-- Opponent Wishlist Modal (Read Only) -->
+    <div class="modal" id="opponentWishlistModal">
+        <div class="modal-content">
+            <div class="modal-title" id="opponentWishlistTitle"><?php echo $opponentPlayer['first_name']; ?>'s Wishlist</div>
+
+            <div id="opponentWishlistItems" style="margin-bottom: 16px; max-height: 60vh; overflow-y: auto;"></div>
+
+            <button class="btn btn-secondary" onclick="closeModal('opponentWishlistModal')">Close</button>
+        </div>
+    </div>
 
     <!-- Dice Overlay -->
     <div class="dice-popover" id="dicePopover">

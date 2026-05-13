@@ -367,14 +367,246 @@ function openHandCards() {
 }
 
 function checkForPenaltyWarning(handCards) {
-   const gameEndTime = new Date(gameData.gameEndDate.replace(" ", "T") + "Z");
-   const now = new Date();
-   const hoursUntilExpiry = (gameEndTime - now) / (1000 * 60 * 60);
-   const nonChanceCount = handCards.filter(card => card.type !== "chance").length;
-   if (hoursUntilExpiry > 0 && hoursUntilExpiry < 24 && nonChanceCount > 0) {
+    // Game-end penalty warning
+    const gameEndTime = new Date(gameData.gameEndDate.replace(" ", "T") + "Z");
+    const now = new Date();
+    const hoursUntilExpiry = (gameEndTime - now) / (1000 * 60 * 60);
+    const nonChanceCount = handCards.filter(card => card.type !== "chance").length;
+    if (hoursUntilExpiry > 0 && hoursUntilExpiry < 24 && nonChanceCount > 0) {
         document.getElementById('penalty_points').textContent = nonChanceCount * 5;
         document.getElementsByClassName('penalties-warning')[0].classList.add('show');
     }
+
+    // Midnight expired-card penalty warning
+    // Cards that are already expired, not chance/daily, no extension pending,
+    // and will have been expired for 24+ hours by midnight tonight
+    const midnight = new Date();
+    midnight.setHours(24, 0, 0, 0); // next midnight
+
+    const penaltyCards = handCards.filter(card => {
+        if (!card.expires_at) return false;
+        if (card.type === 'chance' || card.card_type === 'chance') return false;
+        if (card.type === 'daily' || card.card_type === 'daily') return false;
+        if (card.extension_request === 1) return false;
+        const expiresAt = new Date(card.expires_at);
+        const isExpired = expiresAt < now;
+        // Will have been expired for 24+ hours by midnight?
+        const expiredDurationAtMidnight = (midnight - expiresAt) / (1000 * 60 * 60);
+        return isExpired && expiredDurationAtMidnight >= 24;
+    });
+
+    if (penaltyCards.length > 0) {
+        const count = penaltyCards.length;
+        document.getElementById('expired_penalty_points').textContent = count;
+        document.getElementById('expired_penalty_total').textContent = count;
+        document.getElementById('expired_penalty_plural').textContent = count > 1 ? 's' : '';
+        document.querySelector('.expired-penalty-warning').classList.add('show');
+    }
+}
+
+function openWishlistModal() {
+    const modal = document.getElementById('wishlistModal');
+    if(modal) {
+        modal.classList.add('active');
+        setOverlayActive(true);
+    }
+    loadWishlist();
+}
+
+function loadWishlist() {
+    const container = document.getElementById('wishlistItems');
+    container.innerHTML = '<div class="wishlist-empty">Loading...</div>';
+
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'action=get_wishlist'
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (!data.success) { container.innerHTML = '<div class="wishlist-empty">Failed to load.</div>'; return; }
+        renderWishlist(container, data.items, false);
+    });
+}
+
+function renderWishlist(container, items, readOnly) {
+    if (!items || items.length === 0) {
+        container.innerHTML = '<div class="wishlist-empty">No items yet.</div>';
+        return;
+    }
+
+    const active = items.filter(i => !parseInt(i.is_completed));
+    const done = items.filter(i => parseInt(i.is_completed));
+    const ordered = [...active, ...done];
+
+    container.innerHTML = ordered.map(item => {
+        const completed = parseInt(item.is_completed);
+        const checkIcon = completed ? '<i class="fa-solid fa-check"></i>' : '';
+        const checkBtn = readOnly
+            ? ''
+            : `<button class="wishlist-item-check" onclick="toggleWishlistItem(${item.id}, ${completed})" title="${completed ? 'Mark incomplete' : 'Mark complete'}">${checkIcon}</button>`;
+
+        const actions = readOnly || completed
+            ? (readOnly ? '' : `
+                <div class="wishlist-item-actions">
+                    <button class="wishlist-action-btn" id="wishlist-del-${item.id}" onclick="wishlistDeleteTap(${item.id})" title="Delete"><i class="fa-solid fa-trash"></i></button>
+                </div>`)
+            : `
+                <div class="wishlist-item-actions">
+                    <button class="wishlist-action-btn" onclick="wishlistStartEdit(${item.id})" title="Edit"><i class="fa-solid fa-pencil"></i></button>
+                    <button class="wishlist-action-btn" id="wishlist-del-${item.id}" onclick="wishlistDeleteTap(${item.id})" title="Delete"><i class="fa-solid fa-trash"></i></button>
+                </div>`;
+
+        return `
+            <div class="wishlist-item ${completed ? 'completed' : ''}" id="wishlist-item-${item.id}">
+                ${checkBtn}
+                <span class="wishlist-item-text" id="wishlist-text-${item.id}">${escapeHtml(item.item_text)}</span>
+                ${actions}
+            </div>`;
+    }).join('');
+}
+
+function submitWishlistItem() {
+    const input = document.getElementById('wishlistNewItem');
+    const text = input.value.trim();
+    if (!text) return;
+
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'action=add_wishlist_item&item_text=' + encodeURIComponent(text)
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            input.value = '';
+            loadWishlist();
+        }
+    });
+}
+
+function toggleWishlistItem(itemId, currentlyCompleted) {
+    const newState = currentlyCompleted ? 0 : 1;
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `action=toggle_wishlist_item&item_id=${itemId}&is_completed=${newState}`
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) loadWishlist();
+    });
+}
+
+let wishlistDeletePending = {};
+
+function wishlistDeleteTap(itemId) {
+    const btn = document.getElementById('wishlist-del-' + itemId);
+    if (!btn) return;
+
+    if (wishlistDeletePending[itemId]) {
+        // Second tap — confirm delete
+        clearTimeout(wishlistDeletePending[itemId]);
+        delete wishlistDeletePending[itemId];
+        fetch('game.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `action=delete_wishlist_item&item_id=${itemId}`
+        })
+        .then(r => r.json())
+        .then(data => { if (data.success) loadWishlist(); });
+    } else {
+        // First tap — highlight and arm
+        btn.classList.add('delete-confirm');
+        btn.innerHTML = '<i class="fa-solid fa-trash"></i> <i class="fa-solid fa-check delete-confirm-check"></i>';
+        wishlistDeletePending[itemId] = setTimeout(() => {
+            // Reset if no second tap within 3 seconds
+            delete wishlistDeletePending[itemId];
+            btn.classList.remove('delete-confirm');
+            btn.innerHTML = '<i class="fa-solid fa-trash"></i>';
+        }, 3000);
+    }
+}
+
+function wishlistStartEdit(itemId) {
+    const textEl = document.getElementById('wishlist-text-' + itemId);
+    if (!textEl) return;
+    const current = textEl.textContent;
+
+    textEl.outerHTML = `<input class="wishlist-item-edit-input" id="wishlist-edit-input-${itemId}" type="text" value="${escapeHtml(current)}" maxlength="500">`;
+
+    const input = document.getElementById('wishlist-edit-input-' + itemId);
+    input.focus();
+    input.select();
+
+    input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') wishlistSaveEdit(itemId);
+        if (e.key === 'Escape') loadWishlist();
+    });
+
+    input.addEventListener('blur', function() {
+        // Small delay to allow save button clicks if any, then reload to cancel
+        setTimeout(() => {
+            const stillEditing = document.getElementById('wishlist-edit-input-' + itemId);
+            if (stillEditing) loadWishlist();
+        }, 150);
+    });
+
+    // Swap the edit icon for a save icon
+    const actionsEl = input.closest('.wishlist-item')?.querySelector('.wishlist-item-actions');
+    if (actionsEl) {
+        const editBtn = actionsEl.querySelector('.wishlist-action-btn:first-child');
+        if (editBtn) {
+            editBtn.innerHTML = '<i class="fa-solid fa-check"></i>';
+            editBtn.setAttribute('onclick', `wishlistSaveEdit(${itemId})`);
+            editBtn.style.color = 'rgba(255,255,255,0.7)';
+        }
+    }
+}
+
+function wishlistSaveEdit(itemId) {
+    const input = document.getElementById('wishlist-edit-input-' + itemId);
+    if (!input) return;
+    const text = input.value.trim();
+    if (!text) { loadWishlist(); return; }
+
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `action=edit_wishlist_item&item_id=${itemId}&item_text=${encodeURIComponent(text)}`
+    })
+    .then(r => r.json())
+    .then(data => { if (data.success) loadWishlist(); });
+}
+
+function openOpponentWishlist() {
+    closeCardOverlay('handCardsOverlay');
+    const modal = document.getElementById('opponentWishlistModal');
+    if(modal) {
+        modal.classList.add('active');
+        setOverlayActive(true);
+    }
+    const container = document.getElementById('opponentWishlistItems');
+    container.innerHTML = '<div class="wishlist-empty">Loading...</div>';
+
+    fetch('game.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'action=get_opponent_wishlist'
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (!data.success) { container.innerHTML = '<div class="wishlist-empty">Failed to load.</div>'; return; }
+        const title = document.getElementById('opponentWishlistTitle');
+        if (data.opponent_name) title.textContent = data.opponent_name + "'s Wishlist";
+        renderWishlist(container, data.items, true);
+    });
+}
+
+function escapeHtml(text) {
+    const d = document.createElement('div');
+    d.appendChild(document.createTextNode(text));
+    return d.innerHTML;
 }
 
 // Populate card grid
@@ -393,6 +625,13 @@ function populateCardGrid(gridId, cards, type) {
     
     cards.forEach(card => {
         const cardElement = createCardElement(card, type);
+        document.addEventListener('click', function(e) {
+            const link = e.target.closest('a[href="#wishlist"]');
+            if (link) {
+                e.preventDefault();
+                openOpponentWishlist();
+            }
+        });
         grid.appendChild(cardElement);
     });
 }

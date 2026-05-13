@@ -482,7 +482,7 @@ body.notification .player-status {
 
 .player-timers {
     position: absolute;
-    top: 80px;
+    top: 130px;
     right: 20px;
     display: flex;
     flex-direction: column;
@@ -1025,6 +1025,112 @@ body:not(.interact) .bottom-right-menu {
     transform: scale(0);
     transition: all 0.3s var(--animation-spring);
     position: relative;
+}
+
+.wishlist-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 10px;
+    margin: 10px 0;
+}
+
+.wishlist-item:last-child {
+    border-bottom: none;
+}
+
+.wishlist-item-text {
+    flex: 1;
+    font-size: 14px;
+    word-break: break-word;
+    text-wrap-style: pretty;
+}
+
+.wishlist-item.completed .wishlist-item-text {
+    text-decoration: line-through;
+    opacity: 0.4;
+}
+
+.wishlist-item-check {
+    background: transparent;
+    border: 2px solid #ccc;
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    min-width: 22px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: transparent;
+    font-size: 11px;
+    transition: all 0.2s;
+    padding: 0;
+}
+
+.wishlist-item.completed .wishlist-item-check {
+    background: #aaa;
+}
+
+.wishlist-empty {
+    text-align: center;
+    opacity: 0.45;
+    font-size: 14px;
+    padding: 24px 0;
+}
+
+.wishlist-item-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+    padding-left: 8px;
+}
+
+.wishlist-action-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #aaa;
+    font-size: 13px;
+    padding: 4px;
+    transition: color 0.2s;
+    line-height: 1;
+}
+
+.wishlist-action-btn:hover {
+    color: #666;
+}
+
+.wishlist-action-btn.delete-confirm {
+    color: #e05555;
+}
+
+.wishlist-action-btn.delete-confirm-check {
+    color: #e05555;
+}
+
+.wishlist-item-edit-input {
+    flex: 1;
+    background: rgba(0,0,0,0.05);
+    border: 1px solid #aaa;
+    border-radius: 6px;
+    color: inherit;
+    font-size: 14px;
+    padding: 4px 8px;
+    outline: none;
+}
+
+@media (prefers-color-scheme: dark) {
+    .wishlist-item-edit-input {
+        background: rgba(255,255,255,0.08);
+    }
+}
+
+.wishlist-item-edit-input:focus {
+    border-color: #666;
 }
 
 #levelUpModal .modal-content {
@@ -2248,6 +2354,10 @@ body.usa.female .game-card.daily-card {
     line-height: 1.4;
     margin-bottom: 15px;
     flex: 1;
+}
+
+.card-description a {
+    color: #666;
 }
 
 .fillin-blank {
@@ -4173,7 +4283,8 @@ body.female .awardIcon.double {
         color: #e6e6e6;
     }
     
-    .card-description {
+    .card-description,
+    .card-description a {
         color: #ccc;
     }
 
