@@ -470,7 +470,7 @@ function endGameAwards($gameId) {
     $pdo = Config::getDatabaseConnection();
     $SERVE_AWARD_POINTS = 50;
     $DAILY_AWARD_POINTS = 25;
-    $BATTLE_AWARD_POINTS = 25;
+    $BATTLE_AWARD_POINTS = 15;
 
     // Fetch both players for this game
     $stmt = $pdo->prepare("SELECT * FROM players WHERE game_id = ? ORDER BY id ASC LIMIT 2");

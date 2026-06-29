@@ -2447,7 +2447,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             </div>
             <div class="awardType">
                 <div class="opponentNumber" id="opponent-battle-count">0</div>
-                <div class="awardIcon"><i class="fa-solid fa-swords"></i><div class="awardLabel">Battle Champion</div><div class="awardPoints">+25</div></div>
+                <div class="awardIcon"><i class="fa-solid fa-swords"></i><div class="awardLabel">Battle Champion</div><div class="awardPoints">+15</div></div>
                 <div class="playerNumber" id="player-battle-count">0</div>
             </div>
             <div class="awardType">

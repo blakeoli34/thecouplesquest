@@ -2162,9 +2162,14 @@ function enableNotificationsFromModal() {
 
 // Enhanced Firebase messaging with better reliability for iOS PWA
 
-// Add token refresh monitoring
 function setupFirebaseMessaging() {
-    // Check if token refresh is needed
+    if (!firebaseMessaging) return;
+
+    const vapidKey = 'BAhDDY44EUfm9YKOElboy-2fb_6lzVhW4_TLMr4Ctiw6oA_ROcKZ09i5pKMQx3s7SoWgjuPbW-eGI7gFst6qjag';
+
+    // Check needs_refresh FIRST, then get token — never in parallel.
+    // Running getToken() concurrently with deleteToken() causes a race where
+    // the old invalid token gets written back to the DB after the fresh one.
     fetch('game.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -2173,31 +2178,20 @@ function setupFirebaseMessaging() {
     .then(response => response.json())
     .then(data => {
         if (data.needs_refresh) {
-            // Silently refresh token
-            const vapidKey = 'BAhDDY44EUfm9YKOElboy-2fb_6lzVhW4_TLMr4Ctiw6oA_ROcKZ09i5pKMQx3s7SoWgjuPbW-eGI7gFst6qjag';
-            firebaseMessaging.deleteToken().then(() => {
+            return firebaseMessaging.deleteToken().then(() => {
                 return firebaseMessaging.getToken({ vapidKey });
-            }).then((newToken) => {
-                if (newToken) {
-                    updateTokenOnServer(newToken);
-                }
-            }).catch(() => {});
+            });
+        } else {
+            return firebaseMessaging.getToken({ vapidKey });
         }
-    });
-    if (!firebaseMessaging) return;
-    
-    const vapidKey = 'BAhDDY44EUfm9YKOElboy-2fb_6lzVhW4_TLMr4Ctiw6oA_ROcKZ09i5pKMQx3s7SoWgjuPbW-eGI7gFst6qjag';
-    
-    // Get initial token
-    firebaseMessaging.getToken({ vapidKey }).then((currentToken) => {
-        if (currentToken) {
-            console.log('FCM Token received:', currentToken);
-            updateTokenOnServer(currentToken);
-            
-            // Store token locally for comparison
-            localStorage.setItem('fcm_token', currentToken);
+    })
+    .then(token => {
+        if (token) {
+            updateTokenOnServer(token);
+            localStorage.setItem('fcm_token', token);
         }
-    }).catch((err) => {
+    })
+    .catch(err => {
         console.log('Error getting FCM token:', err);
     });
 
