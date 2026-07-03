@@ -2176,9 +2176,14 @@ function setupFirebaseMessaging() {
         body: 'action=check_token_refresh_needed'
     })
     .then(response => response.json())
+    // If the server check fails (non-JSON response, network error, etc.) treat it as
+    // no-refresh-needed so getToken() still runs and tokens stay in sync.
+    .catch(() => ({ needs_refresh: false }))
     .then(data => {
-        if (data.needs_refresh) {
-            return firebaseMessaging.deleteToken().then(() => {
+        if (data && data.needs_refresh) {
+            // deleteToken() throws if no push subscription exists (e.g. already cleared).
+            // Swallow that error and always proceed to getToken().
+            return firebaseMessaging.deleteToken().catch(() => {}).then(() => {
                 return firebaseMessaging.getToken({ vapidKey });
             });
         } else {
